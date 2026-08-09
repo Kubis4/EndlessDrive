@@ -1,0 +1,17 @@
+# Normalizácia koncov riadkov.
+#
+# `gradlew` je shell skript – musí mať LF aj keď sa commituje z Windows.
+# S CRLF ho Linux a CI odmietnu s "bad interpreter".
+* text=auto
+
+gradlew text eol=lf
+*.sh text eol=lf
+gradlew.bat text eol=crlf
+*.bat text eol=crlf
+
+# Binárne súbory nech Git nikdy neprepisuje.
+*.jar binary
+*.png binary
+*.webp binary
+*.ttf binary
+*.otf binary
