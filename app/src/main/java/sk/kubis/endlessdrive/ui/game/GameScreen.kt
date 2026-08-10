@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -38,7 +40,6 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -50,6 +51,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import sk.kubis.endlessdrive.core.GameConfig
 import sk.kubis.endlessdrive.domain.model.BranchStyle
 import sk.kubis.endlessdrive.domain.model.ComponentSlot
+import sk.kubis.endlessdrive.domain.model.FluidGrade
 import sk.kubis.endlessdrive.domain.model.GamePhase
 import sk.kubis.endlessdrive.game.GameEngine
 
@@ -107,18 +109,39 @@ fun GameScreen(
             with(renderer) { draw(engine) }
         }
 
-        GameHud(ui, Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
-
-        Text(
-            text = ui.message,
-            color = Color(0xFFE8DFD0),
-            style = MaterialTheme.typography.bodyLarge,
+        // Horná lišta v jednom stĺpci – HUD a stavové tlačidlá sa nikdy neprekryjú.
+        Column(
             modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 56.dp)
-                .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
-                .padding(horizontal = 12.dp, vertical = 4.dp)
-        )
+                .align(Alignment.TopStart)
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                GameHud(ui, Modifier.weight(1f, fill = false))
+                Spacer(Modifier.width(8.dp))
+                StatusBar(
+                    ui = ui,
+                    onToggleLights = { viewModel.toggleHeadlights() },
+                    onTogglePause = { viewModel.setPaused(!ui.paused) }
+                )
+            }
+            if (ui.message.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = ui.message,
+                    color = Color(0xFFE8DFD0),
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier
+                        .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                )
+            }
+        }
 
         when (ui.phase) {
             GamePhase.PREP, GamePhase.STOPPED, GamePhase.EXPLORING -> {
@@ -163,6 +186,15 @@ fun GameScreen(
             }
         }
 
+        if (ui.paused && ui.phase != GamePhase.GAME_OVER) {
+            PausePanel(
+                ui = ui,
+                onResume = { viewModel.setPaused(false) },
+                onMenu = onExitToMenu,
+                modifier = Modifier.align(Alignment.Center)
+            )
+        }
+
         if (showInventory) {
             InventoryPanel(
                 engine = engine,
@@ -177,7 +209,9 @@ fun GameScreen(
             CarPanel(
                 engine = engine,
                 bagRevision = ui.bagRevision,
-                carImage = assets.sedan.stripped,
+                layers = assets.sedan,
+                onRepair = { viewModel.repair(it) },
+                onUnmount = { viewModel.unmount(it) },
                 onClose = { showCar = false },
                 modifier = Modifier.align(Alignment.Center)
             )
@@ -185,7 +219,10 @@ fun GameScreen(
         if (ui.exploring) {
             LootPanel(
                 engine = engine,
+                bagRevision = ui.bagRevision,
+                pumpFuelL = ui.pumpFuelL,
                 onTake = { viewModel.takeLoot(it) },
+                onRefuel = { viewModel.refuelFromPump() },
                 onClose = { viewModel.leaveBuilding() },
                 modifier = Modifier.align(Alignment.CenterEnd).padding(16.dp)
             )
@@ -197,24 +234,178 @@ fun GameScreen(
 private fun GameHud(ui: GameUiState, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
-            .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
-            .padding(horizontal = 14.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
+            .background(Color.Black.copy(alpha = 0.52f), RoundedCornerShape(10.dp))
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        HudStat("PALIVO", String.format("%.0f/%.0f L", ui.fuelL, ui.fuelCapacityL))
-        HudStat("OLEJ", String.format("%.1f/%.0f L", ui.oilL, ui.oilCapacityL))
-        HudStat("CHLADIACA", String.format("%.1f/%.0f L", ui.coolantL, ui.coolantCapacityL))
-        HudStat("TEPLOTA", "${ui.temperature.toInt()}°C")
-        HudStat("RÝCHLOSŤ", "${ui.speedKmh.toInt()} km/h")
-        HudStat("VZDIALENOSŤ", String.format("%.1f km", ui.distanceKm))
+        val fuelRatio = (ui.fuelL / ui.fuelCapacityL.coerceAtLeast(1f)).coerceIn(0f, 1f)
+        val oilRatio = (ui.oilL / ui.oilCapacityL.coerceAtLeast(1f)).coerceIn(0f, 1f)
+        val coolRatio = (ui.coolantL / ui.coolantCapacityL.coerceAtLeast(1f)).coerceIn(0f, 1f)
+        val tempRatio = ((ui.temperature - 40f) / 90f).coerceIn(0f, 1f)
+
+        // Ukazovatele sa v núdzi zmestia posunom, rýchlosť a km ostávajú vždy vidieť.
+        Row(
+            modifier = Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Gauge(
+                "PALIVO", fuelRatio, String.format("%.0f L", ui.fuelL),
+                levelColor(fuelRatio, 0.15f, 0.35f), ui.fuelPurity
+            )
+            Gauge(
+                "OLEJ", oilRatio, String.format("%.1f L", ui.oilL),
+                levelColor(oilRatio, 0.15f, 0.35f), ui.oilPurity
+            )
+            Gauge(
+                "CHLADENIE", coolRatio, String.format("%.1f L", ui.coolantL),
+                levelColor(coolRatio, 0.15f, 0.35f), ui.coolantPurity
+            )
+            Gauge(
+                "BATÉRIA", ui.batteryCharge, "${(ui.batteryCharge * 100).toInt()} %",
+                levelColor(ui.batteryCharge, 0.15f, 0.35f)
+            )
+            Gauge(
+                "TEPLOTA",
+                tempRatio,
+                "${ui.temperature.toInt()}°C",
+                when {
+                    ui.temperature > 110f -> Color(0xFFEF5350)
+                    ui.temperature > 98f -> Color(0xFFFFB74D)
+                    else -> Color(0xFF81C784)
+                }
+            )
+            Gauge(
+                "STAV AUTA", ui.overallHealth, "${(ui.overallHealth * 100).toInt()} %",
+                levelColor(ui.overallHealth, 0.25f, 0.5f)
+            )
+        }
+
+        val reversing = ui.speedKmh < -0.5f
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                // Pri cúvaní ukazujeme R a kladné číslo, nie mínus.
+                (if (reversing) "R " else "") + kotlin.math.abs(ui.speedKmh).toInt(),
+                color = if (reversing) Color(0xFFFFB74D) else Color(0xFFE8DFD0),
+                style = MaterialTheme.typography.displaySmall
+            )
+            Text("km/h", color = Color(0xFF9A8F7E), style = MaterialTheme.typography.labelLarge)
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                String.format("%.2f", ui.distanceKm),
+                color = Color(0xFFC4A35A),
+                style = MaterialTheme.typography.displaySmall,
+                maxLines = 1
+            )
+            Text(
+                "km · rek. ${String.format("%.1f", ui.bestDistanceKm)}",
+                color = Color(0xFF9A8F7E),
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1
+            )
+        }
     }
 }
 
 @Composable
-private fun HudStat(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+private fun Gauge(
+    label: String,
+    ratio: Float,
+    value: String,
+    color: Color,
+    /** Kvapaliny: čistota obsahu nádrže. Záporné = ukazovateľ bez čistoty. */
+    purity: Float = -1f
+) {
+    Column(horizontalAlignment = Alignment.Start) {
         Text(label, color = Color(0xFF9A8F7E), style = MaterialTheme.typography.labelLarge)
-        Text(value, color = Color(0xFFE8DFD0), style = MaterialTheme.typography.titleLarge)
+        Box(
+            Modifier
+                .width(58.dp)
+                .height(7.dp)
+                .background(Color(0xFF2B2721), RoundedCornerShape(4.dp))
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth(ratio.coerceIn(0f, 1f))
+                    .fillMaxHeight()
+                    .background(color, RoundedCornerShape(4.dp))
+            )
+            if (purity in 0f..0.999f) {
+                // Tenký prúžok = koľko z objemu je naozaj kvapalina a nie voda.
+                Box(
+                    Modifier
+                        .fillMaxWidth((ratio * purity).coerceIn(0f, 1f))
+                        .height(3.dp)
+                        .background(purityColor(purity), RoundedCornerShape(4.dp))
+                )
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(value, color = Color(0xFFE8DFD0), style = MaterialTheme.typography.titleLarge)
+            if (purity in 0f..0.92f) {
+                Spacer(Modifier.width(3.dp))
+                Text(
+                    "${(purity * 100).toInt()}%",
+                    color = purityColor(purity),
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
+        }
+    }
+}
+
+private fun purityColor(purity: Float): Color = when {
+    purity >= 0.92f -> Color(0xFF81C784)
+    purity >= 0.75f -> Color(0xFFDCE775)
+    purity >= 0.55f -> Color(0xFFFFB74D)
+    else -> Color(0xFFEF5350)
+}
+
+private fun levelColor(ratio: Float, low: Float, mid: Float): Color = when {
+    ratio <= low -> Color(0xFFEF5350)
+    ratio <= mid -> Color(0xFFFFB74D)
+    else -> Color(0xFF81C784)
+}
+
+/** Hodiny, svetlá a pauza – vpravo hore. */
+@Composable
+private fun StatusBar(
+    ui: GameUiState,
+    onToggleLights: () -> Unit,
+    onTogglePause: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            (if (ui.isNight) "☾" else "☀") + " " + ui.clock,
+            color = Color(0xFFE8DFD0),
+            style = MaterialTheme.typography.titleLarge
+        )
+        SmallToggle("SVETLÁ", ui.headlightsOn, onToggleLights)
+        SmallToggle("PAUZA", ui.paused, onTogglePause)
+    }
+}
+
+@Composable
+private fun SmallToggle(label: String, active: Boolean, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (active) Color(0xFFC4A35A) else Color(0xFF3A342C),
+            contentColor = if (active) Color(0xFF1A1612) else Color(0xFFE8DFD0)
+        ),
+        shape = RoundedCornerShape(6.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+    ) {
+        Text(label, style = MaterialTheme.typography.labelLarge)
     }
 }
 
@@ -250,15 +441,17 @@ private fun JunctionPanel(
                     }
                     Button(
                         onClick = { onChoose(choice.id) },
-                        modifier = Modifier.weight(1f).height(72.dp),
+                        modifier = Modifier.weight(1f).heightIn(min = 84.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = accent,
                             contentColor = Color(0xFFFFF8F0)
                         ),
-                        shape = RoundedCornerShape(8.dp)
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(10.dp)
                     ) {
+                        // Zámerne bez čísel – čo je za odbočkou, sa zistí až jazdou.
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(choice.label, style = MaterialTheme.typography.labelLarge)
+                            Text(choice.label, style = MaterialTheme.typography.headlineMedium)
                             Text(choice.hint, style = MaterialTheme.typography.bodyLarge)
                         }
                     }
@@ -374,9 +567,9 @@ private fun InventoryPanel(
                         if (stack != null) {
                             val def = stack.def
                             val label = if (def.fluid != null) {
-                                "${def.name} · ${String.format("%.0f", def.fluidAmount * stack.count)} L"
+                                "${def.name} · ${String.format("%.0f", def.fluidAmount * stack.count)} L · ${stack.stateLabel}"
                             } else {
-                                "${def.name} ×${stack.count} · ${stack.condition.displayName} · ${(stack.health * 100).toInt()}%"
+                                "${def.name} ×${stack.count} · ${stack.stateLabel}"
                             }
                             val mounted = def.mountsTo?.let { engine.car.parts[it] }
                             val compare = when {
@@ -454,7 +647,9 @@ private fun InventoryPanel(
 private fun CarPanel(
     engine: GameEngine,
     bagRevision: Int,
-    carImage: ImageBitmap,
+    layers: SedanLayers,
+    onRepair: (ComponentSlot) -> Unit,
+    onUnmount: (ComponentSlot) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -466,101 +661,58 @@ private fun CarPanel(
 
     Surface(
         modifier = modifier
-            .fillMaxWidth(0.92f)
-            .fillMaxHeight(0.88f),
+            .fillMaxWidth(0.96f)
+            .fillMaxHeight(0.94f),
         color = Color(0xFF2A241C).copy(alpha = 0.97f),
         shape = RoundedCornerShape(12.dp)
     ) {
-        Column(Modifier.fillMaxSize().padding(14.dp)) {
+        Column(Modifier.fillMaxSize().padding(12.dp)) {
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("AUTO", style = MaterialTheme.typography.headlineMedium, color = Color(0xFFE8DFD0))
+                Text(
+                    "Palivo ${engine.car.fuel.toInt()} L · Olej ${String.format("%.1f", engine.car.oil)} L · " +
+                        "Chladiaca ${String.format("%.1f", engine.car.coolant)} L",
+                    color = Color(0xFFC8BFAE),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Text(
+                    "palivo ${(engine.car.fuelPurity * 100).toInt()} % · " +
+                        "olej ${(engine.car.oilPurity * 100).toInt()} % · " +
+                        "chladiaca ${(engine.car.coolantPurity * 100).toInt()} %",
+                    color = purityColor(
+                        minOf(engine.car.fuelPurity, engine.car.oilPurity, engine.car.coolantPurity)
+                    ),
+                    style = MaterialTheme.typography.bodyLarge
+                )
                 TextButton(onClick = onClose) { Text("✕") }
             }
-            Text(
-                "Klikni na zadok / stred / predok auta",
-                color = Color(0xFF9A8F7E),
-                style = MaterialTheme.typography.bodyLarge
-            )
-            Text(
-                "Palivo ${engine.car.fuel.toInt()} L · Olej ${String.format("%.1f", engine.car.oil)} L · Chladiaca ${String.format("%.1f", engine.car.coolant)} L",
-                color = Color(0xFFC8BFAE)
-            )
-            Spacer(Modifier.height(10.dp))
 
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .weight(0.55f)
-                    .background(Color(0xFF3A4A55), RoundedCornerShape(8.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    Modifier
-                        .fillMaxHeight(0.92f)
-                        .aspectRatio(
-                            (carImage.width.toFloat() / carImage.height.toFloat()).coerceIn(2.2f, 4.2f)
-                        )
-                ) {
-                    Image(
-                        bitmap = carImage,
-                        contentDescription = "Sedan",
-                        contentScale = ContentScale.FillBounds,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                    Canvas(Modifier.fillMaxSize()) {
-                        val w = size.width
-                        val h = size.height
-                        val cy = h * 0.80f
-                        val r = h * 0.20f
-                        for (fx in floatArrayOf(0.18f, 0.80f)) {
-                            val cx = w * fx
-                            drawCircle(Color(0xFF15171A), r, androidx.compose.ui.geometry.Offset(cx, cy))
-                            drawCircle(Color(0xFF2E343A), r * 0.62f, androidx.compose.ui.geometry.Offset(cx, cy))
-                            drawCircle(Color(0xFFCFD8DC), r * 0.16f, androidx.compose.ui.geometry.Offset(cx, cy))
-                        }
-                    }
-                    // Hotspoty priamo na aute
-                    CarZone(
-                        label = "Zadok",
-                        active = section == CarSection.ZADOK,
-                        onClick = {
-                            section = CarSection.ZADOK
-                            selected = null
-                        },
-                        modifier = Modifier
-                            .align(Alignment.CenterStart)
-                            .fillMaxWidth(0.30f)
-                            .fillMaxHeight(0.85f)
-                    )
-                    CarZone(
-                        label = "Stred",
-                        active = section == CarSection.STRED,
-                        onClick = {
-                            section = CarSection.STRED
-                            selected = null
-                        },
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .fillMaxWidth(0.34f)
-                            .fillMaxHeight(0.85f)
-                    )
-                    CarZone(
-                        label = "Predok",
-                        active = section == CarSection.PREDOK,
-                        onClick = {
-                            section = CarSection.PREDOK
-                            selected = null
-                        },
-                        modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .fillMaxWidth(0.30f)
-                            .fillMaxHeight(0.85f)
-                    )
-                }
+            Spacer(Modifier.height(8.dp))
+
+            Row(Modifier.fillMaxWidth().weight(1f)) {
+                // Auto vyzerá rovnako ako v hre – ten istý sprite aj kolesá.
+                CarView(
+                    layers = layers,
+                    section = section,
+                    onSection = {
+                        section = it
+                        selected = null
+                    },
+                    modifier = Modifier.weight(1.05f).fillMaxHeight()
+                )
+                Spacer(Modifier.width(10.dp))
+                // Všetkých 14 slotov naraz – žiadne scrollovanie.
+                SlotGrid(
+                    engine = engine,
+                    section = section,
+                    selected = selected,
+                    onSelect = { selected = it },
+                    modifier = Modifier.weight(1f).fillMaxHeight()
+                )
             }
 
             Spacer(Modifier.height(8.dp))
@@ -569,68 +721,197 @@ private fun CarPanel(
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(Modifier.padding(10.dp)) {
-                    when {
-                        section == null -> Text("Vyber zónu na aute", color = Color(0xFF9A8F7E))
-                        selected == null -> Text(
-                            "Sekcia ${section!!.label} — vyber diel",
-                            color = Color(0xFF9A8F7E)
-                        )
-                        selectedPart == null -> {
-                            Text(selected!!.displayName, color = Color(0xFFC4A35A))
-                            Text("Chýba — nič namontované", color = Color(0xFFB85C38))
+                Row(
+                    Modifier.padding(10.dp).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        when {
+                            selected == null -> Text(
+                                "Vyber diel vpravo alebo zónu na aute",
+                                color = Color(0xFF9A8F7E)
+                            )
+                            selectedPart == null -> {
+                                Text(selected!!.displayName, color = Color(0xFFC4A35A))
+                                Text("Chýba — nič namontované", color = Color(0xFFB85C38))
+                            }
+                            else -> {
+                                Text(
+                                    "${selected!!.displayName} · ${selectedPart.def.name}",
+                                    color = Color(0xFFC4A35A)
+                                )
+                                Text(
+                                    "${selectedPart.condition.displayName} · ${(selectedPart.health * 100).toInt()} %",
+                                    color = healthColor(selectedPart.health),
+                                    style = MaterialTheme.typography.titleLarge
+                                )
+                            }
                         }
-                        else -> {
-                            Text(selected!!.displayName, color = Color(0xFFC4A35A))
-                            Text(
-                                "${selectedPart.def.name} · ${selectedPart.condition.displayName}",
-                                color = Color(0xFFE8DFD0)
-                            )
-                            Text(
-                                "Stav: ${(selectedPart.health * 100).toInt()} %",
-                                color = healthColor(selectedPart.health),
-                                style = MaterialTheme.typography.titleLarge
-                            )
+                    }
+                    if (selectedPart != null) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = { onRepair(selected!!) },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF3D4A34),
+                                    contentColor = Color(0xFFE8DFD0)
+                                ),
+                                shape = RoundedCornerShape(6.dp)
+                            ) { Text("OPRAVIŤ") }
+                            Button(
+                                onClick = { onUnmount(selected!!) },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF4A3A28),
+                                    contentColor = Color(0xFFE8DFD0)
+                                ),
+                                shape = RoundedCornerShape(6.dp)
+                            ) { Text("DEMONTOVAŤ") }
                         }
                     }
                 }
             }
+        }
+    }
+}
 
-            Spacer(Modifier.height(6.dp))
-            Column(
-                Modifier
-                    .weight(0.45f)
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-            ) {
-                val slots = section?.slots.orEmpty()
-                if (slots.isEmpty()) {
-                    Text("…", color = Color(0xFF9A8F7E))
-                } else {
-                    slots.forEach { slot ->
-                        val part = engine.car.parts[slot]
-                        val isSel = selected == slot
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 2.dp)
-                                .background(
-                                    if (isSel) Color(0xFFC4A35A).copy(alpha = 0.22f) else Color.Transparent,
-                                    RoundedCornerShape(6.dp)
-                                )
-                                .clickable { selected = slot }
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(slot.displayName, color = Color(0xFFE8DFD0))
-                            Text(
-                                if (part == null) "—" else "${(part.health * 100).toInt()} %",
-                                color = if (part == null) Color(0xFFB85C38) else healthColor(part.health)
-                            )
-                        }
-                    }
+/** Bočný pohľad na auto zhodný s hrou + klikacie zóny. */
+@Composable
+private fun CarView(
+    layers: SedanLayers,
+    section: CarSection?,
+    onSection: (CarSection) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val aspect = (layers.imageWidth.toFloat() / layers.imageHeight.toFloat()).coerceIn(1.8f, 4.5f)
+    Box(
+        modifier.background(Color(0xFF3A4A55), RoundedCornerShape(8.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth(0.94f)
+                .aspectRatio(aspect)
+        ) {
+            Image(
+                bitmap = layers.stripped,
+                contentDescription = "Sedan",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize()
+            )
+            Canvas(Modifier.fillMaxSize()) {
+                val w = size.width
+                val r = layers.wheelRadiusFx * w
+                for (fx in floatArrayOf(layers.rearWheelFx, layers.frontWheelFx)) {
+                    val c = androidx.compose.ui.geometry.Offset(w * fx, size.height * layers.wheelCenterFy)
+                    drawCircle(Color(0xFF1B1E22), r, c)
+                    drawCircle(Color(0xFF32373D), r * 0.66f, c)
+                    drawCircle(Color(0xFF3E2723), r * 0.30f, c)
+                    drawCircle(Color(0xFFCFD8DC), r * 0.12f, c)
                 }
+            }
+            Row(Modifier.fillMaxSize()) {
+                CarSection.entries.forEach { zone ->
+                    CarZone(
+                        label = zone.label,
+                        active = section == zone,
+                        onClick = { onSection(zone) },
+                        modifier = Modifier.weight(1f).fillMaxHeight()
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Mriežka všetkých slotov – 3 stĺpce, bez scrollovania. */
+@Composable
+private fun SlotGrid(
+    engine: GameEngine,
+    section: CarSection?,
+    selected: ComponentSlot?,
+    onSelect: (ComponentSlot) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val slots = ComponentSlot.entries
+    val columns = 3
+    val rows = (slots.size + columns - 1) / columns
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        for (row in 0 until rows) {
+            Row(
+                Modifier.fillMaxWidth().weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                for (col in 0 until columns) {
+                    val index = row * columns + col
+                    if (index >= slots.size) {
+                        Spacer(Modifier.weight(1f))
+                        continue
+                    }
+                    val slot = slots[index]
+                    SlotChip(
+                        slot = slot,
+                        part = engine.car.parts[slot],
+                        selected = selected == slot,
+                        dimmed = section != null && !section.slots.contains(slot),
+                        onClick = { onSelect(slot) },
+                        modifier = Modifier.weight(1f).fillMaxHeight()
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SlotChip(
+    slot: ComponentSlot,
+    part: sk.kubis.endlessdrive.game.car.MountedPart?,
+    selected: Boolean,
+    dimmed: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val health = part?.health
+    Column(
+        modifier
+            .background(
+                when {
+                    selected -> Color(0xFFC4A35A).copy(alpha = 0.30f)
+                    part == null -> Color(0xFF4A2A28).copy(alpha = 0.45f)
+                    else -> Color(0xFF221C16)
+                },
+                RoundedCornerShape(6.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            slot.displayName,
+            color = Color(0xFFE8DFD0).copy(alpha = if (dimmed) 0.45f else 1f),
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 1
+        )
+        Text(
+            if (health == null) "chýba" else "${(health * 100).toInt()} %",
+            color = (if (health == null) Color(0xFFB85C38) else healthColor(health))
+                .copy(alpha = if (dimmed) 0.5f else 1f),
+            style = MaterialTheme.typography.titleLarge
+        )
+        if (health != null) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .background(Color(0xFF3A342C), RoundedCornerShape(2.dp))
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth(health.coerceIn(0f, 1f))
+                        .fillMaxHeight()
+                        .background(healthColor(health), RoundedCornerShape(2.dp))
+                )
             }
         }
     }
@@ -647,7 +928,7 @@ private fun CarZone(
         modifier
             .padding(3.dp)
             .background(
-                if (active) Color(0xFFC4A35A).copy(alpha = 0.28f) else Color.Black.copy(alpha = 0.12f),
+                if (active) Color(0xFFC4A35A).copy(alpha = 0.22f) else Color.Transparent,
                 RoundedCornerShape(6.dp)
             )
             .clickable(onClick = onClick),
@@ -655,9 +936,9 @@ private fun CarZone(
     ) {
         Text(
             label,
-            color = if (active) Color(0xFFFFF8E7) else Color(0xFFE8DFD0).copy(alpha = 0.85f),
+            color = if (active) Color(0xFFFFF8E7) else Color(0xFFE8DFD0).copy(alpha = 0.75f),
             style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.padding(bottom = 6.dp)
+            modifier = Modifier.padding(bottom = 4.dp)
         )
     }
 }
@@ -699,12 +980,35 @@ private fun healthColor(h: Float): Color = when {
 @Composable
 private fun LootPanel(
     engine: GameEngine,
+    bagRevision: Int,
+    pumpFuelL: Float,
     onTake: (Int) -> Unit,
+    onRefuel: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val b = engine.activeBuilding ?: return
-    PanelCard(b.type.displayName.uppercase(), onClose, modifier.widthIn(max = 320.dp)) {
+    // Loot je obyčajný MutableList – Compose ho nesleduje, revízia vynúti prekreslenie.
+    val rev = bagRevision
+    PanelCard(b.type.displayName.uppercase(), rev, onClose, modifier.widthIn(max = 320.dp)) {
+        if (pumpFuelL > 0.05f) {
+            Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                Text(
+                    "V stojane zostáva ${String.format("%.0f", pumpFuelL)} L",
+                    color = Color(0xFFC4A35A)
+                )
+                Button(
+                    onClick = onRefuel,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF3F5A3A),
+                        contentColor = Color(0xFFE8F5E9)
+                    ),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text("NATANKOVAŤ", style = MaterialTheme.typography.labelLarge)
+                }
+            }
+        }
         if (b.loot.isEmpty()) {
             Text("Nič tu už nie je.", color = Color(0xFF9A8F7E))
         } else {
@@ -721,7 +1025,7 @@ private fun LootPanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "$title\n${item.condition.displayName}",
+                        "$title\n${item.stateLabel}",
                         color = Color(0xFFE8DFD0),
                         modifier = Modifier.weight(1f)
                     )
@@ -735,9 +1039,11 @@ private fun LootPanel(
 @Composable
 private fun PanelCard(
     title: String,
+    /** Mení sa pri každej zmene obsahu – bez toho by Compose obsah preskočil. */
+    revision: Int,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
-    content: @Composable () -> Unit
+    content: @Composable (Int) -> Unit
 ) {
     Surface(
         modifier = modifier.widthIn(min = 280.dp, max = 420.dp).fillMaxHeight(0.85f),
@@ -754,7 +1060,51 @@ private fun PanelCard(
                 TextButton(onClick = onClose) { Text("✕") }
             }
             Spacer(Modifier.height(8.dp))
-            Column(Modifier.verticalScroll(rememberScrollState())) { content() }
+            Column(Modifier.verticalScroll(rememberScrollState())) { content(revision) }
+        }
+    }
+}
+
+@Composable
+private fun RunStat(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(label, color = Color(0xFF8A7F6E), style = MaterialTheme.typography.labelLarge)
+        Text(value, color = Color(0xFFE8DFD0), style = MaterialTheme.typography.titleLarge)
+    }
+}
+
+@Composable
+private fun PausePanel(
+    ui: GameUiState,
+    onResume: () -> Unit,
+    onMenu: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.width(300.dp),
+        color = Color(0xFF1A1612).copy(alpha = 0.95f),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("PAUZA", style = MaterialTheme.typography.headlineMedium, color = Color(0xFFE8DFD0))
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "${String.format("%.2f", ui.distanceKm)} km · ${ui.clock}",
+                color = Color(0xFFC8BFAE)
+            )
+            Text(
+                "Spálené ${String.format("%.1f", ui.fuelBurnedL)} L · ${ui.itemsLooted} vecí · ${ui.buildingsVisited} budov",
+                color = Color(0xFF9A8F7E),
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Spacer(Modifier.height(16.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(onClick = onResume) { Text("POKRAČOVAŤ") }
+                Button(
+                    onClick = onMenu,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3A342C))
+                ) { Text("MENU") }
+            }
         }
     }
 }
@@ -767,7 +1117,7 @@ private fun GameOverOverlay(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        modifier = modifier.width(320.dp),
+        modifier = modifier.width(340.dp),
         color = Color(0xFF1A1612).copy(alpha = 0.95f),
         shape = RoundedCornerShape(12.dp)
     ) {
@@ -775,6 +1125,13 @@ private fun GameOverOverlay(
             Text("KONIEC JAZDY", style = MaterialTheme.typography.headlineMedium, color = Color(0xFFE8DFD0))
             Spacer(Modifier.height(8.dp))
             Text(engine.endReason?.message ?: "", color = Color(0xFFC8BFAE))
+            if (engine.endDetail.isNotEmpty()) {
+                Text(
+                    engine.endDetail,
+                    color = Color(0xFFEF9A9A),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
             Spacer(Modifier.height(12.dp))
             Text(
                 String.format("%.2f km", engine.distanceKm),
@@ -783,6 +1140,16 @@ private fun GameOverOverlay(
             )
             if (engine.isNewRecord) {
                 Text("NOVÝ REKORD", color = Color(0xFFB85C38), style = MaterialTheme.typography.labelLarge)
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                RunStat("PALIVO", String.format("%.1f L", engine.fuelBurnedL))
+                RunStat("LOOT", engine.itemsLooted.toString())
+                RunStat("BUDOVY", engine.buildingsVisited.toString())
+                RunStat("ČAS", engine.clock)
             }
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

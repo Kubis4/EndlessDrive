@@ -135,7 +135,18 @@ data class ItemStack(
     val defId: String,
     var condition: ComponentCondition = ComponentCondition.USED,
     var health: Float = condition.maxHealth,
-    var count: Int = 1
+    var count: Int = 1,
+    /** Len pre kvapaliny: 1 = čistá, menej = riedená vodou / znečistená. */
+    var purity: Float = 1f
 ) {
     val def: ItemDef get() = ItemCatalog.byId(defId) ?: ItemCatalog.FUEL_CAN
+    val grade: FluidGrade get() = FluidGrade.of(purity)
+
+    /** Popis stavu do UI – kvapaliny majú čistotu, diely opotrebenie. */
+    val stateLabel: String
+        get() = if (def.fluid != null) {
+            "${grade.displayName} · ${(purity * 100).toInt()} %"
+        } else {
+            "${condition.displayName} · ${(health * 100).toInt()} %"
+        }
 }

@@ -44,6 +44,46 @@ object GameConfig {
     const val TEMP_RESPONSE = 0.12f
     const val ENGINE_WEAR_LOW_OIL = 0.012f
     const val ENGINE_WEAR_OVERHEAT = 0.018f
+    /** Opotrebenie motora zo znečisteného paliva (na plnú „vodu“, za sekundu). */
+    const val ENGINE_WEAR_BAD_FUEL = 0.006f
+    /** Opotrebenie motora z riedeného oleja. */
+    const val ENGINE_WEAR_BAD_OIL = 0.009f
+    /** Nad touto čistotou kvapalina motoru neškodí. */
+    const val PURITY_SAFE_OIL = 0.85f
+    const val PURITY_SAFE_FUEL = 0.80f
+    /** O koľko °C zhorší plne znečistená chladiaca kvapalina cieľovú teplotu. */
+    const val BAD_COOLANT_HEAT = 18f
+    /** Nad týmto sklonom (stúpanie) rastie spotreba, pod ním klesá. */
+    const val FUEL_SLOPE_UP = 3.2f
+    const val FUEL_SLOPE_DOWN = 1.6f
+    /** Ťah gravitácie po svahu (m/s² na jednotku sklonu). */
+    const val SLOPE_GRAVITY = 2.8f
+
+    // --- Úseky trate ---
+    const val FEATURE_MIN_LENGTH = 70f
+    const val FEATURE_MAX_LENGTH = 190f
+    /** Opotrebenie pneumatík/pruženia na rozbitej ceste (za sekundu pri plnej rýchlosti). */
+    const val TIRE_WEAR_BROKEN = 0.045f
+
+    // --- Denný cyklus ---
+    /** Dĺžka celého dňa v sekundách herného času. */
+    const val DAY_LENGTH = 600f
+    /** Štart jazdy ~ 8:00 (0 = polnoc, 0.5 = poludnie). */
+    const val DAY_START = 0.33f
+    /** Odber batérie svetlami pri vypnutom motore (podiel/s). */
+    const val HEADLIGHT_DRAIN_OFF = 0.007f
+    /** Odber svetlami pri bežiacom motore (alternátor to väčšinou pokryje). */
+    const val HEADLIGHT_DRAIN_ON = 0.004f
+    /** Nabíjanie alternátorom počas jazdy. */
+    const val ALTERNATOR_CHARGE = 0.015f
+    /** Pod touto hodnotou denného svetla treba svetlá. */
+    const val NIGHT_THRESHOLD = 0.42f
+    /** Bez svetiel v noci nevidíš – rýchlosť je zastropovaná. */
+    const val NIGHT_BLIND_SPEED = 7f
+
+    // --- Benzínová pumpa ---
+    const val PUMP_FUEL_MIN = 12f
+    const val PUMP_FUEL_MAX = 55f
 
     // --- Inventár ---
     const val INVENTORY_SLOTS = 16

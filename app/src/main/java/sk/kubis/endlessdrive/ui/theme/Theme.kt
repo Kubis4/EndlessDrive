@@ -51,6 +51,11 @@ private val AppTypography = Typography(
         fontSize = 42.sp,
         letterSpacing = 1.5.sp
     ),
+    displaySmall = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Bold,
+        fontSize = 22.sp
+    ),
     headlineMedium = TextStyle(
         fontFamily = FontFamily.Serif,
         fontWeight = FontWeight.SemiBold,

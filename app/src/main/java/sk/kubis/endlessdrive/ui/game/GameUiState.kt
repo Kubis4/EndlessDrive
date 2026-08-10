@@ -2,6 +2,7 @@ package sk.kubis.endlessdrive.ui.game
 
 import sk.kubis.endlessdrive.domain.model.EndReason
 import sk.kubis.endlessdrive.domain.model.GamePhase
+import sk.kubis.endlessdrive.domain.model.RoadFeature
 import sk.kubis.endlessdrive.game.PrepStep
 
 /** Stav HUD / overlayov – aktualizuje sa max ~10×/s, nie každú snímku. */
@@ -15,16 +16,31 @@ data class GameUiState(
     val fuelCapacityL: Float = 40f,
     val oilCapacityL: Float = 4f,
     val coolantCapacityL: Float = 6f,
+    /** Čistota kvapalín v nádržiach (1 = čistá). */
+    val fuelPurity: Float = 1f,
+    val oilPurity: Float = 1f,
+    val coolantPurity: Float = 1f,
+    val roadFeature: RoadFeature = RoadFeature.STRAIGHT,
     val temperature: Float = 0f,
     val speedKmh: Float = 0f,
     val distanceKm: Float = 0f,
     val overallHealth: Float = 0f,
+    val batteryCharge: Float = 0f,
     val engineRunning: Boolean = false,
+    val headlightsOn: Boolean = false,
+    val isNight: Boolean = false,
+    val clock: String = "08:00",
     val hasNearbyBuilding: Boolean = false,
     val exploring: Boolean = false,
+    /** Zásoba v stojane preskúmavanej benzínky. */
+    val pumpFuelL: Float = 0f,
+    val paused: Boolean = false,
     val endReason: EndReason? = null,
     val isNewRecord: Boolean = false,
     val bestDistanceKm: Float = 0f,
+    val fuelBurnedL: Float = 0f,
+    val itemsLooted: Int = 0,
+    val buildingsVisited: Int = 0,
     /** Invalidácia inventára / panelov auta. */
     val bagRevision: Int = 0
 )

@@ -3,6 +3,7 @@ package sk.kubis.endlessdrive.ui.game
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
@@ -126,6 +127,68 @@ class CarArtist {
         }
     }
 
+    /**
+     * Kužeľ svetlometov vychádza z nameranej pozície svetla v sprite a rotuje s autom.
+     * Kreslí sa až po nočnom závoji, aby ho tma nezhasla.
+     */
+    fun DrawScope.drawHeadlightBeam(
+        bodyX: Float,
+        bodyY: Float,
+        angle: Float,
+        ppm: Float,
+        proj: DepthProjection,
+        layers: SedanLayers?,
+        strength: Float,
+        braking: Boolean
+    ) {
+        if (layers == null || strength <= 0.02f) return
+        val deg = -Math.toDegrees(angle.toDouble()).toFloat()
+        val near = GameConfig.CAR_NEAR_DEPTH
+        val px = proj.linearX(bodyX, near)
+        val py = proj.linearY(bodyY, near)
+
+        rotate(degrees = deg, pivot = Offset(px, py)) {
+            val layout = spriteLayout(layers, px, py, ppm)
+            val hx = layout.originX + layers.headlightFx * layout.drawW
+            val hy = layout.originY + layers.headlightFy * layout.drawH
+            val tx = layout.originX + layers.taillightFx * layout.drawW
+            val ty = layout.originY + layers.taillightFy * layout.drawH
+            val roadY = layout.frontWy + layout.wheelR
+            val len = ppm * 12f
+
+            bodyPath.reset()
+            bodyPath.moveTo(hx, hy - ppm * 0.10f)
+            bodyPath.lineTo(hx + len, roadY - ppm * 2.1f)
+            bodyPath.lineTo(hx + len, roadY + ppm * 0.35f)
+            bodyPath.lineTo(hx, hy + ppm * 0.14f)
+            bodyPath.close()
+            drawPath(
+                bodyPath,
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color(0xFFFFF2C0).copy(alpha = 0.34f * strength),
+                        Color(0xFFFFF2C0).copy(alpha = 0.10f * strength),
+                        Color.Transparent
+                    ),
+                    startX = hx,
+                    endX = hx + len
+                )
+            )
+            // Svetelná plocha na vozovke tesne pred autom.
+            drawOval(
+                Color(0xFFFFF3C4).copy(alpha = 0.22f * strength),
+                topLeft = Offset(hx, roadY - ppm * 0.45f),
+                size = Size(len * 0.8f, ppm * 0.9f)
+            )
+            drawCircle(Color(0xFFFFF8DC).copy(alpha = 0.85f * strength), ppm * 0.14f, Offset(hx, hy))
+            drawCircle(Color(0xFFFFEFA8).copy(alpha = 0.35f * strength), ppm * 0.34f, Offset(hx, hy))
+
+            val tail = if (braking) Color(0xFFFF2A2A) else Color(0xFFD8402F)
+            drawCircle(tail.copy(alpha = (if (braking) 0.95f else 0.6f) * strength), ppm * 0.11f, Offset(tx, ty))
+            drawCircle(tail.copy(alpha = 0.22f * strength), ppm * 0.30f, Offset(tx, ty))
+        }
+    }
+
     private data class SpriteLayout(
         val originX: Float,
         val originY: Float,
@@ -212,12 +275,12 @@ class CarArtist {
         tireHealth: Float,
         accent: Color
     ) {
-        val rr = r * (0.85f + 0.15f * tireHealth)
-        drawCircle(Color(0xFF15171A), rr * 0.98f, Offset(cx + rr * 0.12f, cy + rr * 0.04f))
-        drawCircle(Color(0xFF26292E), rr, Offset(cx, cy))
-        drawCircle(Color(0xFF3C4247), rr * 0.62f, Offset(cx, cy))
-        drawCircle(accent, rr * 0.34f, Offset(cx, cy))
-        drawCircle(Color(0xFFCFD8DC), rr * 0.14f, Offset(cx, cy))
+        val rr = r * (0.90f + 0.10f * tireHealth)
+        // Pneumatika + disk sú sústredné – žiadny posunutý „druhý“ kruh.
+        drawCircle(Color(0xFF1B1E22), rr, Offset(cx, cy))
+        drawCircle(Color(0xFF32373D), rr * 0.66f, Offset(cx, cy))
+        drawCircle(accent.copy(alpha = 0.85f), rr * 0.30f, Offset(cx, cy))
+        drawCircle(Color(0xFFCFD8DC), rr * 0.12f, Offset(cx, cy))
         rotate(degrees = spinDeg, pivot = Offset(cx, cy)) {
             for (i in 0 until 5) {
                 val a = (i * 72f) * (Math.PI / 180.0).toFloat()

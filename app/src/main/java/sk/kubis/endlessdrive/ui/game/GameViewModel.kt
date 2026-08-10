@@ -27,6 +27,7 @@ class GameViewModel(
     private var bestKm = bestDistanceKm
     private var hudTimer = 0f
     private var pausedByLifecycle = false
+    private var pausedByUser = false
     private var bagRevision = 0
 
     /** Invalidácia Canvasu – čítať len vnútri Canvas. */
@@ -67,8 +68,22 @@ class GameViewModel(
         publishUi(force = true)
     }
 
+    /** Ručná pauza – čas, spotreba aj batéria stoja. */
+    fun setPaused(value: Boolean) {
+        pausedByUser = value
+        if (value) {
+            gasPressed = false
+            brakePressed = false
+            throttle = 0f
+            brake = 0f
+            engine.throttleInput = 0f
+            engine.brakeInput = 0f
+        }
+        publishUi(force = true)
+    }
+
     fun onFrame(dt: Float, screenHeightPx: Float) {
-        if (pausedByLifecycle) {
+        if (pausedByLifecycle || pausedByUser) {
             frame++
             return
         }
@@ -121,16 +136,29 @@ class GameViewModel(
             fuelCapacityL = e.car.fuelCapacity,
             oilCapacityL = e.car.oilCapacity,
             coolantCapacityL = e.car.coolantCapacity,
+            fuelPurity = e.car.fuelPurity,
+            oilPurity = e.car.oilPurity,
+            coolantPurity = e.car.coolantPurity,
+            roadFeature = e.currentFeature,
             temperature = e.car.temperature,
             speedKmh = e.car.speedKmh,
             distanceKm = e.distanceKm,
             overallHealth = e.car.overallHealth,
+            batteryCharge = e.car.batteryCharge,
             engineRunning = e.car.engineRunning,
+            headlightsOn = e.headlightsOn,
+            isNight = e.isNight,
+            clock = e.clock,
             hasNearbyBuilding = e.buildingNear() != null,
             exploring = e.phase == GamePhase.EXPLORING && e.activeBuilding != null,
+            pumpFuelL = e.activeBuilding?.pumpFuelL ?: 0f,
+            paused = pausedByUser,
             endReason = e.endReason,
             isNewRecord = e.isNewRecord,
             bestDistanceKm = bestKm,
+            fuelBurnedL = e.fuelBurnedL,
+            itemsLooted = e.itemsLooted,
+            buildingsVisited = e.buildingsVisited,
             bagRevision = bagRevision
         )
     }
@@ -189,6 +217,21 @@ class GameViewModel(
         bumpBag()
     }
 
+    fun unmount(slot: ComponentSlot) {
+        engine.unmountSlot(slot)
+        bumpBag()
+    }
+
+    fun refuelFromPump() {
+        engine.refuelFromPump()
+        bumpBag()
+    }
+
+    fun toggleHeadlights() {
+        engine.toggleHeadlights()
+        bump()
+    }
+
     fun startEngine() {
         engine.tryStartEngine()
         bump()
@@ -227,6 +270,7 @@ class GameViewModel(
         throttle = 0f
         brake = 0f
         pausedByLifecycle = false
+        pausedByUser = false
         engine = GameEngine(Random.nextLong(), bestKm)
         hudTimer = 0f
         bump()

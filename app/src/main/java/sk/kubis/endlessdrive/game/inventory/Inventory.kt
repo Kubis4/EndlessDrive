@@ -32,7 +32,14 @@ class Inventory(private val maxSlots: Int = GameConfig.INVENTORY_SLOTS) {
         if (stack.def.fluid != null) {
             val idx = slots.indexOfFirst { it?.defId == stack.defId }
             if (idx >= 0) {
-                slots[idx]!!.count += stack.count
+                val existing = slots[idx]!!
+                // Zlievame do jedného kanistra → čistota sa mieša podľa objemu.
+                val total = existing.count + stack.count
+                if (total > 0) {
+                    existing.purity =
+                        (existing.purity * existing.count + stack.purity * stack.count) / total
+                }
+                existing.count = total
                 return true
             }
         }

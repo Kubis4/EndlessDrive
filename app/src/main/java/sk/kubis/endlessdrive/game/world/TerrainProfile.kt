@@ -11,18 +11,23 @@ import kotlin.math.pow
 class TerrainProfile(seed: Long) {
     private val noise = SimplexNoise(seed)
 
-    fun heightAt(worldX: Float, style: BranchStyle): Float {
+    /**
+     * @param challengeMul násobiteľ členitosti z aktuálneho úseku trate
+     *   (rovinka < 1, kopce > 1, most ≈ 0).
+     */
+    fun heightAt(worldX: Float, style: BranchStyle, challengeMul: Float = 1f): Float {
         val x = worldX
         val intro = MathX.smoothstep(8f, 70f, x)
         val difficulty = MathX.clamp((x - 100f) / 1400f, 0f, 1f).toDouble().pow(0.75).toFloat()
-        val challenge = style.hillChallenge
+        val challenge = style.hillChallenge * challengeMul.coerceIn(0f, 3f)
 
         // Viac rovín medzi kopcami.
         val flatMask = MathX.smoothstep(-0.05f, 0.45f, noise.noise2(x * 0.0028f, 71.5f))
         val flatFloor = 0.48f + 0.35f * difficulty
         val calm = flatFloor + (1f - flatFloor) * flatMask
 
-        val steep = ((0.45f + 0.40f * difficulty) * challenge).coerceAtMost(1.0f) * intro * calm
+        // Strop drží najstrmšie miesta v rozumnom uhle – slabý vrak sa tam ešte vyškriabe.
+        val steep = ((0.40f + 0.32f * difficulty) * challenge).coerceAtMost(0.80f) * intro * calm
         val stretch = 1.15f + 0.65f * difficulty
 
         var h = 0f
@@ -35,31 +40,10 @@ class TerrainProfile(seed: Long) {
         return 3.2f + h
     }
 
-    fun slopeAt(worldX: Float, style: BranchStyle): Float {
+    fun slopeAt(worldX: Float, style: BranchStyle, challengeMul: Float = 1f): Float {
         val d = 0.55f
-        return (heightAt(worldX + d, style) - heightAt(worldX - d, style)) / (2f * d)
-    }
-
-    /** Nájde lokálne najrovnejšie miesto v [fromLocal, toLocal] (abs slope). */
-    fun flattestLocalX(
-        worldOrigin: Float,
-        style: BranchStyle,
-        fromLocal: Float,
-        toLocal: Float,
-        step: Float = 2.5f
-    ): Float {
-        var bestX = fromLocal
-        var best = Float.MAX_VALUE
-        var x = fromLocal
-        while (x <= toLocal) {
-            val s = kotlin.math.abs(slopeAt(worldOrigin + x, style))
-            if (s < best) {
-                best = s
-                bestX = x
-            }
-            x += step
-        }
-        return bestX
+        return (heightAt(worldX + d, style, challengeMul) -
+            heightAt(worldX - d, style, challengeMul)) / (2f * d)
     }
 
     private fun octave(x: Float, freq: Float, phase: Float, slope: Float): Float =
