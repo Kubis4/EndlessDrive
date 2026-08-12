@@ -3,6 +3,7 @@ package sk.kubis.endlessdrive.core
 import kotlin.math.PI
 import kotlin.math.exp
 import kotlin.math.floor
+import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
@@ -35,6 +36,19 @@ object MathX {
     }
 
     fun approxSin(x: Float): Float = sin(x.toDouble()).toFloat()
+
+    /**
+     * Nekonečná krivka postupu: 0 na štarte, 1 vo vzdialenosti [softCap],
+     * ďalej rastie stále, len čoraz pomalšie (2× softCap ≈ 1.58,
+     * 10× softCap ≈ 3.46). Vďaka tomu sa hra nikdy „nedorastie“ –
+     * nemá tvrdý strop, po ktorom je 30. kilometer rovnaký ako 8.
+     */
+    fun growth(distance: Float, softCap: Float): Float {
+        if (distance <= 0f || softCap <= 0f) return 0f
+        return (ln(1f + distance / softCap) / LN2)
+    }
+
+    private val LN2 = ln(2f)
 
     fun floorDiv(v: Float, size: Float): Int = floor(v / size).toInt()
 }

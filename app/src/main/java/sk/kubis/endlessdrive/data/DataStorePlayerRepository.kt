@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -21,6 +22,7 @@ class DataStorePlayerRepository(context: Context) : PlayerRepository {
         val BEST = floatPreferencesKey("best_km")
         val RUNS = intPreferencesKey("total_runs")
         val TOTAL = floatPreferencesKey("total_km")
+        val RUN = stringPreferencesKey("run_snapshot")
     }
 
     override val profile: Flow<PlayerProfile> = store.data.map { prefs ->
@@ -41,5 +43,15 @@ class DataStorePlayerRepository(context: Context) : PlayerRepository {
             prefs[Keys.RUNS] = (prefs[Keys.RUNS] ?: 0) + 1
             prefs[Keys.TOTAL] = (prefs[Keys.TOTAL] ?: 0f) + distanceKm
         }
+    }
+
+    override suspend fun loadRun(): String? = store.data.first()[Keys.RUN]
+
+    override suspend fun saveRun(data: String) {
+        store.edit { it[Keys.RUN] = data }
+    }
+
+    override suspend fun clearRun() {
+        store.edit { it.remove(Keys.RUN) }
     }
 }

@@ -118,6 +118,56 @@ class SkyPainter {
         drawOval(color, topLeft = Offset(cx + r * 0.25f, cy - r * 0.34f), size = Size(r * 1.0f, r * 0.52f))
     }
 
+    /** Nízka silueta lesa medzi kopcami a lúkou – tretia vrstva hĺbky. */
+    fun DrawScope.drawTreeline(camX: Float, horizonY: Float, day: Float, biome: BiomeType) {
+        val col = lerp(
+            lerp(
+                when (biome) {
+                    BiomeType.RURAL -> Color(0xFF41603C)
+                    BiomeType.INDUSTRIAL -> Color(0xFF44515A)
+                    BiomeType.WASTELAND -> Color(0xFF5B5136)
+                },
+                Color(0xFF10182B), 0.75f
+            ),
+            when (biome) {
+                BiomeType.RURAL -> Color(0xFF41603C)
+                BiomeType.INDUSTRIAL -> Color(0xFF44515A)
+                BiomeType.WASTELAND -> Color(0xFF5B5136)
+            },
+            day
+        )
+        val baseY = horizonY + horizonY * 0.02f
+        val h = horizonY * 0.075f
+        ridgePath.reset()
+        ridgePath.moveTo(-4f, size.height)
+        var x = -4f
+        while (x <= size.width + 4f) {
+            val u = camX * 0.34f + x / 26f
+            // Zubatý profil korún – nie hladká vlna.
+            val n = (sin(u.toDouble()).toFloat() * 0.5f + 0.5f) *
+                (sin((u * 2.7f + 1.3f).toDouble()).toFloat() * 0.5f + 0.5f)
+            ridgePath.lineTo(x, baseY - h * (0.35f + n))
+            x += 7f
+        }
+        ridgePath.lineTo(size.width + 4f, size.height)
+        ridgePath.close()
+        drawPath(ridgePath, col)
+    }
+
+    /** Hmla nad horizontom – zjemní prechod medzi oblohou a krajinou. */
+    fun DrawScope.drawHaze(horizonY: Float, day: Float, biome: BiomeType) {
+        val haze = lerp(Color(0xFF1B2338), biomeHorizon(biome), day.coerceIn(0f, 1f))
+        drawRect(
+            brush = Brush.verticalGradient(
+                colors = listOf(Color.Transparent, haze.copy(alpha = 0.55f), Color.Transparent),
+                startY = horizonY - horizonY * 0.30f,
+                endY = horizonY + horizonY * 0.14f
+            ),
+            topLeft = Offset(0f, horizonY - horizonY * 0.30f),
+            size = Size(size.width, horizonY * 0.44f)
+        )
+    }
+
     /** Dve vrstvy vzdialených kopcov – hlavný zdroj hĺbky za cestou. */
     fun DrawScope.drawDistantHills(camX: Float, horizonY: Float, day: Float, biome: BiomeType) {
         for (layer in 0 until 2) {

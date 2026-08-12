@@ -114,13 +114,19 @@ class SceneryPainter {
 
     // --- Jednotlivé kulisy -------------------------------------------------
 
+    /** Tieň na zemi – jediná vec, ktorá kulisu „posadí“ do terénu. */
+    private fun DrawScope.groundShadow(x: Float, y: Float, s: Float, day: Float, spread: Float = 1f) {
+        val alpha = 0.10f + 0.16f * day.coerceIn(0f, 1f)
+        drawOval(
+            Color(0xFF1A1408).copy(alpha = alpha),
+            topLeft = Offset(x - s * 0.85f * spread, y - s * 0.11f),
+            size = Size(s * 1.7f * spread, s * 0.24f)
+        )
+    }
+
     private fun DrawScope.broadTree(x: Float, y: Float, s: Float, day: Float) {
         val h = s * 2.6f
-        drawOval(
-            shade(Color.Black, day).copy(alpha = 0.18f),
-            topLeft = Offset(x - s * 0.7f, y - s * 0.09f),
-            size = Size(s * 1.4f, s * 0.20f)
-        )
+        groundShadow(x, y, s, day, 1.1f)
         drawLine(
             shade(Color(0xFF5B4433), day),
             Offset(x, y), Offset(x, y - h * 0.55f),
@@ -135,6 +141,7 @@ class SceneryPainter {
 
     private fun DrawScope.pineTree(x: Float, y: Float, s: Float, day: Float) {
         val h = s * 3.0f
+        groundShadow(x, y, s, day, 0.9f)
         drawLine(
             shade(Color(0xFF4A3728), day),
             Offset(x, y), Offset(x, y - h * 0.28f),
@@ -155,6 +162,7 @@ class SceneryPainter {
     }
 
     private fun DrawScope.deadTree(x: Float, y: Float, s: Float, day: Float) {
+        groundShadow(x, y, s, day, 0.7f)
         val col = shade(Color(0xFF6B5B4A), day)
         val h = s * 2.2f
         drawLine(col, Offset(x, y), Offset(x - s * 0.08f, y - h), strokeWidth = s * 0.13f, cap = StrokeCap.Round)
@@ -163,6 +171,7 @@ class SceneryPainter {
     }
 
     private fun DrawScope.bush(x: Float, y: Float, s: Float, day: Float, base: Color) {
+        groundShadow(x, y, s, day, 0.6f)
         val c = shade(base, day)
         drawCircle(c, s * 0.42f, Offset(x, y - s * 0.30f))
         drawCircle(c, s * 0.32f, Offset(x - s * 0.35f, y - s * 0.18f))
@@ -215,6 +224,7 @@ class SceneryPainter {
     }
 
     private fun DrawScope.container(x: Float, y: Float, s: Float, day: Float) {
+        groundShadow(x, y, s, day, 1.5f)
         val w = s * 2.4f
         val h = s * 1.1f
         val body = shade(Color(0xFF7A5A3E), day)
@@ -231,6 +241,7 @@ class SceneryPainter {
     }
 
     private fun DrawScope.wreck(x: Float, y: Float, s: Float, day: Float) {
+        groundShadow(x, y, s, day, 1.2f)
         val body = shade(Color(0xFF6E4B3A), day)
         drawRect(body, topLeft = Offset(x - s * 0.9f, y - s * 0.55f), size = Size(s * 1.8f, s * 0.42f))
         drawRect(body, topLeft = Offset(x - s * 0.35f, y - s * 0.85f), size = Size(s * 0.85f, s * 0.34f))

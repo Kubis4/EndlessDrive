@@ -2,6 +2,7 @@ package sk.kubis.endlessdrive.ui.game
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -15,6 +16,7 @@ import sk.kubis.endlessdrive.domain.model.ComponentSlot
 import sk.kubis.endlessdrive.domain.model.GamePhase
 import sk.kubis.endlessdrive.domain.repository.PlayerRepository
 import sk.kubis.endlessdrive.game.GameEngine
+import sk.kubis.endlessdrive.game.save.RunCodec
 import kotlin.random.Random
 
 class GameViewModel(
@@ -22,13 +24,18 @@ class GameViewModel(
     bestDistanceKm: Float
 ) : ViewModel() {
 
-    private var engine: GameEngine = GameEngine(Random.nextLong(), bestDistanceKm)
+    private var engine: GameEngine by mutableStateOf(GameEngine(Random.nextLong(), bestDistanceKm))
     private var recorded = false
     private var bestKm = bestDistanceKm
     private var hudTimer = 0f
     private var pausedByLifecycle = false
     private var pausedByUser = false
     private var bagRevision = 0
+
+    // Kĺzavý priemer snímkovej frekvencie pre HUD.
+    private var fpsAccum = 0f
+    private var fpsFrames = 0
+    private var fps = 0
 
     /** Invalidácia Canvasu – čítať len vnútri Canvas. */
     var frame by mutableIntStateOf(0)
@@ -43,6 +50,45 @@ class GameViewModel(
     private var brake = 0f
 
     val game: GameEngine get() = engine
+
+    /** true, keď je rozohraná jazda, do ktorej sa dá vrátiť z menu. */
+    var hasActiveRun: Boolean by mutableStateOf(false)
+        private set
+
+    init {
+        // Rozohraná jazda z minula – ak sedí, pokračujeme presne tam, kde sme skončili.
+        viewModelScope.launch {
+            val saved = runCatching { playerRepository.loadRun() }.getOrNull() ?: return@launch
+            val snap = RunCodec.decode(saved)
+            if (snap == null) {
+                runCatching { playerRepository.clearRun() }
+                return@launch
+            }
+            engine = GameEngine.restore(snap, bestKm)
+            recorded = false
+            hasActiveRun = true
+            publishUi(force = true)
+        }
+    }
+
+    /** Odloží jazdu na disk – volá sa pri pauze a na križovatke. */
+    private fun persistRun() {
+        if (!hasActiveRun || engine.phase == GamePhase.GAME_OVER) return
+        val data = RunCodec.encode(engine.snapshot())
+        viewModelScope.launch { runCatching { playerRepository.saveRun(data) } }
+    }
+
+    private fun forgetRun() {
+        viewModelScope.launch { runCatching { playerRepository.clearRun() } }
+    }
+
+    /** Rekord z profilu môže doraziť z DataStore až po vytvorení ViewModelu. */
+    fun updateBestDistance(km: Float) {
+        if (km > bestKm) {
+            bestKm = km
+            publishUi(force = true)
+        }
+    }
 
     fun onGasChanged(pressed: Boolean) {
         gasPressed = pressed
@@ -60,6 +106,7 @@ class GameViewModel(
         brake = 0f
         engine.throttleInput = 0f
         engine.brakeInput = 0f
+        persistRun()
         publishUi(force = true)
     }
 
@@ -83,12 +130,14 @@ class GameViewModel(
     }
 
     fun onFrame(dt: Float, screenHeightPx: Float) {
+        trackFps(dt)
         if (pausedByLifecycle || pausedByUser) {
             frame++
             return
         }
 
         if (engine.phase == GamePhase.GAME_OVER) {
+            hasActiveRun = false
             maybeRecord()
             frame++
             publishUi(dt, force = true)
@@ -114,6 +163,16 @@ class GameViewModel(
         publishUi(dt)
     }
 
+    private fun trackFps(dt: Float) {
+        fpsAccum += dt
+        fpsFrames++
+        if (fpsAccum >= 0.5f) {
+            fps = (fpsFrames / fpsAccum).toInt()
+            fpsAccum = 0f
+            fpsFrames = 0
+        }
+    }
+
     private fun publishUi(dt: Float = 0f, force: Boolean = false) {
         hudTimer += dt
         val phaseChanged = _ui.value.phase != engine.phase
@@ -128,7 +187,9 @@ class GameViewModel(
         val e = engine
         return GameUiState(
             phase = e.phase,
-            message = e.message,
+            // Stará hláška zmizne sama; blokáciu držíme, kým trvá.
+            message = if (e.messageFresh) e.message else "",
+            blockedReason = e.blockedReason,
             prepStep = e.prepStep,
             fuelL = e.car.fuel,
             oilL = e.car.oil,
@@ -140,6 +201,20 @@ class GameViewModel(
             oilPurity = e.car.oilPurity,
             coolantPurity = e.car.coolantPurity,
             roadFeature = e.currentFeature,
+            surface = e.currentSurface,
+            isWinter = e.isWinter,
+            hasChains = e.car.hasChains,
+            surfaceAhead = e.patchAhead?.let { p ->
+                p.surface to (p.start - e.localX).toInt().coerceAtLeast(0)
+            },
+            approachingJunction = e.approachingJunction,
+            junctionDistanceM = e.junctionDistanceM,
+            pendingChoiceId = e.pendingChoiceId,
+            events = e.activeEvents.mapNotNull { ev ->
+                ev.event.chip?.let { it to ev.remaining.toInt() }
+            },
+            wheelSlip = e.car.wheelSlip,
+            wheelsLocked = e.car.wheelsLocked,
             temperature = e.car.temperature,
             speedKmh = e.car.speedKmh,
             distanceKm = e.distanceKm,
@@ -153,12 +228,17 @@ class GameViewModel(
             exploring = e.phase == GamePhase.EXPLORING && e.activeBuilding != null,
             pumpFuelL = e.activeBuilding?.pumpFuelL ?: 0f,
             paused = pausedByUser,
+            fps = fps,
             endReason = e.endReason,
             isNewRecord = e.isNewRecord,
             bestDistanceKm = bestKm,
             fuelBurnedL = e.fuelBurnedL,
             itemsLooted = e.itemsLooted,
             buildingsVisited = e.buildingsVisited,
+            fittedEngine = e.car.fittedHudLabel(ComponentSlot.ENGINE),
+            fittedDrive = e.car.fittedHudLabel(ComponentSlot.DRIVETRAIN),
+            fittedTires = "${e.car.fittedHudLabel(ComponentSlot.TIRE_FRONT)}/${e.car.fittedHudLabel(ComponentSlot.TIRE_REAR)}",
+            fittedSuspension = e.car.fittedHudLabel(ComponentSlot.SUSPENSION),
             bagRevision = bagRevision
         )
     }
@@ -207,13 +287,18 @@ class GameViewModel(
         if (ok) bumpBag() else bump()
     }
 
-    fun useItem(i: Int) {
-        val ok = engine.useInventoryItem(i)
+    fun useItem(i: Int, target: ComponentSlot? = null) {
+        val ok = engine.useInventoryItem(i, target)
         if (ok) bumpBag() else bump()
     }
 
     fun repair(slot: ComponentSlot) {
         engine.repairSlot(slot)
+        bumpBag()
+    }
+
+    fun swapTyres() {
+        engine.swapTyres()
         bumpBag()
     }
 
@@ -234,11 +319,21 @@ class GameViewModel(
 
     fun startEngine() {
         engine.tryStartEngine()
+        if (engine.car.engineRunning) {
+            hasActiveRun = true
+            persistRun()
+        }
         bump()
     }
 
     fun stopEngine() {
         engine.stopEngine()
+        bump()
+    }
+
+    /** Voľba vetvy za jazdy – auto nezastavuje. */
+    fun selectBranch(id: Int) {
+        engine.selectBranch(id)
         bump()
     }
 
@@ -248,6 +343,7 @@ class GameViewModel(
         throttle = 0f
         brake = 0f
         engine.chooseBranch(id)
+        persistRun()
         bump()
     }
 
@@ -256,6 +352,7 @@ class GameViewModel(
     private fun maybeRecord() {
         if (recorded) return
         recorded = true
+        forgetRun()
         val distance = engine.distanceKm
         if (distance > bestKm) bestKm = distance
         viewModelScope.launch {
@@ -263,7 +360,10 @@ class GameViewModel(
         }
     }
 
+    /** Nová jazda od nuly – nový vrak, nový svet. */
     fun retry() {
+        hasActiveRun = false
+        forgetRun()
         recorded = false
         gasPressed = false
         brakePressed = false

@@ -2,21 +2,32 @@ package sk.kubis.endlessdrive
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import sk.kubis.endlessdrive.core.GameConfig
+import sk.kubis.endlessdrive.core.SeededRandom
 import sk.kubis.endlessdrive.domain.model.BranchStyle
+import sk.kubis.endlessdrive.domain.model.ComponentCondition
 import sk.kubis.endlessdrive.domain.model.ComponentSlot
+import sk.kubis.endlessdrive.domain.model.DriveLayout
 import sk.kubis.endlessdrive.domain.model.EndReason
 import sk.kubis.endlessdrive.domain.model.FluidType
 import sk.kubis.endlessdrive.domain.model.GamePhase
 import sk.kubis.endlessdrive.domain.model.ItemCatalog
 import sk.kubis.endlessdrive.domain.model.ItemStack
 import sk.kubis.endlessdrive.domain.model.RoadFeature
+import sk.kubis.endlessdrive.domain.model.RoadPaving
+import sk.kubis.endlessdrive.domain.model.RoadSurface
+import sk.kubis.endlessdrive.domain.model.SedanSpec
+import sk.kubis.endlessdrive.domain.model.TIRE_SLOTS
 import sk.kubis.endlessdrive.game.DayCycle
 import sk.kubis.endlessdrive.game.GameEngine
 import sk.kubis.endlessdrive.game.car.Car
 import sk.kubis.endlessdrive.game.world.TerrainProfile
+import sk.kubis.endlessdrive.domain.model.BuildingType
+import sk.kubis.endlessdrive.game.save.RunCodec
+import sk.kubis.endlessdrive.game.world.LootGenerator
 import sk.kubis.endlessdrive.game.world.WorldGenerator
 
 class GameCoreTest {
@@ -129,10 +140,10 @@ class GameCoreTest {
     fun unmountMovesPartToInventory() {
         val engine = GameEngine(6L, 0f)
         engine.inventory.clear()
-        assertTrue(engine.car.hasPart(ComponentSlot.TIRES))
-        assertTrue(engine.unmountSlot(ComponentSlot.TIRES))
-        assertFalse(engine.car.hasPart(ComponentSlot.TIRES))
-        assertTrue(engine.inventory.slots.any { it?.def?.mountsTo == ComponentSlot.TIRES })
+        assertTrue(engine.car.hasPart(ComponentSlot.TIRE_FRONT))
+        assertTrue(engine.unmountSlot(ComponentSlot.TIRE_FRONT))
+        assertFalse(engine.car.hasPart(ComponentSlot.TIRE_FRONT))
+        assertTrue(engine.inventory.slots.any { it?.def?.axleTire == true })
     }
 
     @Test
@@ -234,7 +245,9 @@ class GameCoreTest {
             seen += "${car.parts.keys.sorted().joinToString()}|${(car.fuel * 2).toInt()}"
             // Motor, nádrž, pneumatiky a pruženie ostávajú vždy.
             assertTrue(car.hasPart(ComponentSlot.ENGINE))
-            assertTrue(car.hasPart(ComponentSlot.TIRES))
+            assertTrue(car.hasPart(ComponentSlot.TIRE_FRONT))
+            assertTrue(car.hasPart(ComponentSlot.TIRE_REAR))
+            assertEquals(ItemCatalog.TIRE_POOR.id, car.parts[ComponentSlot.TIRE_FRONT]?.defId)
 
             // Kôlňa pri aute musí obsahovať všetko, čo chýba do štartu.
             val shed = engine.segment.buildings.first()
@@ -242,7 +255,7 @@ class GameCoreTest {
             car.missingEssentials().forEach { slot ->
                 assertTrue(
                     "kôlňa musí ponúkať $slot (seed $seed)",
-                    shed.loot.any { it.def.mountsTo == slot }
+                    shed.loot.any { it.def.canMountTo(slot) }
                 )
             }
             if (car.fuel < 1f) {
@@ -309,6 +322,478 @@ class GameCoreTest {
         // Najstrmšie, čo terén dovolí.
         repeat(180) { car.applyDrive(1f / 60f, 1f, 0f, 0f, 0.35f, 0.2f) }
         assertTrue("auto sa musí rozbehnúť aj do kopca, dostalo ${car.speed}", car.speed > 1f)
+    }
+
+    private fun drivingCar(layout: String, tireHealth: Float = 0.9f): Car {
+        val car = Car()
+        car.installStarterKit()
+        car.mount(
+            ComponentSlot.DRIVETRAIN,
+            ItemStack(
+                when (layout) {
+                    "FWD" -> ItemCatalog.DRIVE_FWD.id
+                    "AWD" -> ItemCatalog.DRIVE_AWD.id
+                    else -> ItemCatalog.DRIVE_RWD.id
+                },
+                ComponentCondition.NEW, 1f
+            )
+        )
+        TIRE_SLOTS.forEach {
+            car.mount(it, ItemStack(ItemCatalog.TIRE.id, ComponentCondition.USED, tireHealth))
+        }
+        car.fuel = 20f
+        car.engineRunning = true
+        return car
+    }
+
+    @Test
+    fun runningDryStopsTheCarButNotTheRun() {
+        val engine = GameEngine(21L, 0f)
+        engine.prepareForDriving()
+        engine.tryStartEngine()
+        engine.resumeDriving()
+        // V batohu je kanister – dôjdené palivo teda nesmie znamenať koniec.
+        engine.inventory.add(ItemStack(ItemCatalog.FUEL_CAN.id, ComponentCondition.NEW, 1f))
+        engine.car.fuel = 0.02f
+        engine.throttleInput = 1f
+        repeat(120) { engine.advance(1f / 60f) }
+
+        assertTrue("jazda nesmie skončiť, kým sa dá doliať", engine.phase != GamePhase.GAME_OVER)
+        assertNull(engine.endReason)
+        assertFalse("motor musí zhasnúť", engine.car.engineRunning)
+        assertEquals(GamePhase.STOPPED, engine.phase)
+    }
+
+    @Test
+    fun deadEngineWithNoSpareEndsTheRun() {
+        val engine = GameEngine(22L, 0f)
+        engine.prepareForDriving()
+        engine.tryStartEngine()
+        engine.resumeDriving()
+        // Motor sa vymeniť nedá – v batohu nič a nablízku tiež nič.
+        repeat(engine.inventory.slots.size) { engine.discardInventoryItem(it) }
+        engine.segment.buildings.clear()
+        engine.car.parts[ComponentSlot.ENGINE]?.health = 0.02f
+        engine.throttleInput = 1f
+        repeat(120) { engine.advance(1f / 60f) }
+
+        assertEquals(GamePhase.GAME_OVER, engine.phase)
+        assertEquals(EndReason.ENGINE_DESTROYED, engine.endReason)
+    }
+
+    @Test
+    fun starterCarHooksUpOnTarmacButSpinsInMud() {
+        // Štartovné 2WD auto sa na rovine musí chytiť, nie páliť gumy na mieste.
+        for (seed in 1L..6L) {
+            val car = Car()
+            car.installStarterKit(SeededRandom(seed))
+            car.fuel = 20f
+            car.fuelPurity = 1f
+            car.engineRunning = true
+            repeat(120) { car.applyDrive(1f / 60f, 1f, 0f, 0f, 0f, 0f) }
+            assertTrue("štart sa musí rozbehnúť (seed $seed), má ${car.speed}", car.speed > 6f)
+            assertTrue(
+                "na asfalte nemá stále prešmykovať (seed $seed), slip ${car.wheelSlip}",
+                car.wheelSlip < 0.25f
+            )
+        }
+
+        // V bahne naopak musí byť preklz jasne vidieť.
+        val muddy = Car()
+        muddy.installStarterKit(SeededRandom(3L))
+        muddy.fuel = 20f
+        muddy.engineRunning = true
+        repeat(90) { muddy.applyDrive(1f / 60f, 1f, 0f, 0f, 0f, 0f, RoadSurface.MUD) }
+        assertTrue("v bahne sa musí pretáčať, slip ${muddy.wheelSlip}", muddy.wheelSlip > 0.2f)
+    }
+
+    @Test
+    fun spinWearsOnlyTheDrivenTyre() {
+        val car = drivingCar("RWD", 0.5f)
+        car.mount(ComponentSlot.ENGINE, ItemStack(ItemCatalog.ENGINE_C.id, ComponentCondition.NEW, 1f))
+        val front0 = car.parts[ComponentSlot.TIRE_FRONT]!!.health
+        val rear0 = car.parts[ComponentSlot.TIRE_REAR]!!.health
+        repeat(300) {
+            car.applyDrive(1f / 60f, 1f, 0f, 0f, 0f, 0f)
+            car.tickWear(1f / 60f, 0f, 0f)
+        }
+        val frontLost = front0 - car.parts[ComponentSlot.TIRE_FRONT]!!.health
+        val rearLost = rear0 - car.parts[ComponentSlot.TIRE_REAR]!!.health
+        assertTrue("preklz musí zodierať hnanú nápravu viac", rearLost > frontLost * 1.3f)
+    }
+
+    @Test
+    fun fwdPullsAwayWithoutBurningTheTyres() {
+        // FWD má motor nad hnanou nápravou – nesmie sa len pretáčať.
+        val fwd = drivingCar("FWD", 0.5f)
+        repeat(180) { fwd.applyDrive(1f / 60f, 1f, 0f, 0f, 0f, 0f) }
+        assertTrue("FWD sa musí rozbehnúť, má ${fwd.speed}", fwd.speed > 6f)
+        assertTrue("FWD nesmie stále preklzávať, slip ${fwd.wheelSlip}", fwd.wheelSlip < 0.25f)
+
+        val rwd = drivingCar("RWD", 0.5f)
+        repeat(180) { rwd.applyDrive(1f / 60f, 1f, 0f, 0f, 0f, 0f) }
+        // Rozdiel medzi pohonmi má byť v charaktere, nie v tom, či sa dá ísť.
+        assertTrue(
+            "FWD nesmie byť proti RWD nepoužiteľné (${fwd.speed} vs ${rwd.speed})",
+            fwd.speed > rwd.speed * 0.8f
+        )
+    }
+
+    @Test
+    fun fwdTyresSurviveALongPull() {
+        val fwd = drivingCar("FWD", 0.6f)
+        val front0 = fwd.parts[ComponentSlot.TIRE_FRONT]!!.health
+        repeat(1800) {
+            fwd.applyDrive(1f / 60f, 1f, 0f, 0f, 0f, 0f)
+            fwd.tickWear(1f / 60f, 0f, 0f)
+        }
+        val lost = front0 - fwd.parts[ComponentSlot.TIRE_FRONT]!!.health
+        assertTrue("30 s plného plynu nesmie zožrať gumu, ubudlo $lost", lost < 0.08f)
+    }
+
+    /** Ustálená rýchlosť po dlhom plnom plyne na danom stúpaní (km/h). */
+    private fun cruiseKmh(car: Car, slope: Float, paving: Float = 1f): Float {
+        val wb = SedanSpec.wheelOffsetX * 2f
+        car.snapToGround(0f, slope)
+        repeat(1200) {
+            car.applyDrive(1f / 60f, 1f, 0f, 0f, slope * wb, 0f, RoadSurface.ASPHALT, paving)
+        }
+        return car.speedKmh
+    }
+
+    @Test
+    fun starterCarHasUsableSpeedAndPullsHills() {
+        // Regresia: s ACCEL 9.5 a COAST_DRAG 1.8 auto na rovine skončilo na
+        // 38 km/h a 25 % stúpanie ho úplne zastavilo.
+        listOf("RWD", "FWD").forEach { layout ->
+            val flat = cruiseKmh(drivingCar(layout, 0.6f), 0f)
+            assertTrue("$layout na rovine musí ísť aspoň 45 km/h, ide $flat", flat > 45f)
+
+            val hill = cruiseKmh(drivingCar(layout, 0.6f), 0.25f)
+            assertTrue("$layout musí utiahnuť 25 % stúpanie, ide $hill", hill > 8f)
+        }
+    }
+
+    @Test
+    fun engineUpgradesShowUpAsSpeed() {
+        fun withEngine(id: String): Car {
+            val car = drivingCar("RWD", 0.9f)
+            car.mount(ComponentSlot.ENGINE, ItemStack(id, ComponentCondition.NEW, 1f))
+            return car
+        }
+        val a = cruiseKmh(withEngine(ItemCatalog.ENGINE_A.id), 0f)
+        val b = cruiseKmh(withEngine(ItemCatalog.ENGINE_B.id), 0f)
+        val c = cruiseKmh(withEngine(ItemCatalog.ENGINE_C.id), 0f)
+        assertTrue("silnejší motor musí byť cítiť ($a → $b → $c)", b > a + 8f && c > b)
+
+        // A hlavne v kopci, kde slabý motor zastane.
+        val weakHill = cruiseKmh(withEngine(ItemCatalog.ENGINE_A.id), 0.35f)
+        val strongHill = cruiseKmh(withEngine(ItemCatalog.ENGINE_C.id), 0.35f)
+        assertTrue("v kopci musí byť rozdiel ešte väčší", strongHill > weakHill + 15f)
+    }
+
+    @Test
+    fun starterCarClimbsOnEveryDryPaving() {
+        // Regresia: po križovatke sa vetva zmení na hlinu/štrk/piesok. Ani tam
+        // sa nesmie stať, že auto nevyjde ani mierny kopec.
+        RoadPaving.entries.filter { !it.winter }.forEach { paving ->
+            for (seed in 1L..4L) {
+                val car = Car()
+                car.installStarterKit(SeededRandom(seed))
+                car.fuel = 20f
+                car.fuelPurity = 1f
+                car.engineRunning = true
+                val wb = SedanSpec.wheelOffsetX * 2f
+                car.snapToGround(0f, 0.25f)
+                repeat(240) {
+                    car.applyDrive(
+                        1f / 60f, 1f, 0f, 0f, 0.25f * wb, 0f,
+                        RoadSurface.ASPHALT, paving.gripMul
+                    )
+                }
+                assertTrue(
+                    "$paving (seed $seed) sa musí dať vyjsť, auto má ${car.speed}",
+                    car.speed > 2.5f
+                )
+            }
+        }
+    }
+
+    @Test
+    fun tractionEaseOffNeverKillsTheClimb() {
+        // Preklz smie ubrať ťah, ale nikdy nie tak, aby auto zastalo.
+        val car = drivingCar("RWD", 0.35f)
+        car.mount(ComponentSlot.ENGINE, ItemStack(ItemCatalog.ENGINE_C.id, ComponentCondition.NEW, 1f))
+        val wb = SedanSpec.wheelOffsetX * 2f
+        car.snapToGround(0f, 0.22f)
+        repeat(300) {
+            car.applyDrive(1f / 60f, 1f, 0f, 0f, 0.22f * wb, 0f, RoadSurface.ASPHALT, 0.88f)
+        }
+        assertTrue("aj s preklzom sa musí ísť hore, má ${car.speed}", car.speed > 2f)
+    }
+
+    @Test
+    fun snowOnlyShowsUpLateInTheRun() {
+        fun winterShare(distance: Float): Float {
+            var winter = 0
+            var total = 0
+            for (seed in 1L..60L) {
+                BranchStyle.entries.forEach { style ->
+                    total++
+                    if (WorldGenerator.planSegment(seed, style, distance).paving.winter) winter++
+                }
+            }
+            return winter.toFloat() / total
+        }
+        assertEquals("skoro v jazde nesmie snežiť", 0f, winterShare(3000f), 0.001f)
+        assertEquals(0f, winterShare(GameConfig.SNOW_START_M - 500f), 0.001f)
+        assertTrue("neskôr už sneh musí prísť", winterShare(25000f) > 0.15f)
+    }
+
+    @Test
+    fun winterGearOnlyDropsBeforeItIsNeeded() {
+        fun winterFinds(distance: Float): Int {
+            var found = 0
+            for (seed in 1L..80L) {
+                val loot = LootGenerator.generate(
+                    SeededRandom(seed), BuildingType.AUTO_SHOP, distance, BranchStyle.INDUSTRIAL
+                )
+                found += loot.count {
+                    it.defId == ItemCatalog.TIRE_WINTER.id || it.defId == ItemCatalog.SNOW_CHAINS.id
+                }
+            }
+            return found
+        }
+        assertEquals("na začiatku zimná výbava nemá čo padať", 0, winterFinds(2000f))
+        // Pred snehom sa už nájsť musí, inak by hráč do zimy vošiel bez šance.
+        assertTrue(winterFinds(GameConfig.SNOW_START_M - 1500f) > 0)
+    }
+
+    @Test
+    fun winterGearIsWhatMakesSnowDrivable() {
+        fun snowRun(tire: String, chains: Boolean): Float {
+            val car = Car()
+            car.installStarterKit()
+            TIRE_SLOTS.forEach {
+                car.mount(it, ItemStack(tire, ComponentCondition.NEW, 1f))
+            }
+            if (chains) {
+                car.mount(
+                    ComponentSlot.CHAINS,
+                    ItemStack(ItemCatalog.SNOW_CHAINS.id, ComponentCondition.NEW, 1f)
+                )
+            }
+            car.fuel = 20f
+            car.engineRunning = true
+            val wb = SedanSpec.wheelOffsetX * 2f
+            car.snapToGround(0f, 0.16f)
+            repeat(200) {
+                car.applyDrive(
+                    1f / 60f, 1f, 0f, 0f, 0.16f * wb, 0f,
+                    RoadSurface.ASPHALT, RoadPaving.SNOW.gripMul, winter = true
+                )
+            }
+            return car.speed
+        }
+        val summer = snowRun(ItemCatalog.TIRE.id, chains = false)
+        val winterTyres = snowRun(ItemCatalog.TIRE_WINTER.id, chains = false)
+        val chained = snowRun(ItemCatalog.TIRE_WINTER.id, chains = true)
+        assertTrue("zimné gumy musia byť na snehu lepšie ($winterTyres vs $summer)", winterTyres > summer + 1f)
+        assertTrue("reťaze pridajú ešte viac", chained > winterTyres)
+    }
+
+    @Test
+    fun coldEngineBurnsMoreAndFreezesWateryCoolant() {
+        fun burn(cold: Float): Float {
+            val car = Car()
+            car.installStarterKit()
+            car.fuel = 20f
+            car.fuelPurity = 1f
+            car.coolantPurity = 1f
+            car.temperature = 35f
+            car.engineRunning = true
+            val before = car.fuel
+            repeat(300) { car.tickDriving(1f / 60f, 1f, 1f, 0f, cold) }
+            return before - car.fuel
+        }
+        assertTrue("v mraze musí studený motor žrať viac", burn(1f) > burn(0f) * 1.05f)
+
+        // Voda v chladiči v mraze motor trhá – čistá kvapalina nie.
+        fun engineLoss(purity: Float): Float {
+            val car = Car()
+            car.installStarterKit()
+            car.fuel = 20f
+            car.coolant = 4f
+            car.coolantPurity = purity
+            car.engineRunning = true
+            val h0 = car.parts[ComponentSlot.ENGINE]!!.health
+            repeat(600) { car.tickDriving(1f / 60f, 0.5f, 1f, 0f, 1f) }
+            return h0 - car.parts[ComponentSlot.ENGINE]!!.health
+        }
+        assertTrue("zamrznutá voda musí ničiť motor", engineLoss(0.1f) > engineLoss(0.95f) * 1.5f)
+    }
+
+    @Test
+    fun tyreCanBeFittedToTheChosenAxle() {
+        val engine = GameEngine(31L, 0f)
+        engine.inventory.clear()
+        engine.inventory.add(ItemStack(ItemCatalog.TIRE_SPORT.id, ComponentCondition.NEW, 1f))
+        assertTrue(engine.useInventoryItem(0, ComponentSlot.TIRE_FRONT))
+        assertEquals(ItemCatalog.TIRE_SPORT.id, engine.car.parts[ComponentSlot.TIRE_FRONT]!!.defId)
+
+        engine.inventory.clear()
+        engine.inventory.add(ItemStack(ItemCatalog.TIRE_OFFROAD.id, ComponentCondition.NEW, 1f))
+        assertTrue(engine.useInventoryItem(0, ComponentSlot.TIRE_REAR))
+        assertEquals(ItemCatalog.TIRE_OFFROAD.id, engine.car.parts[ComponentSlot.TIRE_REAR]!!.defId)
+        // Predok sa tým nesmie prepísať.
+        assertEquals(ItemCatalog.TIRE_SPORT.id, engine.car.parts[ComponentSlot.TIRE_FRONT]!!.defId)
+    }
+
+    @Test
+    fun storageAddsSlotsAndWeight() {
+        val engine = GameEngine(33L, 0f)
+        val baseSlots = engine.inventory.slots.size
+        val baseWeight = engine.inventory.maxWeight
+
+        engine.inventory.clear()
+        engine.inventory.add(ItemStack(ItemCatalog.ROOF_RACK.id, ComponentCondition.NEW, 1f))
+        assertTrue(engine.useInventoryItem(0, null))
+        assertEquals(baseSlots + ItemCatalog.ROOF_RACK.extraSlots, engine.inventory.slots.size)
+        assertEquals(
+            baseWeight + ItemCatalog.ROOF_RACK.extraWeight,
+            engine.inventory.maxWeight,
+            0.01f
+        )
+        assertTrue(engine.car.hasRoofRack)
+
+        // Batoh a nosič sa sčítajú – sú to dva rôzne sloty.
+        engine.inventory.add(ItemStack(ItemCatalog.BACKPACK.id, ComponentCondition.NEW, 1f))
+        val idx = engine.inventory.slots.indexOfFirst { it?.defId == ItemCatalog.BACKPACK.id }
+        assertTrue(engine.useInventoryItem(idx, null))
+        assertEquals(
+            baseSlots + ItemCatalog.ROOF_RACK.extraSlots + ItemCatalog.BACKPACK.extraSlots,
+            engine.inventory.slots.size
+        )
+    }
+
+    @Test
+    fun fullRackCannotBeRemovedUntilEmptied() {
+        val engine = GameEngine(34L, 0f)
+        engine.inventory.clear()
+        engine.inventory.add(ItemStack(ItemCatalog.ROOF_RACK.id, ComponentCondition.NEW, 1f))
+        engine.useInventoryItem(0, null)
+        // Zaplníme batoh tak, aby sa bez nosiča nezmestil.
+        repeat(engine.inventory.slots.size) {
+            engine.inventory.add(ItemStack(ItemCatalog.WATER.id, ComponentCondition.NEW, 1f))
+        }
+        val used = engine.inventory.usedSlots
+        assertFalse("plný nosič sa nesmie dať zložiť", engine.unmountSlot(ComponentSlot.ROOF_RACK))
+        assertEquals("nič sa nesmie stratiť", used, engine.inventory.usedSlots)
+        assertTrue(engine.car.hasRoofRack)
+    }
+
+    @Test
+    fun storageSurvivesSaveAndRestore() {
+        val engine = GameEngine(35L, 0f)
+        engine.inventory.clear()
+        engine.inventory.add(ItemStack(ItemCatalog.BOOT_CRATE.id, ComponentCondition.NEW, 1f))
+        engine.useInventoryItem(0, null)
+        repeat(5) {
+            engine.inventory.add(ItemStack(ItemCatalog.OIL_BOTTLE.id, ComponentCondition.NEW, 1f))
+        }
+        val before = engine.inventory.usedSlots
+        val restored = GameEngine.restore(
+            RunCodec.decode(RunCodec.encode(engine.snapshot()))!!, 0f
+        )
+        assertEquals(engine.inventory.slots.size, restored.inventory.slots.size)
+        assertEquals(before, restored.inventory.usedSlots)
+    }
+
+    @Test
+    fun tyresCanBeSwappedBetweenAxles() {
+        val car = Car()
+        car.installStarterKit()
+        car.mount(ComponentSlot.TIRE_FRONT, ItemStack(ItemCatalog.TIRE.id, ComponentCondition.USED, 0.8f))
+        car.mount(ComponentSlot.TIRE_REAR, ItemStack(ItemCatalog.TIRE_POOR.id, ComponentCondition.CRITICAL, 0.2f))
+        assertTrue(car.swapTyres())
+        assertEquals(ItemCatalog.TIRE_POOR.id, car.parts[ComponentSlot.TIRE_FRONT]!!.defId)
+        assertEquals(0.8f, car.parts[ComponentSlot.TIRE_REAR]!!.health, 0.001f)
+        assertEquals(ItemCatalog.TIRE.id, car.parts[ComponentSlot.TIRE_REAR]!!.defId)
+    }
+
+    @Test
+    fun everyBranchStyleCanProduceItsOwnPaving() {
+        val seen = mutableSetOf<RoadPaving>()
+        for (seed in 1L..40L) {
+            BranchStyle.entries.forEach { style ->
+                seen += WorldGenerator.planSegment(seed, style, 3000f).paving
+            }
+        }
+        assertTrue("varianty vozovky sa musia striedať, videné: $seen", seen.size >= 5)
+        // Tutorial ostáva na asfalte – prvý dojem nemá byť piesková stopa.
+        assertEquals(RoadPaving.ASPHALT, GameEngine(7L, 0f).segment.paving)
+    }
+
+    @Test
+    fun onlyDrivenAxleSpinsUnderPower() {
+        // RWD s vypálenými gumami: zadné koleso sa točí rýchlejšie než predné,
+        // ktoré sa len valí po ceste.
+        val rwd = drivingCar("RWD", 0.3f)
+        rwd.mount(ComponentSlot.ENGINE, ItemStack(ItemCatalog.ENGINE_C.id, ComponentCondition.NEW, 1f))
+        repeat(40) { rwd.applyDrive(1f / 60f, 1f, 0f, 0f, 0f, 0f) }
+        assertTrue("RWD musí pretáčať zadok, slip ${rwd.wheelSlip}", rwd.wheelSlip > 0.15f)
+        assertTrue(
+            "zadné koleso sa musí točiť inak než predné",
+            kotlin.math.abs(rwd.wheelSpinRearDeg - rwd.wheelSpinFrontDeg) > 1f
+        )
+
+        val fwd = drivingCar("FWD", 0.3f)
+        fwd.mount(ComponentSlot.ENGINE, ItemStack(ItemCatalog.ENGINE_C.id, ComponentCondition.NEW, 1f))
+        repeat(40) { fwd.applyDrive(1f / 60f, 1f, 0f, 0f, 0f, 0f) }
+        assertEquals(ComponentSlot.TIRE_FRONT, fwd.drivenSlot)
+        assertEquals(ComponentSlot.TIRE_REAR, rwd.drivenSlot)
+    }
+
+    @Test
+    fun mudSlowsTheCarDownComparedToTarmac() {
+        fun run(surface: RoadSurface): Float {
+            val car = drivingCar("RWD")
+            repeat(240) { car.applyDrive(1f / 60f, 1f, 0f, 0f, 0f, 0f, surface) }
+            return car.speed
+        }
+        val tarmac = run(RoadSurface.ASPHALT)
+        assertTrue("bahno musí byť citeľne pomalšie", run(RoadSurface.MUD) < tarmac * 0.85f)
+        assertTrue("voda musí brzdiť", run(RoadSurface.WATER) < tarmac * 0.92f)
+        assertTrue("štrk brzdí len mierne", run(RoadSurface.GRAVEL) < tarmac)
+    }
+
+    @Test
+    fun surfacePatchesAppearAndStayOffBridges() {
+        val terrain = TerrainProfile(9L)
+        var total = 0
+        for (seed in 1L..8L) {
+            val plan = WorldGenerator.planSegment(seed, BranchStyle.SHORTCUT_RISK, 9000f)
+            val seg = WorldGenerator.createSegment(plan, 0f, 9000f, terrain)
+            total += seg.patches.size
+            var prevEnd = 0f
+            seg.patches.forEach { patch ->
+                assertTrue("naplaveniny sa nesmú prekrývať", patch.start >= prevEnd)
+                prevEnd = patch.end
+                assertTrue(patch.length > 3f)
+                assertTrue("nesmie zasahovať do rázcestia", patch.end <= seg.length)
+                val feature = seg.sectionAtLocal(patch.start)?.feature
+                assertTrue("na moste naplavenina nemá čo robiť", feature != RoadFeature.BRIDGE)
+                assertEquals(patch.surface, seg.surfaceAtLocal(patch.start + 0.5f))
+            }
+        }
+        assertTrue("na 9. km už majú prekážky byť bežné, bolo $total", total > 8)
+    }
+
+    @Test
+    fun tutorialRoadHasNoSurfaceTraps() {
+        val engine = GameEngine(4L, 0f)
+        assertTrue(engine.segment.patches.isEmpty())
+        assertEquals(RoadSurface.ASPHALT, engine.currentSurface)
     }
 
     @Test
@@ -414,12 +899,53 @@ class GameCoreTest {
         assertEquals(oldEnd, engine.segment.worldOrigin, 0.01f)
         assertEquals(choice.style, engine.segment.style)
     }
+
+    @Test
+    fun axleTiresMountSeparatelyAndAffectGrip() {
+        val car = Car()
+        car.installStarterKit(SeededRandom(3L))
+        assertEquals(ItemCatalog.TIRE_POOR.id, car.parts[ComponentSlot.TIRE_FRONT]?.defId)
+        assertEquals(ItemCatalog.TIRE_POOR.id, car.parts[ComponentSlot.TIRE_REAR]?.defId)
+        val poorGrip = car.tireGrip
+
+        car.mountBothTires(ItemCatalog.TIRE_SPORT.id, ComponentCondition.NEW, 1f)
+        assertTrue("sport gumy musia držať lepšie", car.tireGrip > poorGrip + 0.2f)
+
+        // Predok poor, zadok sport – RWD ťaží zadok.
+        car.mount(ComponentSlot.DRIVETRAIN, ItemStack(ItemCatalog.DRIVE_RWD.id, ComponentCondition.NEW, 1f))
+        car.mount(ComponentSlot.TIRE_FRONT, ItemStack(ItemCatalog.TIRE_POOR.id, ComponentCondition.USED, 0.5f))
+        car.mount(ComponentSlot.TIRE_REAR, ItemStack(ItemCatalog.TIRE_SPORT.id, ComponentCondition.NEW, 1f))
+        val rwdMixed = car.tireGrip
+        car.mount(ComponentSlot.DRIVETRAIN, ItemStack(ItemCatalog.DRIVE_FWD.id, ComponentCondition.NEW, 1f))
+        val fwdMixed = car.tireGrip
+        assertTrue("RWD má ťažiť lepší zadok", rwdMixed > fwdMixed)
+        assertEquals(DriveLayout.FWD, car.driveLayout)
+    }
+
+    @Test
+    fun inventoryTireFitsEmptyAxleFirst() {
+        val engine = GameEngine(12L, 0f)
+        engine.inventory.clear()
+        assertTrue(engine.unmountSlot(ComponentSlot.TIRE_FRONT))
+        assertFalse(engine.car.hasPart(ComponentSlot.TIRE_FRONT))
+        assertTrue(engine.car.hasPart(ComponentSlot.TIRE_REAR))
+        assertTrue(engine.inventory.add(ItemStack(ItemCatalog.TIRE.id, ComponentCondition.USED, 0.8f)))
+        val idx = engine.inventory.slots.indexOfFirst { it?.defId == ItemCatalog.TIRE.id }
+        assertTrue(engine.useInventoryItem(idx))
+        assertEquals(ItemCatalog.TIRE.id, engine.car.parts[ComponentSlot.TIRE_FRONT]?.defId)
+        assertEquals(ItemCatalog.TIRE_POOR.id, engine.car.parts[ComponentSlot.TIRE_REAR]?.defId)
+    }
 }
 
 /**
  * Štartovací vrak je náhodný – testom, ktoré potrebujú jazdiace auto,
  * doplníme chýbajúce diely a čisté kvapaliny.
  */
+private fun Car.mountBothTires(defId: String, condition: ComponentCondition, health: Float) {
+    mount(ComponentSlot.TIRE_FRONT, ItemStack(defId, condition, health))
+    mount(ComponentSlot.TIRE_REAR, ItemStack(defId, condition, health))
+}
+
 private fun GameEngine.prepareForDriving() {
     listOf(
         ComponentSlot.BATTERY to ItemCatalog.BATTERY,

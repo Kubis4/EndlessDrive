@@ -39,6 +39,7 @@ class BuildingPainter {
             BuildingType.GAS_STATION -> gasStation(px, py, s, day, lit, b.pumpFuelL > 0.05f)
             BuildingType.AUTO_SHOP -> autoShop(px, py, s, day, lit)
         }
+        if (b.landmark) depotFlag(px, py, s, day)
         if (near) marker(px, py, s, b.looted)
     }
 
@@ -246,6 +247,23 @@ class BuildingPainter {
     private fun DrawScope.door(x: Float, y: Float, w: Float, h: Float, day: Float) {
         drawRect(shade(Color(0xFF4A3527), day), topLeft = Offset(x, y - h), size = Size(w, h))
         drawCircle(shade(Color(0xFFCBB47A), day), w * 0.08f, Offset(x + w * 0.8f, y - h * 0.5f))
+    }
+
+    /** Vlajka nad depom – vidno ju už z diaľky, dá jazde cieľ. */
+    private fun DrawScope.depotFlag(x: Float, y: Float, s: Float, day: Float) {
+        val mast = y - s * 5.2f
+        drawLine(
+            shade(Color(0xFFBFB6A4), day),
+            Offset(x - s * 2.2f, y),
+            Offset(x - s * 2.2f, mast),
+            strokeWidth = (s * 0.10f).coerceAtLeast(1.5f)
+        )
+        path.reset()
+        path.moveTo(x - s * 2.2f, mast)
+        path.lineTo(x - s * 0.7f, mast + s * 0.42f)
+        path.lineTo(x - s * 2.2f, mast + s * 0.84f)
+        path.close()
+        drawPath(path, shade(Color(0xFFD2AE63), day))
     }
 
     /** Ukazovateľ nad budovou, keď je auto v dosahu. */

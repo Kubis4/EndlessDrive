@@ -15,9 +15,9 @@ object DayCycle {
     fun sunElevation(time: Float): Float =
         sin(((time - 0.25f) * 2f * PI).toDouble()).toFloat()
 
-    /** 0 = tma, 1 = plné denné svetlo. */
+    /** 0 = tma, 1 = plné denné svetlo – širší „deň“, kratšia skutočná noc. */
     fun daylight(time: Float): Float =
-        MathX.smoothstep(-0.18f, 0.22f, sunElevation(time))
+        MathX.smoothstep(-0.40f, 0.10f, sunElevation(time))
 
     /** 1 tesne pri východe/západe slnka, 0 inak – pre oranžovú oblohu. */
     fun goldenHour(time: Float): Float {

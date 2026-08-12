@@ -71,11 +71,11 @@ class SedanLayers(raw: Bitmap) {
         scrubFringe(cropped)
         imageWidth = cropped.width
         imageHeight = cropped.height
-        // Namerané zo sprite: stredy oblúkov blatníkov a ich polomer.
-        rearWheelFx = 0.186f
-        frontWheelFx = 0.816f
-        wheelCenterFy = 0.94f
-        wheelRadiusFx = 0.075f
+        // Namerané zo sprite: stredy oblúkov blatníkov (symetrický rázvor).
+        rearWheelFx = 0.185f
+        frontWheelFx = 0.815f
+        wheelCenterFy = 0.92f
+        wheelRadiusFx = 0.076f
         stripped = darken(cropped, 0.92f).asImageBitmap()
         body = part(cropped, 0.06f, 0.08f, 0.88f, 0.82f)
         doors = part(cropped, 0.28f, 0.18f, 0.38f, 0.62f)

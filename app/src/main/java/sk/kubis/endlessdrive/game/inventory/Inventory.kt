@@ -3,12 +3,51 @@ package sk.kubis.endlessdrive.game.inventory
 import sk.kubis.endlessdrive.core.GameConfig
 import sk.kubis.endlessdrive.domain.model.ItemStack
 
-class Inventory(private val maxSlots: Int = GameConfig.INVENTORY_SLOTS) {
-    val slots = ArrayList<ItemStack?>(maxSlots)
+class Inventory(private val baseSlots: Int = GameConfig.INVENTORY_SLOTS) {
+    val slots = ArrayList<ItemStack?>(baseSlots)
 
     init {
-        repeat(maxSlots) { slots.add(null) }
+        repeat(baseSlots) { slots.add(null) }
     }
+
+    /** Miesto navyše z batoha / debny v kufri / strešného nosiča. */
+    var bonusSlots = 0
+        private set
+    var bonusWeight = 0f
+        private set
+
+    val maxWeight: Float get() = GameConfig.INVENTORY_MAX_WEIGHT + bonusWeight
+
+    /**
+     * Prepočíta kapacitu po (od)montovaní úložiska. Zmenšenie prejde len vtedy,
+     * keď sa má čo zmenšovať – obsadené sloty sa nikdy nezahodia.
+     *
+     * @return true, ak sa kapacita naozaj zmenila
+     */
+    fun applyCapacity(extraSlots: Int, extraWeight: Float): Boolean {
+        bonusWeight = extraWeight
+        val target = baseSlots + extraSlots
+        if (target == slots.size) {
+            bonusSlots = extraSlots
+            return false
+        }
+        if (target > slots.size) {
+            repeat(target - slots.size) { slots.add(null) }
+        } else {
+            // Zhora dole zmažeme len prázdne sloty; obsah sa nestratí.
+            var i = slots.lastIndex
+            while (slots.size > target && i >= 0) {
+                if (slots[i] == null) slots.removeAt(i)
+                i--
+            }
+        }
+        bonusSlots = slots.size - baseSlots
+        return true
+    }
+
+    /** Koľko slotov by zostalo voľných po zmenšení na [extraSlots]. */
+    fun fitsWithin(extraSlots: Int): Boolean =
+        usedSlots <= baseSlots + extraSlots
 
     val usedSlots: Int get() = slots.count { it != null }
 
@@ -17,18 +56,16 @@ class Inventory(private val maxSlots: Int = GameConfig.INVENTORY_SLOTS) {
 
     fun canFit(stack: ItemStack): Boolean {
         val def = stack.def
-        // stackovanie kvapalín rovnakého typu
-        if (def.fluid != null) {
-            val existing = slots.indexOfFirst { it?.defId == stack.defId }
-            if (existing >= 0) return true
-        }
-        if (slots.any { it == null }) {
-            return totalWeight + def.weight * stack.count <= GameConfig.INVENTORY_MAX_WEIGHT
-        }
-        return false
+        val added = def.weight * stack.count
+        if (totalWeight + added > maxWeight) return false
+        // Kvapalina sa priloží k rovnakému kanistru – miesto v batohu nepotrebuje,
+        // hmotnosť sa jej ale počíta rovnako ako všetkému ostatnému.
+        if (def.fluid != null && slots.any { it?.defId == stack.defId }) return true
+        return slots.any { it == null }
     }
 
     fun add(stack: ItemStack): Boolean {
+        if (!canFit(stack)) return false
         if (stack.def.fluid != null) {
             val idx = slots.indexOfFirst { it?.defId == stack.defId }
             if (idx >= 0) {
@@ -45,7 +82,6 @@ class Inventory(private val maxSlots: Int = GameConfig.INVENTORY_SLOTS) {
         }
         val empty = slots.indexOfFirst { it == null }
         if (empty < 0) return false
-        if (totalWeight + stack.def.weight * stack.count > GameConfig.INVENTORY_MAX_WEIGHT) return false
         slots[empty] = stack
         return true
     }

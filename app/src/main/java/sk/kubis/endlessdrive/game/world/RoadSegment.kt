@@ -5,7 +5,9 @@ import sk.kubis.endlessdrive.domain.model.BiomeType
 import sk.kubis.endlessdrive.domain.model.BranchStyle
 import sk.kubis.endlessdrive.domain.model.BuildingType
 import sk.kubis.endlessdrive.domain.model.ItemStack
+import sk.kubis.endlessdrive.domain.model.RoadPaving
 import sk.kubis.endlessdrive.domain.model.RoadFeature
+import sk.kubis.endlessdrive.domain.model.RoadSurface
 
 data class WorldBuilding(
     val id: Long,
@@ -15,9 +17,24 @@ data class WorldBuilding(
     /** Zásoba v stojane – len benzínová stanica. */
     var pumpFuelL: Float = 0f,
     /** Čistota paliva v stojane. */
-    var pumpPurity: Float = 1f
+    var pumpPurity: Float = 1f,
+    /** Depo na míľniku – vždy stojí za zastavenie. */
+    val landmark: Boolean = false
 ) {
     val looted: Boolean get() = loot.isEmpty() && pumpFuelL <= 0.05f
+}
+
+/**
+ * Naplavenina na ceste – bahno, piesok, voda, štrk. Je vidieť dopredu,
+ * takže sa dá pribrzdiť alebo si na ňu vziať rozbeh.
+ */
+class SurfacePatch(
+    val surface: RoadSurface,
+    val start: Float,
+    val end: Float
+) {
+    val length: Float get() = end - start
+    fun contains(localX: Float): Boolean = localX >= start && localX < end
 }
 
 /** Konkrétny úsek trate v segmente (lokálne súradnice). */
@@ -39,7 +56,9 @@ data class SegmentPlan(
     val style: BranchStyle,
     val length: Float,
     val features: List<RoadFeature>,
-    val buildingCount: Int
+    val buildingCount: Int,
+    /** Z čoho je vetva postavená – vidno to hneď, ako sa na ňu vojde. */
+    val paving: RoadPaving = RoadPaving.ASPHALT
 ) {
     val lengthKm: Float get() = length / 1000f
 
@@ -62,7 +81,9 @@ data class BranchChoice(
 ) {
     val style: BranchStyle get() = plan.style
     val segmentSeed: Long get() = plan.seed
-    val label: String get() = style.label
+    /** Zasneženú vetvu vidno už z rázcestia – biela cesta sa nedá prehliadnuť. */
+    val winter: Boolean get() = plan.paving.winter
+    val label: String get() = if (winter) "${style.label} ❄" else style.label
     val hint: String get() = style.hint
 }
 
@@ -78,10 +99,14 @@ class RoadSegment(
     val sections: List<RoadSection>,
     val choices: List<BranchChoice>,
     var worldOrigin: Float,
-    private val terrain: TerrainProfile
+    private val terrain: TerrainProfile,
+    val paving: RoadPaving = RoadPaving.ASPHALT
 ) {
     /** Budovy sa dopĺňajú až po vzniku segmentu – potrebujú jeho výškový profil. */
     val buildings: MutableList<WorldBuilding> = mutableListOf()
+
+    /** Naplaveniny na vozovke; zoradené podľa [SurfacePatch.start]. */
+    val patches: MutableList<SurfacePatch> = mutableListOf()
 
     val biome: BiomeType get() = style.biome
     val endWorldX: Float get() = worldOrigin + length
@@ -168,6 +193,14 @@ class RoadSegment(
         val d = 0.55f
         return (heightAtLocal(localX + d) - heightAtLocal(localX - d)) / (2f * d)
     }
+
+    /** Povrch pod kolesami – asfalt, ak tam nič nenaplavilo. */
+    fun surfaceAtLocal(localX: Float): RoadSurface =
+        patches.firstOrNull { it.contains(localX) }?.surface ?: RoadSurface.ASPHALT
+
+    /** Najbližšia naplavenina pred autom (na varovanie a vykreslenie). */
+    fun patchAheadOfLocal(localX: Float, within: Float): SurfacePatch? =
+        patches.firstOrNull { it.start > localX && it.start - localX <= within }
 
     /** Hrboľatosť pod autom = štýl vetvy + aktuálny úsek. */
     fun bumpinessAtLocal(localX: Float): Float =

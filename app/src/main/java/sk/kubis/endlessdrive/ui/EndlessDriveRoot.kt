@@ -1,6 +1,7 @@
 package sk.kubis.endlessdrive.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -24,6 +25,15 @@ fun EndlessDriveRoot(container: AppContainer) {
     val nav = rememberNavController()
     val profile by container.playerRepository.profile.collectAsState(initial = PlayerProfile())
 
+    // ViewModel visí na aktivite, nie na obrazovke hry – návrat do menu
+    // teda jazdu nezahodí a dá sa v nej pokračovať.
+    val vm: GameViewModel = viewModel(
+        factory = remember { GameViewModel.factory(container.playerRepository, profile.bestDistanceKm) }
+    )
+    LaunchedEffect(profile.bestDistanceKm) {
+        vm.updateBestDistance(profile.bestDistanceKm)
+    }
+
     NavHost(
         navController = nav,
         startDestination = Routes.MENU
@@ -31,24 +41,20 @@ fun EndlessDriveRoot(container: AppContainer) {
         composable(Routes.MENU) {
             MenuScreen(
                 profile = profile,
-                onPlay = {
-                    nav.navigate(Routes.GAME) {
-                        launchSingleTop = true
-                    }
+                canContinue = vm.hasActiveRun,
+                onContinue = {
+                    nav.navigate(Routes.GAME) { launchSingleTop = true }
+                },
+                onNewRun = {
+                    vm.retry()
+                    nav.navigate(Routes.GAME) { launchSingleTop = true }
                 }
             )
         }
         composable(Routes.GAME) {
-            val vm: GameViewModel = viewModel(
-                factory = remember(profile.bestDistanceKm) {
-                    GameViewModel.factory(
-                        container.playerRepository,
-                        profile.bestDistanceKm
-                    )
-                }
-            )
             GameScreen(
                 viewModel = vm,
+                assets = container.gameAssets,
                 onExitToMenu = {
                     nav.popBackStack(Routes.MENU, inclusive = false)
                 }

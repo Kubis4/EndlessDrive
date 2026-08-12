@@ -13,7 +13,18 @@ class Camera2D {
     var basePpm = GameConfig.CAMERA_BASE_PPM; private set
     var pitch = 0f; private set
 
+    /** Otras kamery pri hrboľatej ceste (v metroch). */
+    var shakeX = 0f; private set
+    var shakeY = 0f; private set
+    private var shakeTime = 0f
+    private var shakeAmount = 0f
+
     private var initialized = false
+
+    /** [intensity] 0..1 – koľko trasie práve teraz. */
+    fun setShake(intensity: Float) {
+        shakeAmount = intensity.coerceIn(0f, 1f)
+    }
 
     fun snapTo(wx: Float, wy: Float) {
         x = wx
@@ -31,7 +42,9 @@ class Camera2D {
         vehicleAngle: Float
     ) {
         val lookAhead = (velX * GameConfig.CAMERA_LOOK_AHEAD).coerceAtLeast(0f)
-        val desiredX = targetX + lookAhead + 2.0f
+        // Auto drží pevné miesto na obrazovke (CAR_SCREEN_X), kamera už
+        // nepridáva vlastný posun – iba predvídavosť pri rýchlosti.
+        val desiredX = targetX + lookAhead
         // Y kamera sleduje auto 1:1 → auto ostane na obrazovke, nechodí hore/dole.
         val desiredY = targetY + GameConfig.CAMERA_Y_BIAS
 
@@ -57,8 +70,15 @@ class Camera2D {
             return
         }
 
+        // Otras: dve nesúmerné sínusovky, aby to nevyzeralo ako pravidelné kmitanie.
+        shakeTime += dt
+        val amp = shakeAmount * GameConfig.CAMERA_SHAKE
+        shakeX = MathX.approxSin(shakeTime * 37f) * amp * 0.4f
+        shakeY = MathX.approxSin(shakeTime * 53f + 1.7f) * amp
+
         x = MathX.damp(x, desiredX, GameConfig.CAMERA_SMOOTH, dt)
-        y = MathX.damp(y, desiredY, GameConfig.CAMERA_SMOOTH, dt)
+        // Y: sleduj auto, ale nie 1:1 – na kopcoch auto na obrazovke stúpa/klesá.
+        y = MathX.damp(y, desiredY, GameConfig.CAMERA_SMOOTH * 0.55f, dt)
         ppm = MathX.damp(ppm, desiredPpm, 2.4f, dt)
         pitch = MathX.damp(pitch, desiredPitch, GameConfig.DEPTH_PITCH_SMOOTH, dt)
     }
