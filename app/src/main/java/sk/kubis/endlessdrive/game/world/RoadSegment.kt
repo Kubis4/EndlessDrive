@@ -111,14 +111,26 @@ class RoadSegment(
     val biome: BiomeType get() = style.biome
     val endWorldX: Float get() = worldOrigin + length
 
-    /** Hĺbka rokliny pod mostom (m). */
-    private val gorgeDepth = 3.4f
+    /**
+     * Hĺbka rokliny pod mostom (m). Pri 3.4 m sedela mostovka prakticky na
+     * teréne a most nebolo od cesty rozoznať – roklina musí byť priepasť.
+     */
+    private val gorgeDepth = 8.5f
 
     fun sectionAtLocal(localX: Float): RoadSection? {
         if (sections.isEmpty()) return null
         val clamped = localX.coerceIn(0f, length - 0.01f)
         return sections.firstOrNull { it.contains(clamped) } ?: sections.last()
     }
+
+    /**
+     * Stojí na [worldX] budova (do vzdialenosti [clearanceM] od jej stredu)?
+     *
+     * Kulisy sa podľa toho miestu vyhnú. Budovy sa kreslia až po nich, takže
+     * strom za garážou jej prerastal cez strechu.
+     */
+    fun buildingOccupies(worldX: Float, clearanceM: Float): Boolean =
+        buildings.any { kotlin.math.abs(worldX - (worldOrigin + it.localX)) < clearanceM }
 
     fun featureAtWorld(worldX: Float): RoadFeature =
         sectionAtLocal(worldX - worldOrigin)?.feature ?: RoadFeature.STRAIGHT
@@ -147,15 +159,26 @@ class RoadSegment(
         return cur
     }
 
-    /** Terén pod cestou – na moste sa prepadne do rokliny. */
+    /**
+     * Terén pod cestou – na moste sa prepadne do rokliny.
+     *
+     * Roklina používa presne ten istý priebeh ako mostovka. Kým mala vlastný
+     * sínus, terén sa prepadal skôr, než sa vozovka narovnala – pri vjazde
+     * a výjazde tak vznikala nepekná šikmá ostroha pod začiatkom mosta.
+     */
     fun groundAtWorld(worldX: Float): Float {
         val local = worldX - worldOrigin
         val base = terrain.heightAt(worldX, style, challengeAtLocal(local))
         val sec = sectionAtLocal(local) ?: return base
         if (sec.feature != RoadFeature.BRIDGE || sec.length < 1f) return base
+        return base - gorgeDepth * deckRamp(sec, local)
+    }
+
+    /** Podiel, akým je na danom mieste v platnosti mostovka (0 = terén, 1 = lávka). */
+    private fun deckRamp(sec: RoadSection, local: Float): Float {
         val t = ((local - sec.start) / sec.length).coerceIn(0f, 1f)
-        val dip = MathX.approxSin(t * Math.PI.toFloat())
-        return base - gorgeDepth * dip
+        val edge = (BRIDGE_RAMP / sec.length).coerceIn(0.05f, 0.45f)
+        return MathX.smoothstep(0f, edge, t) * (1f - MathX.smoothstep(1f - edge, 1f, t))
     }
 
     /** Vozovka – to, po čom jazdí auto. */
@@ -167,9 +190,7 @@ class RoadSegment(
         // Mostovka je rovná lávka medzi koncami úseku.
         val t = ((local - sec.start) / sec.length).coerceIn(0f, 1f)
         val deck = MathX.lerp(deckStart(sec), deckEnd(sec), t)
-        val ramp = MathX.smoothstep(0f, BRIDGE_RAMP / sec.length, t) *
-            (1f - MathX.smoothstep(1f - BRIDGE_RAMP / sec.length, 1f, t))
-        return MathX.lerp(base, deck, ramp)
+        return MathX.lerp(base, deck, deckRamp(sec, local))
     }
 
     /** Výška mostovky nad terénom v danom bode (0 = žiadny most). */

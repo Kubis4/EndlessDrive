@@ -1,6 +1,7 @@
 package sk.kubis.endlessdrive.domain.repository
 
 import kotlinx.coroutines.flow.Flow
+import sk.kubis.endlessdrive.domain.model.DebugOptions
 
 data class PlayerProfile(
     val bestDistanceKm: Float = 0f,
@@ -17,4 +18,8 @@ interface PlayerRepository {
     suspend fun loadRun(): String?
     suspend fun saveRun(data: String)
     suspend fun clearRun()
+
+    /** Ladiace prepínače z nastavení – držia sa medzi spusteniami. */
+    val debugOptions: Flow<DebugOptions>
+    suspend fun setDebugOptions(options: DebugOptions)
 }

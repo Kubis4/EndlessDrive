@@ -31,6 +31,8 @@ data class RunSnapshot(
     val batteryRescues: Int,
     val car: CarState,
     val inventory: List<StackState?>,
+    /** Obsah kufra – ukladá sa zvlášť od batoha na chrbte. */
+    val boot: List<StackState?>,
     val segment: SegmentState,
     /** Bežiace udalosti: názov + zvyšok času. */
     val events: List<EventState> = emptyList()
@@ -67,7 +69,10 @@ data class StackState(
     val condition: ComponentCondition,
     val health: Float,
     val count: Int,
-    val purity: Float
+    val purity: Float,
+    /** Kvapalina, ktorá ostala vo vymontovanom diele. */
+    val heldFluidL: Float = 0f,
+    val heldPurity: Float = 1f
 )
 
 data class SegmentState(
@@ -96,7 +101,20 @@ data class BuildingState(
  * Formát je riadkový, polia oddelené `|`, položky v zozname `;`, ich časti `:`.
  */
 object RunCodec {
-    private const val VERSION = 3
+    // 4: kufor auta sa ukladá zvlášť od batoha. Staršie záznamy sa zahodia
+    // a hra začne novú jazdu – rozdeliť jeden inventár na dva spätne nemá zmysel.
+    private const val VERSION = 4
+
+    /**
+     * Najstaršia verzia, ktorú ešte vieme prečítať.
+     *
+     * Doteraz sa vyžadovala presná zhoda, takže každé zvýšenie VERSION ticho
+     * zmazalo rozbehnutú jazdu – aj vtedy, keď sa iba pridalo pole na koniec
+     * riadka. Nové polia sa čítajú cez [getOrNull] s náhradnou hodnotou, takže
+     * staršie záznamy sú čitateľné; zdvihnúť túto hranicu treba len vtedy, keď
+     * sa formát zmení tak, že sa dopočítať nedá (ako pri rozdelení inventára).
+     */
+    private const val MIN_COMPAT = 4
 
     fun encode(s: RunSnapshot): String = buildString {
         appendLine("v$VERSION")
@@ -116,6 +134,7 @@ object RunCodec {
         )
         appendLine(c.parts.joinToString(";") { "${it.slot.name}:${it.defId}:${it.condition.name}:${it.health}" })
         appendLine(s.inventory.joinToString(";") { it?.let(::encodeStack) ?: "-" })
+        appendLine(s.boot.joinToString(";") { it?.let(::encodeStack) ?: "-" })
         val seg = s.segment
         appendLine(
             listOf(
@@ -138,8 +157,9 @@ object RunCodec {
     /** Vráti null, keď je záznam z inej verzie alebo poškodený – hra si vytvorí novú jazdu. */
     fun decode(text: String): RunSnapshot? = runCatching {
         val lines = text.trim().lines()
-        require(lines.size >= 7) { "krátky záznam" }
-        require(lines[0] == "v$VERSION") { "iná verzia" }
+        require(lines.size >= 8) { "krátky záznam" }
+        val version = lines[0].removePrefix("v").toIntOrNull()
+        require(version != null && version in MIN_COMPAT..VERSION) { "iná verzia" }
 
         val h = lines[1].split("|")
         val c = lines[2].split("|")
@@ -168,12 +188,13 @@ object RunCodec {
             }
         }
         val inventory = lines[4].split(";").map { if (it == "-" || it.isBlank()) null else decodeStack(it) }
-        val seg = lines[5].split("|")
-        val events = lines[6].split(";").filter { it.isNotBlank() }.map { e ->
+        val boot = lines[5].split(";").map { if (it == "-" || it.isBlank()) null else decodeStack(it) }
+        val seg = lines[6].split("|")
+        val events = lines[7].split(";").filter { it.isNotBlank() }.map { e ->
             val f = e.split(":")
             EventState(RoadEvent.valueOf(f[0]), f[1].toFloat())
         }
-        val buildings = lines.drop(7).filter { it.isNotBlank() }.map { line ->
+        val buildings = lines.drop(8).filter { it.isNotBlank() }.map { line ->
             val f = line.split("|")
             BuildingState(
                 id = f[0].toLong(),
@@ -208,6 +229,7 @@ object RunCodec {
                 x = c[9].toFloat(), y = c[10].toFloat(), speed = c[11].toFloat(), pitch = c[12].toFloat()
             ),
             inventory = inventory,
+            boot = boot,
             segment = SegmentState(
                 planSeed = seg[0].toLong(),
                 style = BranchStyle.valueOf(seg[1]),
@@ -223,7 +245,8 @@ object RunCodec {
     }.getOrNull()
 
     private fun encodeStack(s: StackState) =
-        "${s.defId}:${s.condition.name}:${s.health}:${s.count}:${s.purity}"
+        "${s.defId}:${s.condition.name}:${s.health}:${s.count}:${s.purity}" +
+            ":${s.heldFluidL}:${s.heldPurity}"
 
     private fun decodeStack(text: String): StackState {
         val f = text.split(":")
@@ -232,7 +255,10 @@ object RunCodec {
             condition = ComponentCondition.valueOf(f[1]),
             health = f[2].toFloat(),
             count = f[3].toInt(),
-            purity = f[4].toFloat()
+            purity = f[4].toFloat(),
+            // Staršie záznamy tieto polia nemajú – diel je proste suchý.
+            heldFluidL = f.getOrNull(5)?.toFloatOrNull() ?: 0f,
+            heldPurity = f.getOrNull(6)?.toFloatOrNull() ?: 1f
         )
     }
 }

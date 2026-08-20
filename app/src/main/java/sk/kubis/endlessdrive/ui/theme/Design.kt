@@ -159,8 +159,8 @@ fun StatBar(
     barWidth: androidx.compose.ui.unit.Dp = 54.dp
 ) {
     Column(modifier) {
-        Text(label, color = GameColors.textDim, fontSize = 11.sp, letterSpacing = 0.6.sp, maxLines = 1)
-        Spacer(Modifier.height(2.dp))
+        Text(label, color = GameColors.textDim, fontSize = Type.label, letterSpacing = 0.6.sp, maxLines = 1)
+        Spacer(Modifier.height(Space.xs))
         Box(
             Modifier
                 .width(barWidth)
@@ -182,8 +182,8 @@ fun StatBar(
                 )
             }
         }
-        Spacer(Modifier.height(2.dp))
-        Text(value, color = GameColors.text, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+        Spacer(Modifier.height(Space.xs))
+        Text(value, color = GameColors.text, fontSize = Type.value, fontWeight = FontWeight.Medium, maxLines = 1)
     }
 }
 
@@ -238,9 +238,18 @@ fun GamePanel(
 ) {
     Box(
         modifier
-            .background(GameColors.panel, RoundedCornerShape(16.dp))
-            .border(1.dp, GameColors.outline, RoundedCornerShape(16.dp))
-            .padding(14.dp)
+            // Jemný gradient namiesto plochej výplne – panel tak nepôsobí ako
+            // nalepená krabica a kreslené pozadie za ním ostáva tušiť.
+            .background(
+                Brush.verticalGradient(
+                    0f to GameColors.panelHigh,
+                    0.35f to GameColors.panel,
+                    1f to GameColors.panelSoft
+                ),
+                RoundedCornerShape(18.dp)
+            )
+            .border(1.dp, GameColors.outline, RoundedCornerShape(18.dp))
+            .padding(Space.l)
     ) {
         Column(if (fillHeight) Modifier.fillMaxSize() else Modifier) {
             Row(
@@ -252,15 +261,15 @@ fun GamePanel(
                     Text(
                         title,
                         color = GameColors.text,
-                        fontSize = 19.sp,
+                        fontSize = Type.title,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
+                        letterSpacing = 1.4.sp
                     )
                     if (subtitle != null) {
                         Text(
                             subtitle,
                             color = GameColors.textDim,
-                            fontSize = 12.sp,
+                            fontSize = Type.body,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -268,11 +277,19 @@ fun GamePanel(
                 }
                 header?.invoke()
                 if (onClose != null) {
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(Space.s))
                     IconToggleButton("✕", active = false, onClick = onClose, label = "Close")
                 }
             }
-            Spacer(Modifier.height(10.dp))
+            // Vlasová linka pod hlavičkou – oddelí ju od obsahu bez ďalšej krabice.
+            Spacer(Modifier.height(Space.m))
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(GameColors.outline.copy(alpha = 0.55f))
+            )
+            Spacer(Modifier.height(Space.m))
             Column(
                 if (fillHeight) Modifier.weight(1f).fillMaxWidth() else Modifier.fillMaxWidth()
             ) { content() }
@@ -302,5 +319,20 @@ object Space {
     val s = 8.dp
     val m = 12.dp
     val l = 16.dp
+    val xl = 24.dp
     val screen = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
+}
+
+/**
+ * Typografický rebríček. Päť stupňov stačí – keď má každý text vlastnú
+ * veľkosť, panel sa číta ako zoznam náhodných riadkov namiesto hierarchie.
+ */
+object Type {
+    /** Jedno číslo, na ktoré sa pozerá za jazdy – rýchlosť. */
+    val hero = 32.sp
+    val title = 19.sp
+    val value = 15.sp
+    val body = 13.sp
+    val label = 11.sp
+    val micro = 9.sp
 }

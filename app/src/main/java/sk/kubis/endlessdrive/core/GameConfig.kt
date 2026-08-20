@@ -28,8 +28,14 @@ object GameConfig {
     const val MAX_SPEED = 26f
     const val REVERSE_MAX_SPEED = 8f
     const val REVERSE_ACCEL = 6f
-    /** Späť od najďalej dosiahnutého X (HillRush REVERSE_LIMIT). */
-    const val REVERSE_LIMIT = 40f
+    /**
+     * Späť od najďalej dosiahnutého X (HillRush REVERSE_LIMIT).
+     *
+     * Musí stačiť na poriadny rozbeh: so slabým motorom a zodratými gumami sa
+     * prudký kopec z miesta nevyjde a jediná odpoveď je nabrať rýchlosť
+     * z rovinky za sebou. Pri 40 m na to nebolo dosť miesta.
+     */
+    const val REVERSE_LIMIT = 110f
     /** Max ťah motora (m/s²) pri ~70 hp. */
     /**
      * Ťah motora pri powerFactor 1 (m/s²). Musí byť poriadne nad gravitáciou
@@ -42,7 +48,6 @@ object GameConfig {
     const val COAST_DRAG = 1.15f
     const val AERO_DRAG = 0.028f
     const val STOP_SPEED = 1.0f
-    const val BODY_PITCH_SMOOTH = 8f
     /** Voľná výška stredu nad vozovkou pri stlačenom pružení. */
     const val CAR_RIDE_HEIGHT = 0.42f
     /** Vertikálna gravitácia (m/s²). */
@@ -109,6 +114,15 @@ object GameConfig {
     const val TRACTION_EASE_OFF = 0.55f
     /** Menej ťahu ako toto sa neuberie nikdy – inak sa do kopca nedá vyjsť. */
     const val TRACTION_EASE_FLOOR = 0.72f
+    /**
+     * Koľko z ťahu nad hranicou gripu ešte prejde na cestu.
+     *
+     * Guma je strop, ale nie úplný – silnejší motor si aj na klzkom nájde
+     * o kúsok viac (nižší prevod, jemnejšie dávkovanie). Bez toho sa výkon
+     * nad grip iba zahodil: na zodratých gumách mal 78 hp motor presne tú
+     * istú rýchlosť ako 130 hp a auto sa na piesku nerozbehlo vôbec.
+     */
+    const val GRIP_OVERDRIVE = 0.20f
 
     // --- Zima ---
     /** Od akej vzdialenosti sa môže objaviť zasnežená vetva (m). */
@@ -120,6 +134,10 @@ object GameConfig {
     const val CHAINS_TARMAC_PENALTY = 0.88f
     /** Strop rýchlosti s reťazami (m/s) – nad tým sa ničia. */
     const val CHAINS_MAX_SPEED = 12f
+    /** Pod týmto zdravím je guma roztrhaná a ide sa na disku. */
+    const val BLOWN_TYRE_HEALTH = 0.12f
+    /** Strop rýchlosti na roztrhanej gume (m/s). */
+    const val BLOWN_TYRE_MAX_SPEED = 7f
     /** O koľko °C nižšie drží motor v mraze. */
     const val COLD_TEMP_DROP = 26f
     /** Studený motor žerie viac a batéria dáva menej. */
@@ -135,21 +153,26 @@ object GameConfig {
     const val FUEL_THROTTLE = 0.042f
     const val OIL_DRAIN = 0.0015f
     const val COOLANT_DRAIN = 0.0013f
-    const val OVERHEAT_THRESHOLD = 110f
+    const val OVERHEAT_THRESHOLD = 114f
     const val NORMAL_TEMP = 82f
     /** Ako rýchlo teplota stúpa/klesá (nižšie = stabilnejšie). */
     const val TEMP_RESPONSE = 0.12f
     const val ENGINE_WEAR_LOW_OIL = 0.012f
-    const val ENGINE_WEAR_OVERHEAT = 0.018f
+    const val ENGINE_WEAR_OVERHEAT = 0.012f
     /** Opotrebenie motora zo znečisteného paliva (na plnú „vodu“, za sekundu). */
-    const val ENGINE_WEAR_BAD_FUEL = 0.0045f
+    const val ENGINE_WEAR_BAD_FUEL = 0.0030f
     /** Opotrebenie motora z riedeného oleja. */
-    const val ENGINE_WEAR_BAD_OIL = 0.007f
-    /** Nad touto čistotou kvapalina motoru neškodí – bežný nález ho neubije. */
-    const val PURITY_SAFE_OIL = 0.75f
-    const val PURITY_SAFE_FUEL = 0.70f
+    const val ENGINE_WEAR_BAD_OIL = 0.0035f
+    /**
+     * Nad touto čistotou kvapalina motoru neškodí. Musí ostať pod priemerom
+     * toho, čo sa dá nájsť v dome (~0.64) – dolievanie totiž čistotu len mieša,
+     * takže s vyšším prahom by hráč nemal ako sa z poškodzovania dostať a
+     * jazda by vždy skončila na zodratom motore.
+     */
+    const val PURITY_SAFE_OIL = 0.60f
+    const val PURITY_SAFE_FUEL = 0.58f
     /** O koľko °C zhorší plne znečistená chladiaca kvapalina cieľovú teplotu. */
-    const val BAD_COOLANT_HEAT = 18f
+    const val BAD_COOLANT_HEAT = 11f
     /** Ťah gravitácie po svahu — necháme na fyzike (g·sinθ). */
     const val FUEL_SLOPE_UP = 3.2f
     const val FUEL_SLOPE_DOWN = 1.6f
@@ -191,7 +214,6 @@ object GameConfig {
 
     // --- Úseky trate ---
     const val FEATURE_MIN_LENGTH = 40f
-    const val FEATURE_MAX_LENGTH = 160f
 
     // --- Denný cyklus ---
     /** Dĺžka celého dňa v sekundách herného času (dlhší deň = neskôr tma). */
@@ -214,17 +236,31 @@ object GameConfig {
     const val PUMP_FUEL_MAX = 70f
 
     // --- Inventár ---
-    const val INVENTORY_SLOTS = 16
-    const val INVENTORY_MAX_WEIGHT = 160f
+    /**
+     * Batoh na chrbte – to, čo hráč unesie k budove a späť. Zámerne malý,
+     * aby mal zmysel kufor a rozhodovanie, čo si vezmem so sebou.
+     */
+    const val INVENTORY_SLOTS = 8
+    const val INVENTORY_MAX_WEIGHT = 60f
+    /**
+     * Kufor auta – väčší, ale dostupný len keď stojíme pri aute. Nosnosť musí
+     * bezpečne presiahnuť najťažší diel (motor 160 kg), inak by sa nájdený
+     * motor nedal ani odviezť, ani vymeniť.
+     */
+    const val BOOT_SLOTS = 10
+    const val BOOT_MAX_WEIGHT = 230f
 
     // --- Kamera (bočný pohľad, HillRush-like) ---
     const val CAMERA_BASE_PPM = 66f
     const val CAMERA_MIN_PPM = 50f
     const val CAMERA_LOOK_AHEAD = 0.55f
     const val CAMERA_SMOOTH = 7.0f
-    /** Kamera mieri nad auto → auto sedí nižšie a nezaberá toľko hliny. */
-    /** Kamera mieri nad auto – väčší bias posunie cestu nižšie a ubere zeminy. */
-    const val CAMERA_Y_BIAS = 2.10f
+    /**
+     * Kamera mieri nad auto – väčší bias posunie cestu nižšie a ubere zeminy.
+     * Pod cestou nie je čo ukazovať, len hnedý pás, kým hore je kreslené
+     * pozadie. Preto ide cesta až do spodnej štvrtiny obrazovky.
+     */
+    const val CAMERA_Y_BIAS = 3.10f
     /** Kde na šírke obrazovky sedí auto (0 = vľavo, 0.5 = stred). */
     const val CAR_SCREEN_X = 0.35f
     const val CAMERA_SPEED_ZOOM = 0.010f
@@ -242,24 +278,17 @@ object GameConfig {
     const val DEPTH_PITCH_SHEAR_X = 0.35f
     const val DEPTH_PITCH_SHEAR_Y = 0.28f
     const val DEPTH_PITCH_FOCAL = 0.45f
-    const val DEPTH_AIR_PITCH_BLEND = 0.2f
     const val ROAD_DEPTH = 2.55f
     const val VERGE_DEPTH = 0.38f
-    const val TRACK_EDGE_WOBBLE = 0.03f
     const val RUT_NEAR_DEPTH = 0.92f
     const val RUT_FAR_DEPTH = 1.88f
-    const val CAR_NEAR_DEPTH = 0.95f
-    const val CAR_DEPTH = 1.05f
-    const val WHEEL_DEPTH = 0.26f
 
     // --- Sedan (z HillRush HATCHBACK) ---
     const val WHEEL_RADIUS = 0.48f
     /** Polovičný rázvor – (frontWheelFx - rearWheelFx) / 2 × worldWidthM. */
     const val WHEEL_OFFSET_X = 1.764f
-    const val WHEEL_OFFSET_Y = -0.39f
     /** Vizuálny zdvih karosérie nad kolesá (m) – blatníky nesmú sedieť na gume. */
     const val BODY_VISUAL_LIFT = 0.24f
     const val HEAD_LOCAL_X = 0.45f
     const val HEAD_LOCAL_Y = 0.87f
-    const val HEAD_RADIUS = 0.23f
 }

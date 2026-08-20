@@ -4,43 +4,26 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.lerp
 import sk.kubis.endlessdrive.core.MathX
 import sk.kubis.endlessdrive.domain.model.BiomeType
-import sk.kubis.endlessdrive.game.DayCycle
 import kotlin.math.PI
 import kotlin.math.sin
 
 /**
- * Procedurálna obloha: gradient podľa dennej doby, slnko/mesiac, hviezdy,
- * oblaky a siluety vzdialených kopcov s parallaxom.
+ * Doplnky nad kreslené pozadie: hviezdy, slnko s mesiacom a hmla nad
+ * horizontom. Vlastnú oblohu ani kopce už nekreslíme – tie si každý bióm
+ * nesie v predlohe.
  */
 class SkyPainter {
-    private val ridgePath = Path()
 
-    fun DrawScope.drawSky(time: Float, biome: BiomeType, camX: Float, horizonY: Float) {
-        val day = DayCycle.daylight(time)
-        val golden = DayCycle.goldenHour(time)
-
-        val zenith = lerp(NIGHT_ZENITH, biomeZenith(biome), day)
-            .let { lerp(it, GOLDEN_ZENITH, golden * 0.45f) }
-        val horizon = lerp(NIGHT_HORIZON, biomeHorizon(biome), day)
-            .let { lerp(it, GOLDEN_HORIZON, golden * 0.75f) }
-
-        drawRect(
-            brush = Brush.verticalGradient(
-                0f to zenith,
-                0.65f to lerp(zenith, horizon, 0.6f),
-                1f to horizon
-            ),
-            size = Size(size.width, horizonY)
-        )
-
+    /**
+     * Hviezdy nad kreslené pozadie – to má vlastnú oblohu, ale v noci by bez
+     * nich bolo len tmavé pole.
+     */
+    fun DrawScope.drawStarfield(day: Float, camX: Float, horizonY: Float) {
         drawStars(day, camX, horizonY)
-        drawCelestial(time, day, horizonY)
-        drawClouds(day, golden, camX, horizonY)
     }
 
     private fun DrawScope.drawStars(day: Float, camX: Float, horizonY: Float) {
@@ -61,6 +44,11 @@ class SkyPainter {
                 center = Offset(x, y)
             )
         }
+    }
+
+    /** Slnko a mesiac nad kreslenú oblohu – tá je statická, denný cyklus nie. */
+    fun DrawScope.drawCelestialOver(time: Float, day: Float, horizonY: Float) {
+        drawCelestial(time, day, horizonY)
     }
 
     private fun DrawScope.drawCelestial(time: Float, day: Float, horizonY: Float) {
@@ -91,75 +79,17 @@ class SkyPainter {
         }
     }
 
-    private fun DrawScope.drawClouds(day: Float, golden: Float, camX: Float, horizonY: Float) {
-        val base = lerp(Color(0xFF3B4360), Color(0xFFF6F8FA), day)
-        val tinted = lerp(base, Color(0xFFF3B98A), golden * 0.6f)
-        for (layer in 0 until 2) {
-            val parallax = 0.020f + layer * 0.018f
-            val yBand = horizonY * (0.20f + layer * 0.22f)
-            val scale = 0.8f + layer * 0.3f
-            val alpha = (0.13f + 0.05f * layer) * (0.4f + day * 0.6f)
-            val span = size.width * 2.2f
-            for (i in 0 until 4) {
-                val h = MathX.hash01(i, layer * 37 + 3)
-                var x = (h * span - camX * parallax * 40f) % span
-                if (x < 0f) x += span
-                x -= span * 0.35f
-                val y = yBand + (MathX.hash01(i, layer * 91 + 7) - 0.5f) * horizonY * 0.10f
-                puff(x, y, size.width * 0.075f * scale, tinted.copy(alpha = alpha))
-            }
-        }
-    }
 
-    /** Nízky pretiahnutý oblak – nie guľa. */
-    private fun DrawScope.puff(cx: Float, cy: Float, r: Float, color: Color) {
-        drawOval(color, topLeft = Offset(cx - r * 1.6f, cy - r * 0.24f), size = Size(r * 3.2f, r * 0.48f))
-        drawOval(color, topLeft = Offset(cx - r * 0.75f, cy - r * 0.40f), size = Size(r * 1.5f, r * 0.62f))
-        drawOval(color, topLeft = Offset(cx + r * 0.25f, cy - r * 0.34f), size = Size(r * 1.0f, r * 0.52f))
-    }
-
-    /** Nízka silueta lesa medzi kopcami a lúkou – tretia vrstva hĺbky. */
-    fun DrawScope.drawTreeline(camX: Float, horizonY: Float, day: Float, biome: BiomeType) {
-        val col = lerp(
-            lerp(
-                when (biome) {
-                    BiomeType.RURAL -> Color(0xFF41603C)
-                    BiomeType.INDUSTRIAL -> Color(0xFF44515A)
-                    BiomeType.WASTELAND -> Color(0xFF5B5136)
-                },
-                Color(0xFF10182B), 0.75f
-            ),
-            when (biome) {
-                BiomeType.RURAL -> Color(0xFF41603C)
-                BiomeType.INDUSTRIAL -> Color(0xFF44515A)
-                BiomeType.WASTELAND -> Color(0xFF5B5136)
-            },
-            day
-        )
-        val baseY = horizonY + horizonY * 0.02f
-        val h = horizonY * 0.075f
-        ridgePath.reset()
-        ridgePath.moveTo(-4f, size.height)
-        var x = -4f
-        while (x <= size.width + 4f) {
-            val u = camX * 0.34f + x / 26f
-            // Zubatý profil korún – nie hladká vlna.
-            val n = (sin(u.toDouble()).toFloat() * 0.5f + 0.5f) *
-                (sin((u * 2.7f + 1.3f).toDouble()).toFloat() * 0.5f + 0.5f)
-            ridgePath.lineTo(x, baseY - h * (0.35f + n))
-            x += 7f
-        }
-        ridgePath.lineTo(size.width + 4f, size.height)
-        ridgePath.close()
-        drawPath(ridgePath, col)
-    }
-
-    /** Hmla nad horizontom – zjemní prechod medzi oblohou a krajinou. */
-    fun DrawScope.drawHaze(horizonY: Float, day: Float, biome: BiomeType) {
+    /**
+     * Hmla nad horizontom – zjemní prechod medzi oblohou a krajinou.
+     * Kreslené pozadia si atmosféru nesú samy, tam stačí [strength] okolo 0.4;
+     * na plnú silu by z nich spravila sivý filter.
+     */
+    fun DrawScope.drawHaze(horizonY: Float, day: Float, biome: BiomeType, strength: Float = 1f) {
         val haze = lerp(Color(0xFF1B2338), biomeHorizon(biome), day.coerceIn(0f, 1f))
         drawRect(
             brush = Brush.verticalGradient(
-                colors = listOf(Color.Transparent, haze.copy(alpha = 0.55f), Color.Transparent),
+                colors = listOf(Color.Transparent, haze.copy(alpha = 0.55f * strength), Color.Transparent),
                 startY = horizonY - horizonY * 0.30f,
                 endY = horizonY + horizonY * 0.14f
             ),
@@ -168,62 +98,20 @@ class SkyPainter {
         )
     }
 
-    /** Dve vrstvy vzdialených kopcov – hlavný zdroj hĺbky za cestou. */
-    fun DrawScope.drawDistantHills(camX: Float, horizonY: Float, day: Float, biome: BiomeType) {
-        for (layer in 0 until 2) {
-            val parallax = if (layer == 0) 0.10f else 0.22f
-            val amp = horizonY * (if (layer == 0) 0.16f else 0.11f)
-            val baseY = horizonY - (if (layer == 0) horizonY * 0.02f else -horizonY * 0.03f)
-            val far = hillColor(biome, layer, day)
-
-            ridgePath.reset()
-            ridgePath.moveTo(-4f, size.height)
-            var x = -4f
-            while (x <= size.width + 4f) {
-                val u = (camX * parallax + x / 90f)
-                val y = baseY - amp * (ridge(u, layer * 13.7f) * 0.5f + 0.5f)
-                ridgePath.lineTo(x, y)
-                x += 10f
-            }
-            ridgePath.lineTo(size.width + 4f, size.height)
-            ridgePath.close()
-            drawPath(ridgePath, far)
-        }
-    }
-
-    private fun ridge(x: Float, phase: Float): Float =
-        sin((x * 0.55f + phase).toDouble()).toFloat() * 0.55f +
-            sin((x * 0.23f + phase * 1.7f).toDouble()).toFloat() * 0.32f +
-            sin((x * 1.31f + phase * 0.4f).toDouble()).toFloat() * 0.13f
-
-    private fun hillColor(biome: BiomeType, layer: Int, day: Float): Color {
-        val nearC = when (biome) {
-            BiomeType.RURAL -> Color(0xFF5E7355)
-            BiomeType.INDUSTRIAL -> Color(0xFF5A6470)
-            BiomeType.WASTELAND -> Color(0xFF6B5F49)
-        }
-        val farC = lerp(nearC, Color(0xFFAFC6D6), 0.45f)
-        val c = if (layer == 0) farC else nearC
-        return lerp(lerp(c, Color(0xFF141A2A), 0.72f), c, day)
-    }
-
-    private fun biomeZenith(biome: BiomeType) = when (biome) {
-        BiomeType.RURAL -> Color(0xFF4C8AC6)
-        BiomeType.INDUSTRIAL -> Color(0xFF5B7C93)
-        BiomeType.WASTELAND -> Color(0xFF7A7FA0)
-    }
-
+    /** Farba pri horizonte – ladí aj hmlu nad kreslenými pozadiami. */
     private fun biomeHorizon(biome: BiomeType) = when (biome) {
         BiomeType.RURAL -> Color(0xFFC7DEEA)
         BiomeType.INDUSTRIAL -> Color(0xFFB6C3C9)
         BiomeType.WASTELAND -> Color(0xFFD8C7A8)
+        BiomeType.DESERT -> Color(0xFFF0D9A6)
+        BiomeType.DESERT_DUSK -> Color(0xFFE8A867)
+        BiomeType.FOREST -> Color(0xFFC3CEC4)
+        BiomeType.FOREST_ALIVE -> Color(0xFFCADCC9)
+        BiomeType.SANDSTORM -> Color(0xFFD9B078)
+        BiomeType.DUST_STORM -> Color(0xFFD5B37F)
     }
 
     private companion object {
         const val STAR_COUNT = 70
-        val NIGHT_ZENITH = Color(0xFF080D22)
-        val NIGHT_HORIZON = Color(0xFF1B2240)
-        val GOLDEN_ZENITH = Color(0xFF4E5C96)
-        val GOLDEN_HORIZON = Color(0xFFE8A365)
     }
 }

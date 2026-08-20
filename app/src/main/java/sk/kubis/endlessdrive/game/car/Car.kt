@@ -10,7 +10,11 @@ import sk.kubis.endlessdrive.core.GameConfig
 import sk.kubis.endlessdrive.core.MathX
 import sk.kubis.endlessdrive.core.SeededRandom
 import sk.kubis.endlessdrive.domain.model.ComponentCondition
+import sk.kubis.endlessdrive.domain.model.BODY_SLOTS
 import sk.kubis.endlessdrive.domain.model.ComponentSlot
+import sk.kubis.endlessdrive.domain.model.DebugOptions
+import sk.kubis.endlessdrive.domain.model.basicFor
+import sk.kubis.endlessdrive.domain.model.bestFor
 import sk.kubis.endlessdrive.domain.model.DriveLayout
 import sk.kubis.endlessdrive.domain.model.FluidType
 
@@ -170,6 +174,20 @@ class Car {
         get() = (parts[ComponentSlot.CARGO]?.def?.extraWeight ?: 0f) +
             (parts[ComponentSlot.ROOF_RACK]?.def?.extraWeight ?: 0f)
 
+    /**
+     * Batoh sa nosí na chrbte, takže zväčšuje to, čo hráč unesie – nie kufor.
+     * Debna a strešný nosič sú naopak na aute.
+     */
+    private val backpack: MountedPart?
+        get() = parts[ComponentSlot.CARGO]?.takeIf { it.defId == ItemCatalog.BACKPACK.id }
+
+    val packBonusSlots: Int get() = backpack?.def?.extraSlots ?: 0
+    val packBonusWeight: Float get() = backpack?.def?.extraWeight ?: 0f
+
+    /** Úložisko na aute – všetko okrem batoha. */
+    val bootBonusSlots: Int get() = extraCargoSlots - packBonusSlots
+    val bootBonusWeight: Float get() = extraCargoWeight - packBonusWeight
+
     /** Odpor vzduchu navyše – strešný nosič stojí rýchlosť. */
     val extraDrag: Float
         get() = (parts[ComponentSlot.ROOF_RACK]?.def?.dragAdd ?: 0f) +
@@ -189,7 +207,14 @@ class Car {
         get() {
             val front = parts[ComponentSlot.TIRE_FRONT]?.def?.snowGrip ?: 0.45f
             val rear = parts[ComponentSlot.TIRE_REAR]?.def?.snowGrip ?: 0.45f
-            val tyres = (front + rear) * 0.5f
+            // Rozhoduje hnaná náprava, nie priemer oboch. Pri rovnomernom
+            // priemere zimná guma vzadu na RWD takmer nepomohla – letná
+            // vpredu, ktorá žiadny ťah neprenáša, jej výhodu zjedla.
+            val tyres = when (driveLayout) {
+                DriveLayout.RWD -> rear * 0.78f + front * 0.22f
+                DriveLayout.FWD -> front * 0.78f + rear * 0.22f
+                DriveLayout.AWD -> (front + rear) * 0.5f
+            }
             return if (hasChains) tyres * GameConfig.CHAINS_SNOW_BONUS else tyres
         }
 
@@ -208,6 +233,16 @@ class Car {
         DriveLayout.FWD -> slot == ComponentSlot.TIRE_FRONT
         DriveLayout.RWD -> slot == ComponentSlot.TIRE_REAR
     }
+
+    /** Aspoň jedna guma je na handry – auto ide na disku. */
+    val hasBlownTyre: Boolean
+        get() = TIRE_SLOTS.any { (parts[it]?.health ?: 1f) < GameConfig.BLOWN_TYRE_HEALTH }
+
+    /** Ktorá náprava je roztrhaná (null = obe držia). */
+    val blownAxle: ComponentSlot?
+        get() = TIRE_SLOTS.firstOrNull {
+            (parts[it]?.health ?: 1f) < GameConfig.BLOWN_TYRE_HEALTH
+        }
 
     /** Zlomok gripu, ktorý zo zodratej gumy ostal (0..1.1). */
     fun treadFactor(health: Float): Float {
@@ -329,7 +364,15 @@ class Car {
      * aj koľko a akej kvapaliny je v nádržiach. Chýbajúce veci si hráč
      * musí nájsť — o to práve ide.
      */
-    fun installStarterKit(rng: SeededRandom = SeededRandom(0L)) {
+    /**
+     * @param debug ladiace prepínače z nastavení. Naplno vybavené auto sa
+     *   inak dá dostať len nahraním lootu, čo pri testovaní jednej veci
+     *   znamená polhodinu zháňania. Testy nechávajú prepínače vypnuté.
+     */
+    fun installStarterKit(
+        rng: SeededRandom = SeededRandom(0L),
+        debug: DebugOptions = DebugOptions.OFF
+    ) {
         parts.clear()
 
         fun mount(slot: ComponentSlot, defId: String, lo: Float, hi: Float) {
@@ -359,7 +402,8 @@ class Car {
         if (rng.chance(0.80f)) mount(ComponentSlot.RADIATOR, ItemCatalog.RADIATOR.id, 0.30f, 0.72f)
         if (rng.chance(0.70f)) mount(ComponentSlot.ALTERNATOR, ItemCatalog.ALTERNATOR.id, 0.30f, 0.75f)
         if (rng.chance(0.80f)) mount(ComponentSlot.STARTER, ItemCatalog.STARTER.id, 0.35f, 0.78f)
-        // Karoséria (dvere/kapota/okná/nárazníky) chýba vždy.
+        // Karoséria (dvere/kapota/okná/nárazníky) chýba vždy – okrem ladenia,
+        // to sa dorába nižšie, až keď sú nastavené aj kvapaliny.
 
         // Kvapaliny: občas úplne suchá nádrž.
         fuel = if (rng.chance(0.20f)) 0f else rng.nextFloat(6f, 22f)
@@ -385,6 +429,46 @@ class Car {
         suspensionLoad = 0f
         rearComp = 0f
         frontComp = 0f
+
+        applyDebugOptions(debug)
+    }
+
+    /**
+     * Dorobí auto podľa ladiacich prepínačov. Zámerne až na konci prípravy,
+     * aby prepísala aj kvapaliny – a zámerne mimo náhody zo seedu, takže dve
+     * jazdy s rovnakým nastavením začnú rovnako a testuje sa vždy to isté.
+     */
+    private fun applyDebugOptions(debug: DebugOptions) {
+        if (!debug.any) return
+
+        fun fit(slot: ComponentSlot, def: ItemDef?) {
+            val item = def ?: return
+            parts[slot] = MountedPart(item.id, ComponentCondition.NEW, 1f)
+        }
+
+        if (debug.allComponents || debug.fullUpgrades) {
+            ComponentSlot.entries.forEach { slot ->
+                // Upgrade prepíše aj to, čo už v aute je; „všetky komponenty"
+                // len doplní chýbajúce, aby ostal pôvodný stav dielov.
+                if (debug.fullUpgrades) fit(slot, ItemCatalog.bestFor(slot))
+                else if (!hasPart(slot)) fit(slot, ItemCatalog.basicFor(slot))
+            }
+        } else if (debug.fullBody) {
+            // Samotná karoséria – na kontrolu polôh plechov bez toho, aby sa
+            // zmenila jazda.
+            BODY_SLOTS.forEach { slot -> fit(slot, ItemCatalog.basicFor(slot)) }
+        }
+
+        if (debug.fullFluids) {
+            fuel = fuelCapacity
+            oil = oilCapacity
+            coolant = coolantCapacity
+            fuelPurity = 1f
+            oilPurity = 1f
+            coolantPurity = 1f
+            batteryCharge = 1f
+            temperature = 40f
+        }
     }
 
     /** Priviaže auto na vozovku (príprava, stop, teleport). */
@@ -461,6 +545,10 @@ class Car {
         return ((currentPurity * currentVol + addPurity * addVol) / total).coerceIn(0f, 1f)
     }
 
+    /**
+     * Montáž dielu. Vyliatie kvapaliny pri výmene rieši [GameEngine] – potrebuje
+     * ju totiž zachytiť do kanistra, a to auto samo nevie.
+     */
     fun mount(slot: ComponentSlot, stack: ItemStack): MountedPart? {
         if (!stack.def.canMountTo(slot)) return null
         val previous = parts[slot]
@@ -469,6 +557,31 @@ class Car {
             batteryCharge = maxOf(batteryCharge, (0.45f + 0.45f * stack.health).coerceAtMost(1f))
         }
         return previous
+    }
+
+    /** Koľko a akej kvapaliny je práve v aute. */
+    fun fluidLevel(fluid: FluidType): Float = when (fluid) {
+        FluidType.FUEL -> fuel
+        FluidType.OIL -> oil
+        FluidType.COOLANT -> coolant
+        FluidType.BRAKE_FLUID -> 0f
+    }
+
+    fun fluidPurity(fluid: FluidType): Float = when (fluid) {
+        FluidType.FUEL -> fuelPurity
+        FluidType.OIL -> oilPurity
+        FluidType.COOLANT -> coolantPurity
+        FluidType.BRAKE_FLUID -> 1f
+    }
+
+    /** Vypustí kvapalinu; čistota sa nastaví až tým, čo hráč naleje ako ďalšie. */
+    fun drain(fluid: FluidType) {
+        when (fluid) {
+            FluidType.FUEL -> { fuel = 0f; fuelPurity = 1f }
+            FluidType.OIL -> { oil = 0f; oilPurity = 1f }
+            FluidType.COOLANT -> { coolant = 0f; coolantPurity = 1f }
+            FluidType.BRAKE_FLUID -> Unit
+        }
     }
 
     fun repair(slot: ComponentSlot, amount: Float = 0.25f) {
@@ -604,8 +717,9 @@ class Car {
             fuelUseMul * drainMul * qualityMul * coldMul
         fuel = (fuel - burn * dt).coerceAtLeast(0f)
         if (fuel <= 0f) {
+            // Motor zhasne, ale auto sa nezastaví na fleku – dojazd zotrvačnosťou
+            // a z kopca je súčasť jazdy. Rýchlosť si prevezme fyzika.
             engineRunning = false
-            speed = 0f
             return EndCause.OUT_OF_FUEL
         }
 
@@ -620,7 +734,9 @@ class Car {
         val coolPure = coolantPurity.coerceIn(0f, 1f)
         val climbLoad = (slopeMul - 1f).coerceAtLeast(0f)
         val heatGen = 9f * throttle + 8f * climbLoad
-        val radPenalty = if (hasRadiator) (1f - rad) * 16f else 26f
+        // Ojazdený chladič má hriať, nie zabíjať – štartovací kus má zdravie
+        // od 0.30, čo pri koeficiente 16 znamenalo trvalé prehrievanie.
+        val radPenalty = if (hasRadiator) (1f - rad) * 9f else 26f
         val coolPenalty = (1f - coolOk) * 18f +
             GameConfig.BAD_COOLANT_HEAT * (1f - coolPure)
         // V mraze sa motor na prevádzkovú teplotu nedostane tak ľahko.
@@ -813,7 +929,9 @@ class Car {
         val maxDriveF = mu * driveNormal
         val maxBrakeF = mu * brakeNormal * brakeMul.coerceIn(0.4f, 1.4f)
 
-        val powerFactor = (powerHp / 70f).coerceIn(0.5f, 1.65f)
+        // Strop 1.65 dosiahol už 116 hp, takže V6 a turbodiesel boli na ťah
+        // nerozoznateľné. Rozsah motorov je 78–130 hp, nech ho pokryje celý.
+        val powerFactor = (powerHp / 70f).coerceIn(0.5f, 1.9f)
         val launch = 1f + 0.55f * (1f - (kotlin.math.abs(speed) / 7f).coerceIn(0f, 1f))
         var driveDemand = 0f
         var brakeDemand = 0f
@@ -881,8 +999,11 @@ class Car {
                 slipTarget = 0f
             }
         } else if (driveDemand > 0.05f) {
-            // Kolesá chcú ísť rýchlejšie o ťah / grip.
-            val traction = driveDemand.coerceAtMost(maxDriveF)
+            // Kolesá chcú ísť rýchlejšie o ťah / grip. Guma je strop, ale nie
+            // úplný – zlomok prebytku sa na cestu dostane. Tvrdý orez robil
+            // z motora kulisu: nad hranicou gripu bolo 78 hp aj 130 hp rovnaké.
+            val traction = if (driveDemand <= maxDriveF) driveDemand
+            else maxDriveF + (driveDemand - maxDriveF) * GameConfig.GRIP_OVERDRIVE
             longForce += traction
             // Preklz meriame pomerom „koľko ťahu vs. koľko gumy unesú“.
             // Do TRACTION_SLACK sa auto ešte chytí (vodič dávkuje plyn),
@@ -901,7 +1022,16 @@ class Car {
         wheelSlip = MathX.damp(wheelSlip, slipTarget.coerceIn(0f, 1f), slipRate, dt)
 
         speed += (longForce / mass) * dt
-        var top = GameConfig.MAX_SPEED * (0.70f + 0.30f * tireGrip.coerceIn(0.4f, 1.2f))
+        // Guma musí byť na rýchlosti cítiť. Pri pôvodnom vzorci mala zodratá
+        // guma strop na 82 % maxima – teda takmer žiadny rozdiel oproti novej.
+        // Strop drží guma, ale motor ním smie pohnúť. Bez druhého činiteľa
+        // mal 130 hp turbodiesel na rovine presne tú istú maximálku ako
+        // základných 78 hp – upgrade nebolo na rýchlomere vôbec vidieť.
+        var top = GameConfig.MAX_SPEED *
+            (0.34f + 0.66f * tireGrip.coerceIn(0.15f, 1.2f)) *
+            (0.80f + 0.20f * (powerHp / 95f).coerceIn(0.6f, 1.7f))
+        // Roztrhaná guma znamená jazdu na disku – ďalej sa dá už len doplaziť.
+        if (hasBlownTyre) top = top.coerceAtMost(GameConfig.BLOWN_TYRE_MAX_SPEED)
         // S reťazami sa nedá uháňať – buď ich zložíš, alebo ideš pomaly.
         if (hasChains) top = top.coerceAtMost(GameConfig.CHAINS_MAX_SPEED)
         speed = speed.coerceIn(-GameConfig.REVERSE_MAX_SPEED, top)

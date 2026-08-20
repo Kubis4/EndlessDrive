@@ -2,7 +2,9 @@ package sk.kubis.endlessdrive.ui.game
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -206,18 +208,50 @@ class BuildingPainter {
 
     // --- Stavebné prvky ----------------------------------------------------
 
+    /**
+     * Múr s materiálom: plynulý svetelný spád zľava doprava, zvislé zašpinenie
+     * pri zemi, vodorovné škáry muriva a náznak podmurovky. Ploché obdĺžniky
+     * s dvoma pruhmi pôsobili ako papierová kulisa.
+     */
     private fun DrawScope.wall(left: Float, top: Float, w: Float, h: Float, base: Color) {
-        drawRect(base, topLeft = Offset(left, top), size = Size(w, h))
-        // Jemné vertikálne stmavenie – dodá objem bez shaderov.
         drawRect(
-            Color.Black.copy(alpha = 0.16f),
+            brush = Brush.horizontalGradient(
+                0f to lerp(base, Color.Black, 0.30f),
+                0.42f to base,
+                0.78f to lerp(base, Color.White, 0.10f),
+                1f to lerp(base, Color.Black, 0.14f),
+                startX = left,
+                endX = left + w
+            ),
             topLeft = Offset(left, top),
-            size = Size(w * 0.22f, h)
+            size = Size(w, h)
         )
+        // Zašpinenie a vlhkosť pri zemi.
         drawRect(
-            Color.White.copy(alpha = 0.05f),
-            topLeft = Offset(left + w * 0.22f, top),
-            size = Size(w * 0.3f, h)
+            brush = Brush.verticalGradient(
+                0f to Color.Transparent,
+                1f to Color.Black.copy(alpha = 0.30f),
+                startY = top + h * 0.55f,
+                endY = top + h
+            ),
+            topLeft = Offset(left, top + h * 0.55f),
+            size = Size(w, h * 0.45f)
+        )
+        // Škáry muriva – riedke, len aby stena nebola hladká plocha.
+        val rows = (h / (w * 0.16f)).toInt().coerceIn(2, 7)
+        for (i in 1 until rows) {
+            val ly = top + h * i / rows
+            drawLine(
+                Color.Black.copy(alpha = 0.10f),
+                Offset(left, ly), Offset(left + w, ly),
+                strokeWidth = 1f
+            )
+        }
+        // Podmurovka – tmavší pás, na ktorom dom stojí.
+        drawRect(
+            lerp(base, Color.Black, 0.42f),
+            topLeft = Offset(left, top + h * 0.93f),
+            size = Size(w, h * 0.07f)
         )
     }
 

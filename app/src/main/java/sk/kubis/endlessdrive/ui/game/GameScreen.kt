@@ -6,6 +6,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,11 +15,12 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -39,6 +42,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.sp
@@ -46,7 +50,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import sk.kubis.endlessdrive.core.GameConfig
-import sk.kubis.endlessdrive.domain.model.BranchStyle
 import sk.kubis.endlessdrive.domain.model.ComponentSlot
 import sk.kubis.endlessdrive.domain.model.FluidGrade
 import sk.kubis.endlessdrive.domain.model.GamePhase
@@ -121,22 +124,24 @@ fun GameScreen(
         ui.paused || ui.phase == GamePhase.GAME_OVER
 
     Box(Modifier.fillMaxSize().background(GameColors.panelSoft)) {
-        // Hra kreslí cez celú plochu vrátane výrezu…
+        // Scéna ide cez celú plochu vrátane výrezu. Odsadenie plátna do čiernych
+        // pásov po stranách sa neosvedčilo – obraz tým utrpel viac, než získal.
         Canvas(Modifier.fillMaxSize()) {
             @Suppress("UNUSED_EXPRESSION")
             viewModel.frame
             with(renderer) { draw(engine) }
         }
 
-        // …ale ovládanie a HUD sa držia mimo výrezu a zaoblených rohov.
-        // Výrez býva len na jednej strane – rovnaký inset na L/R, aby UI nebolo posunuté.
-        val cutout = WindowInsets.displayCutout
+        // …ale ovládanie a HUD sa držia mimo výrezu, zaoblených rohov aj
+        // systémových líšt. Bez navigačnej lišty sa spodok palubnej dosky
+        // schoval pod gesto-pruh a kontrolky boli orezané.
         val layoutDir = LocalLayoutDirection.current
+        val safe = WindowInsets.safeDrawing
         val cutoutSide = with(density) {
-            max(cutout.getLeft(this, layoutDir).toDp(), cutout.getRight(this, layoutDir).toDp())
+            max(safe.getLeft(this, layoutDir).toDp(), safe.getRight(this, layoutDir).toDp())
         }
-        val cutoutTop = with(density) { cutout.getTop(this).toDp() }
-        val cutoutBottom = with(density) { cutout.getBottom(this).toDp() }
+        val cutoutTop = with(density) { safe.getTop(this).toDp() }
+        val cutoutBottom = with(density) { safe.getBottom(this).toDp() }
         Box(
             Modifier
                 .fillMaxSize()
@@ -148,26 +153,21 @@ fun GameScreen(
                 )
         ) {
 
-            // --- Prístrojovka -------------------------------------------------
-            // Väčší odstup od okrajov kvôli zaobleným displejom a výrezom.
-            Row(
-                Modifier
+            TripBadge(
+                ui = ui,
+                showFps = showFps,
+                modifier = Modifier
                     .align(Alignment.TopStart)
-                    .fillMaxWidth()
-                    .padding(horizontal = SCREEN_MARGIN, vertical = 14.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                VitalsPanel(ui)
-                TripPanel(ui, showFps)
-            }
+                    .padding(start = SCREEN_MARGIN, top = SCREEN_MARGIN)
+            )
 
-            // Hlášky a výstrahy idú na úplný vrch, do voľného stredu medzi panely.
+            // Rozcestník má prednosť hore; hlášky sa pod neho odsunú, aby sa
+            // neprekrývali. Dole už miesto nie je – tam sedí palubná doska.
             AlertColumn(
                 ui = ui,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 12.dp, start = 260.dp, end = 200.dp)
+                    .padding(top = 12.dp, start = 120.dp, end = 120.dp)
             )
 
             SideIcons(
@@ -176,36 +176,41 @@ fun GameScreen(
                 onToggleLights = { viewModel.toggleHeadlights() },
                 onTogglePause = { viewModel.setPaused(!ui.paused) },
                 onToggleFps = { showFps = !showFps },
-                modifier = Modifier.align(Alignment.CenterEnd).padding(end = SCREEN_MARGIN)
+                // Vrch obrazovky je po presune vitals do dosky voľný – ikony
+                // tam nezavadzajú a neplávajú cez scénu.
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(end = SCREEN_MARGIN, top = SCREEN_MARGIN)
             )
 
             // --- Ovládanie podľa fázy ----------------------------------------
-            when (ui.phase) {
-                GamePhase.PREP, GamePhase.STOPPED, GamePhase.EXPLORING -> {
-                    if (!anyPanelOpen || ui.exploring) {
-                        ActionBar(
-                            ui = ui,
-                            onStart = { viewModel.startEngine() },
-                            onStopEngine = { viewModel.stopEngine() },
-                            onInventory = { showInventory = true },
-                            onCar = { showCar = true },
-                            onEnter = { viewModel.enterBuilding() },
-                            onLeave = { viewModel.leaveBuilding() },
-                            onDrive = { viewModel.resume() },
-                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp)
-                        )
-                    }
-                }
-                GamePhase.DRIVING -> {
-                    GameControls(
-                        onGasChanged = viewModel::onGasChanged,
-                        onBrakeChanged = viewModel::onBrakeChanged,
-                        onStop = viewModel::stop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                GamePhase.JUNCTION -> Unit
-                GamePhase.GAME_OVER -> Unit
+            if (ui.phase == GamePhase.DRIVING) {
+                GameControls(
+                    onGasChanged = viewModel::onGasChanged,
+                    onBrakeChanged = viewModel::onBrakeChanged,
+                    onStop = viewModel::stop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            // Palubná doska drží spodok obrazovky vždy – budíky a kontrolky
+            // patria pred oči aj za jazdy, ovládanie sa v nej len prepína.
+            if (ui.phase != GamePhase.GAME_OVER) {
+                Dashboard(
+                    ui = ui,
+                    onStart = { viewModel.startEngine() },
+                    onStopEngine = { viewModel.stopEngine() },
+                    onInventory = { showInventory = true },
+                    onCar = { showCar = true },
+                    onEnter = { viewModel.enterBuilding() },
+                    onLeave = { viewModel.leaveBuilding() },
+                    onDrive = { viewModel.resume() },
+                    onRest = { viewModel.restUntilDawn() },
+                    onStopDriving = { viewModel.stop() },
+                    // Bez tmavého bloku už doska autu nezavadzia, takže môže
+                    // sedieť v strede v oboch stavoch.
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                )
             }
 
             // Rozcestie sa voli za jazdy - pas nad tlacidlom STOP, bez modalu.
@@ -217,23 +222,13 @@ fun GameScreen(
                     engine.junctionChoices.map { it.id to it.label }
                 },
                 onSelect = viewModel::selectBranch,
+                // Nad plynovým pedálom – palec je pri voľbe už tam.
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 76.dp)
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 18.dp, bottom = 150.dp)
             )
 
-            // --- Prekryvné panely ---------------------------------------------
-            if (ui.phase == GamePhase.JUNCTION) {
-                Scrim()
-                JunctionPanel(
-                    engine = engine,
-                    onChoose = viewModel::chooseBranch,
-                    onInventory = { showInventory = true },
-                    onCar = { showCar = true },
-                    modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.94f).fillMaxHeight(0.7f)
-                )
-            }
-
+            // Korisť sa prehrabáva pri bežiacom HUD – stmavenie nemá.
             if (ui.exploring) {
                 LootPanel(
                     engine = engine,
@@ -249,101 +244,110 @@ fun GameScreen(
                         .fillMaxHeight()
                 )
             }
+        }
+
+        // --- Prekryvné panely ---------------------------------------------
+        // Bývali vnútri odsadenej plochy a spolu s nimi aj stmavenie. Pri
+        // výreze tak po stranách ostali svetlé pruhy bežiacej hry a otvorené
+        // menu vyzeralo, akoby sa scéna kreslila len v strede obrazovky.
+        val safeArea = PaddingValues(
+            start = cutoutSide,
+            end = cutoutSide,
+            top = cutoutTop,
+            bottom = cutoutBottom
+        )
+        Box(Modifier.fillMaxSize()) {
+            if (ui.phase == GamePhase.JUNCTION) {
+                Overlay(safeArea) {
+                    JunctionPanel(
+                        engine = engine,
+                        onChoose = viewModel::chooseBranch,
+                        onInventory = { showInventory = true },
+                        onCar = { showCar = true },
+                        modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.94f).fillMaxHeight(0.7f)
+                    )
+                }
+            }
 
             if (showInventory) {
-                Scrim(onDismiss = { showInventory = false })
-                InventoryPanel(
-                    engine = engine,
-                    bagRevision = ui.bagRevision,
-                    onUse = { i, slot -> viewModel.useItem(i, slot) },
-                    onDiscard = { viewModel.discardItem(it) },
-                    onClose = { showInventory = false },
-                    modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.95f).fillMaxHeight(0.92f)
-                )
+                Overlay(safeArea, onDismiss = { showInventory = false }) {
+                    InventoryPanel(
+                        engine = engine,
+                        bagRevision = ui.bagRevision,
+                        onUse = { i, slot -> viewModel.useItem(i, slot) },
+                        onUseFromBoot = { i, slot -> viewModel.useBootItem(i, slot) },
+                        onDiscard = { viewModel.discardItem(it) },
+                        onDiscardBoot = { viewModel.discardBootItem(it) },
+                        onStow = { viewModel.stowInBoot(it) },
+                        onTake = { viewModel.takeFromBoot(it) },
+                        onClose = { showInventory = false },
+                        modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.95f).fillMaxHeight(0.92f)
+                    )
+                }
             }
 
             if (showCar) {
-                Scrim(onDismiss = { showCar = false })
-                CarPanel(
-                    engine = engine,
-                    bagRevision = ui.bagRevision,
-                    layers = assets.sedan,
-                    onRepair = { viewModel.repair(it) },
-                    onUnmount = { viewModel.unmount(it) },
-                    onSwapTyres = { viewModel.swapTyres() },
-                    onClose = { showCar = false },
-                    modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.95f).fillMaxHeight(0.92f)
-                )
+                Overlay(safeArea, onDismiss = { showCar = false }) {
+                    CarPanel(
+                        engine = engine,
+                        bagRevision = ui.bagRevision,
+                        layers = assets.sedan,
+                        onRepair = { viewModel.repair(it) },
+                        onUnmount = { viewModel.unmount(it) },
+                        onSwapTyres = { viewModel.swapTyres() },
+                        onClose = { showCar = false },
+                        modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.95f).fillMaxHeight(0.92f)
+                    )
+                }
             }
 
             if (ui.paused && ui.phase != GamePhase.GAME_OVER) {
-                Scrim()
-                PausePanel(
-                    ui = ui,
-                    onResume = { viewModel.setPaused(false) },
-                    onRestart = {
-                        viewModel.retry()
-                        viewModel.setPaused(false)
-                    },
-                    onMenu = onExitToMenu,
-                    modifier = Modifier.align(Alignment.Center).width(360.dp)
-                )
+                Overlay(safeArea) {
+                    PausePanel(
+                        ui = ui,
+                        onResume = { viewModel.setPaused(false) },
+                        onRestart = {
+                            viewModel.retry()
+                            viewModel.setPaused(false)
+                        },
+                        onEndRun = { viewModel.endRun() },
+                        onMenu = onExitToMenu,
+                        modifier = Modifier.align(Alignment.Center).width(360.dp)
+                    )
+                }
             }
 
             if (ui.phase == GamePhase.GAME_OVER) {
-                Scrim()
-                GameOverPanel(
-                    engine = engine,
-                    onRetry = { viewModel.retry() },
-                    onMenu = onExitToMenu,
-                    modifier = Modifier.align(Alignment.Center).width(420.dp)
-                )
+                Overlay(safeArea) {
+                    GameOverPanel(
+                        engine = engine,
+                        onRetry = { viewModel.retry() },
+                        onMenu = onExitToMenu,
+                        modifier = Modifier.align(Alignment.Center).width(420.dp)
+                    )
+                }
             }
         }
     }
 }
 
-// ---------------------------------------------------------------------------
-// Spodná lišta akcií
-// ---------------------------------------------------------------------------
-
+/**
+ * Prekryv nad hrou: stmavenie cez celú obrazovku, obsah v bezpečnej ploche.
+ *
+ * Rozdelenie je podstatné. Keby stmavenie dostalo to isté odsadenie ako panel,
+ * pri výreze by po stranách presvitala nezatmavená hra – panel patrí mimo
+ * výrezu, tieň nie.
+ */
 @Composable
-private fun ActionBar(
-    ui: GameUiState,
-    onStart: () -> Unit,
-    onStopEngine: () -> Unit,
-    onInventory: () -> Unit,
-    onCar: () -> Unit,
-    onEnter: () -> Unit,
-    onLeave: () -> Unit,
-    onDrive: () -> Unit,
-    modifier: Modifier = Modifier
+private fun Overlay(
+    insets: PaddingValues,
+    onDismiss: (() -> Unit)? = null,
+    content: @Composable BoxScope.() -> Unit
 ) {
-    Row(
-        modifier
-            .background(GameColors.hudBg, RoundedCornerShape(14.dp))
-            .border(1.dp, GameColors.outline.copy(alpha = 0.7f), RoundedCornerShape(14.dp))
-            .padding(10.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        GameButton("PACK", onInventory)
-        GameButton("CAR", onCar)
-        if (ui.exploring) {
-            GameButton("LEAVE", onLeave)
-        } else if (ui.hasNearbyBuilding) {
-            GameButton("BUILDING", onEnter, style = BtnStyle.Ghost)
-        }
-        // Rozjazd je oddelený, aby sa neklikol pri prehľadávaní.
-        Spacer(Modifier.width(24.dp))
-        if (!ui.engineRunning) {
-            GameButton("START", onStart, style = BtnStyle.Primary)
-        } else {
-            GameButton("SHUT OFF", onStopEngine)
-            GameButton("DRIVE", onDrive, style = BtnStyle.Primary)
-        }
-    }
+    Scrim(onDismiss = onDismiss)
+    Box(Modifier.fillMaxSize().padding(insets), content = content)
 }
+
 
 // ---------------------------------------------------------------------------
 // Križovatka
@@ -373,11 +377,7 @@ private fun JunctionPanel(
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             engine.junctionChoices.forEach { choice ->
-                val accent = when (choice.style) {
-                    BranchStyle.SAFE_RURAL -> Color(0xFF5C7F4C)
-                    BranchStyle.INDUSTRIAL -> Color(0xFF5A6E80)
-                    BranchStyle.SHORTCUT_RISK -> Color(0xFF9E4E30)
-                }
+                val accent = Color(choice.style.accentArgb)
                 Column(
                     Modifier
                         .weight(1f)
@@ -414,58 +414,104 @@ private fun InventoryPanel(
     engine: GameEngine,
     bagRevision: Int,
     onUse: (Int, ComponentSlot?) -> Unit,
+    onUseFromBoot: (Int, ComponentSlot?) -> Unit,
     onDiscard: (Int) -> Unit,
+    onDiscardBoot: (Int) -> Unit,
+    onStow: (Int) -> Unit,
+    onTake: (Int) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     @Suppress("UNUSED_VARIABLE")
     val rev = bagRevision
-    val weight = engine.inventory.totalWeight
-    val cap = engine.inventory.maxWeight
+    val pack = engine.inventory
+    val boot = engine.boot
 
     GamePanel(
         title = "PACK",
-        subtitle = "${engine.inventory.usedSlots} / ${engine.inventory.slots.size} slots · " +
-            "${weight.toInt()} / ${cap.toInt()} kg",
+        subtitle = "On you ${pack.usedSlots}/${pack.slots.size} · " +
+            "${pack.totalWeight.toInt()}/${pack.maxWeight.toInt()} kg   ·   " +
+            "Boot ${boot.usedSlots}/${boot.slots.size} · " +
+            "${boot.totalWeight.toInt()}/${boot.maxWeight.toInt()} kg",
         onClose = onClose,
         modifier = modifier
     ) {
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(
                 Modifier
-                    .weight(1.5f)
+                    .weight(1.4f)
                     .fillMaxHeight()
                     .verticalScroll(rememberScrollState())
             ) {
-                if (engine.inventory.usedSlots == 0) {
+                SectionLabel("ON YOU")
+                Spacer(Modifier.height(6.dp))
+                if (pack.usedSlots == 0) {
                     Text("The pack is empty.", color = GameColors.textDim, fontSize = 14.sp)
                 }
-                engine.inventory.slots.forEachIndexed { i, stack ->
+                pack.slots.forEachIndexed { i, stack ->
                     if (stack == null) return@forEachIndexed
                     val tyre = stack.def.axleTire
                     ItemCard(
+                        revision = bagRevision,
                         stack = stack,
                         // Pri gume porovnávame s tou horšou z náprav.
                         mounted = if (tyre) engine.car.worstTyre()
                         else stack.def.mountsTo?.let { engine.car.parts[it] },
                         primaryLabel = if (stack.def.fluid != null) "POUR IN" else "FIT",
                         onPrimary = { onUse(i, null) },
-                        secondaryLabel = "DROP",
-                        onSecondary = { onDiscard(i) },
+                        secondaryLabel = if (engine.bootReachable) "TO BOOT" else null,
+                        onSecondary = if (engine.bootReachable) ({ onStow(i) }) else null,
+                        onDiscard = { onDiscard(i) },
                         onFitFront = if (tyre) ({ onUse(i, ComponentSlot.TIRE_FRONT) }) else null,
                         onFitRear = if (tyre) ({ onUse(i, ComponentSlot.TIRE_REAR) }) else null,
                         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
                     )
                 }
             }
-            CarSummary(engine, Modifier.weight(1f).fillMaxHeight())
+            Column(
+                Modifier
+                    .weight(1.4f)
+                    .fillMaxHeight()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                SectionLabel(if (engine.bootReachable) "BOOT" else "BOOT — STOP AT THE CAR")
+                Spacer(Modifier.height(6.dp))
+                if (boot.usedSlots == 0) {
+                    Text("The boot is empty.", color = GameColors.textDim, fontSize = 14.sp)
+                }
+                boot.slots.forEachIndexed { i, stack ->
+                    if (stack == null) return@forEachIndexed
+                    val tyre = stack.def.axleTire
+                    val mountable = stack.def.fluid != null || stack.def.mountTargets().isNotEmpty()
+                    ItemCard(
+                        revision = bagRevision,
+                        stack = stack,
+                        mounted = if (tyre) engine.car.worstTyre()
+                        else stack.def.mountsTo?.let { engine.car.parts[it] },
+                        // Motor sa montuje rovno z kufra – na chrbát sa nezmestí.
+                        primaryLabel = if (stack.def.fluid != null) "POUR IN" else "FIT",
+                        onPrimary = { if (mountable) onUseFromBoot(i, null) },
+                        secondaryLabel = "TAKE",
+                        onSecondary = { onTake(i) },
+                        onDiscard = { onDiscardBoot(i) },
+                        onFitFront = if (tyre) ({ onUseFromBoot(i, ComponentSlot.TIRE_FRONT) }) else null,
+                        onFitRear = if (tyre) ({ onUseFromBoot(i, ComponentSlot.TIRE_REAR) }) else null,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    )
+                }
+            }
+            CarSummary(engine, bagRevision, Modifier.weight(1f).fillMaxHeight())
         }
     }
 }
 
 /** Pravý stĺpec inventára: čo je práve v aute. */
 @Composable
-private fun CarSummary(engine: GameEngine, modifier: Modifier = Modifier) {
+private fun CarSummary(engine: GameEngine, revision: Int, modifier: Modifier = Modifier) {
+    // Compose nevidí do GameEngine – bez tohto parametra by sa stĺpec „v aute“
+    // po namontovaní dielu neprekreslil a ukazoval by staré čísla.
+    @Suppress("UNUSED_VARIABLE")
+    val rev = revision
     val car = engine.car
     Column(
         modifier
@@ -519,10 +565,21 @@ private fun CarSummary(engine: GameEngine, modifier: Modifier = Modifier) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Za názvom slotu ide v zátvorke to, čím sa namontovaný diel
+                // líši – bez toho sa hráč nedozvedel, ktorý motor či pruženie
+                // vlastne má. Riadok si berie zvyšok šírky a dlhý názov radšej
+                // skráti; inak by percentá vpravo vytisol do stĺpca znakov.
                 Text(
-                    slot.displayName,
+                    buildString {
+                        append(slot.displayName)
+                        part?.def?.slotDetail(slot)?.takeIf { it.isNotBlank() }
+                            ?.let { append(" ($it)") }
+                    },
                     color = if (part == null) GameColors.textDim else GameColors.text,
-                    fontSize = 12.sp
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).padding(end = 8.dp)
                 )
                 if (part == null) {
                     Chip("missing", GameColors.danger)
@@ -531,7 +588,9 @@ private fun CarSummary(engine: GameEngine, modifier: Modifier = Modifier) {
                         "${(part.health * 100).toInt()} %",
                         color = healthColor(part.health),
                         fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
@@ -546,13 +605,22 @@ private fun ItemCard(
     mounted: MountedPart?,
     primaryLabel: String,
     onPrimary: () -> Unit,
+    /**
+     * Compose nevidí do [ItemStack] – po naliatí sa mení jeho obsah, nie
+     * identita, takže bez tohto by nadpis ďalej ukazoval pôvodný objem.
+     */
+    revision: Int,
     modifier: Modifier = Modifier,
     secondaryLabel: String? = null,
     onSecondary: (() -> Unit)? = null,
+    /** Zahodenie veci – vždy samostatné tlačidlo, nikdy nie zdieľané. */
+    onDiscard: (() -> Unit)? = null,
     /** Gumu si hráč zaradí sám – predok alebo zadok. */
     onFitFront: (() -> Unit)? = null,
     onFitRear: (() -> Unit)? = null
 ) {
+    @Suppress("UNUSED_VARIABLE")
+    val rev = revision
     val def = stack.def
     val isFluid = def.fluid != null
     Column(
@@ -561,14 +629,13 @@ private fun ItemCard(
             .border(1.dp, GameColors.outline, RoundedCornerShape(10.dp))
             .padding(10.dp)
     ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f)) {
+        // Popis hore, ovládanie pod ním. Tlačidlá vedľa obsahu ukrajovali
+        // šírku textu a karta bola zbytočne vysoká a úzka.
+        Column(Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth()) {
                 Text(
-                    if (isFluid) "${def.name} · ${String.format("%.0f", def.fluidAmount * stack.count)} L"
+                    // Skutočný zostatok v nádobe, nie menovitý objem × počet.
+                    if (isFluid) "${def.name} · ${String.format("%.1f", stack.fluidLitres)} L"
                     else "${def.name}${if (stack.count > 1) " ×${stack.count}" else ""}",
                     color = GameColors.text,
                     fontSize = 14.sp,
@@ -605,15 +672,36 @@ private fun ItemCard(
                     )
                 }
             }
-            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Spacer(Modifier.height(8.dp))
+            // Dva riadky namiesto jedného: hlavná akcia hore, presun a
+            // zahodenie dole. V jednom rade sa štyri tlačidlá nezmestili
+            // a dlhšie popisy („TO BOOT“) sa orezávali.
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                // Poradie ako na aute v bočnom pohľade: zadok vľavo, predok vpravo.
                 if (onFitFront != null && onFitRear != null) {
-                    GameButton("→ FRONT", onFitFront, compact = true, style = BtnStyle.Primary)
-                    GameButton("→ REAR", onFitRear, compact = true, style = BtnStyle.Primary)
+                    GameButton("REAR", onFitRear, compact = true, style = BtnStyle.Primary, modifier = Modifier.weight(1f))
+                    GameButton("FRONT", onFitFront, compact = true, style = BtnStyle.Primary, modifier = Modifier.weight(1f))
                 } else {
-                    GameButton(primaryLabel, onPrimary, compact = true, style = BtnStyle.Primary)
+                    GameButton(primaryLabel, onPrimary, compact = true, style = BtnStyle.Primary, modifier = Modifier.weight(1f))
                 }
-                if (secondaryLabel != null && onSecondary != null) {
-                    GameButton(secondaryLabel, onSecondary, compact = true, style = BtnStyle.Danger)
+            }
+            if ((secondaryLabel != null && onSecondary != null) || onDiscard != null) {
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (secondaryLabel != null && onSecondary != null) {
+                        // Ghost má obrys – Secondary má rovnaké pozadie ako karta
+                        // a tlačidlo tak vyzeralo ako obyčajný text.
+                        GameButton(secondaryLabel, onSecondary, compact = true, style = BtnStyle.Ghost, modifier = Modifier.weight(1f))
+                    }
+                    if (onDiscard != null) {
+                        GameButton("DROP", onDiscard, compact = true, style = BtnStyle.Danger, modifier = Modifier.weight(1f))
+                    }
                 }
             }
         }
@@ -672,6 +760,7 @@ private fun LootPanel(
                     mounted = item.def.mountsTo?.let { engine.car.parts[it] },
                     primaryLabel = "TAKE",
                     onPrimary = { onTake(i) },
+                    revision = bagRevision,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
                 )
             }
@@ -723,6 +812,7 @@ private fun CarPanel(
             )
             SlotGrid(
                 engine = engine,
+                revision = bagRevision,
                 section = section,
                 selected = selected,
                 onSelect = { selected = it },
@@ -848,7 +938,8 @@ private fun CarView(
                             tireHealth = tire?.health ?: 0.7f,
                             accent = accent,
                             blurSteps = 1,
-                            tireId = tire?.defId
+                            tireId = tire?.defId,
+                            art = layers.wheelImage(tire?.defId)
                         )
                     }
                 }
@@ -871,18 +962,27 @@ private fun CarView(
 @Composable
 private fun SlotGrid(
     engine: GameEngine,
+    revision: Int,
     section: CarSection?,
     selected: ComponentSlot?,
     onSelect: (ComponentSlot) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Bez revízie by mriežka po výmene dielu ostala na starých hodnotách.
+    @Suppress("UNUSED_VARIABLE")
+    val rev = revision
     val slots = ComponentSlot.entries
     val columns = 3
     val rows = (slots.size + columns - 1) / columns
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    // Riadky si výšku určia podľa obsahu a mriežka sa v prípade potreby posúva.
+    // Pri rovnomernom delení výšky (weight) sa percentá aj „missing“ orezávali.
+    Column(
+        modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
         for (row in 0 until rows) {
             Row(
-                Modifier.fillMaxWidth().weight(1f),
+                Modifier.fillMaxWidth().height(IntrinsicSize.Min),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 for (col in 0 until columns) {
@@ -1063,6 +1163,7 @@ private fun PausePanel(
     ui: GameUiState,
     onResume: () -> Unit,
     onRestart: () -> Unit,
+    onEndRun: () -> Unit,
     onMenu: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1084,6 +1185,15 @@ private fun PausePanel(
             GameButton("CONTINUE", onResume, style = BtnStyle.Primary, modifier = Modifier.weight(1f))
             GameButton("MENU", onMenu, modifier = Modifier.weight(1f))
         }
+        Spacer(Modifier.height(8.dp))
+        // Keď sa už nedá pohnúť, hráč musí vedieť jazdu ukončiť tak, aby sa
+        // prejdené kilometre zapísali. Reštart ich zahodí, toto nie.
+        GameButton(
+            "END RUN · ${String.format("%.1f", ui.distanceKm)} km",
+            onEndRun,
+            style = BtnStyle.Secondary,
+            modifier = Modifier.fillMaxWidth()
+        )
         Spacer(Modifier.height(8.dp))
         // Zaseknutú jazdu treba vedieť zahodiť bez chodenia cez menu.
         GameButton(

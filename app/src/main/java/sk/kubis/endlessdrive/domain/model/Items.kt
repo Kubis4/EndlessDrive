@@ -131,22 +131,36 @@ object ItemCatalog {
      * Základný motor. Musí uniesť to, že 2WD prenáša ťah len jednou nápravou –
      * s 60 hp sa štartovné auto len prepaľovalo a zožralo gumy.
      */
+    // Motory sa volajú podľa objemu a výkonu, nie A/B/C – z písmena sa nedalo
+    // zistiť, či je nález lepší než to, čo je práve v aute.
     val ENGINE_A = ItemDef(
-        id = "engine_a", name = "Engine A (78 hp)", rarity = ItemRarity.RARE,
+        id = "engine_a", name = "1.4 petrol · 78 hp", rarity = ItemRarity.RARE,
         weight = 120f, mountsTo = ComponentSlot.ENGINE, powerHp = 78f,
         fuelUse = 1.15f, reliability = 0.7f, baseValue = 120
     )
+    /** Malý úsporný diesel – slabší, ale spotreba je najnižšia z malých. */
+    val ENGINE_D = ItemDef(
+        id = "engine_d", name = "1.6 diesel · 88 hp", rarity = ItemRarity.RARE,
+        weight = 132f, mountsTo = ComponentSlot.ENGINE, powerHp = 88f,
+        fuelUse = 0.80f, reliability = 0.95f, baseValue = 175
+    )
     val ENGINE_B = ItemDef(
-        id = "engine_b", name = "Engine B (95 hp)", rarity = ItemRarity.VERY_RARE,
+        id = "engine_b", name = "2.0 petrol · 95 hp", rarity = ItemRarity.VERY_RARE,
         weight = 145f, mountsTo = ComponentSlot.ENGINE, powerHp = 95f,
         fuelUse = 0.85f, reliability = 1.1f, baseValue = 220
+    )
+    /** Ťažký vidlicový šesťvalec – sila za cenu spotreby aj hmotnosti. */
+    val ENGINE_E = ItemDef(
+        id = "engine_e", name = "2.5 V6 · 112 hp", rarity = ItemRarity.VERY_RARE,
+        weight = 158f, mountsTo = ComponentSlot.ENGINE, powerHp = 112f,
+        fuelUse = 1.05f, reliability = 1.0f, baseValue = 290
     )
     /**
      * Tretí stupeň – vydrží až do neskorej jazdy a nájde sa prakticky len
      * v depách. Bez neho by chase skončil, keď je auto raz vybavené.
      */
     val ENGINE_C = ItemDef(
-        id = "engine_c", name = "Engine C (130 hp)", rarity = ItemRarity.LEGENDARY,
+        id = "engine_c", name = "2.2 turbodiesel · 130 hp", rarity = ItemRarity.LEGENDARY,
         weight = 160f, mountsTo = ComponentSlot.ENGINE, powerHp = 130f,
         fuelUse = 0.78f, reliability = 1.35f, baseValue = 420
     )
@@ -208,7 +222,8 @@ object ItemCatalog {
     val SUSPENSION_LIFT = ItemDef(
         id = "suspension_lift", name = "Suspension (lifted)", rarity = ItemRarity.RARE,
         weight = 16f, mountsTo = ComponentSlot.SUSPENSION, reliability = 1.15f,
-        rideHeight = 0.64f, suspTravel = 0.58f, baseValue = 70
+        // Zdvih má byť cítiť, nie aby auto vyzeralo ako na chodúľoch.
+        rideHeight = 0.52f, suspTravel = 0.52f, baseValue = 70
     )
     val DRIVE_RWD = ItemDef(
         id = "drive_rwd", name = "Drivetrain RWD", rarity = ItemRarity.COMMON,
@@ -264,19 +279,44 @@ object ItemCatalog {
         weight = 9f, mountsTo = ComponentSlot.REAR_BUMPER, reliability = 1f, baseValue = 18
     )
 
+    // Sedadlá zvlášť. Ako jeden 26 kg kus zabrali pol batoha a v kôlni
+    // vytlačili štartér s batériou – hráč potom odišiel s peknou sedačkou
+    // a nepojazdným autom.
+    val SEAT_FRONT = ItemDef(
+        id = "seat_front", name = "Front seat", rarity = ItemRarity.COMMON,
+        weight = 13f, mountsTo = ComponentSlot.SEAT_FRONT, reliability = 1f, baseValue = 14
+    )
+    val SEAT_REAR = ItemDef(
+        id = "seat_rear", name = "Rear seat", rarity = ItemRarity.COMMON,
+        weight = 16f, mountsTo = ComponentSlot.SEAT_REAR, reliability = 1f, baseValue = 12
+    )
+    val TRUNK_LID = ItemDef(
+        id = "trunk_lid", name = "Boot lid", rarity = ItemRarity.COMMON,
+        weight = 11f, mountsTo = ComponentSlot.TRUNK_LID, reliability = 1f, baseValue = 18
+    )
+    val HEADLIGHT = ItemDef(
+        id = "headlight", name = "Headlight", rarity = ItemRarity.UNCOMMON,
+        weight = 4f, mountsTo = ComponentSlot.HEADLIGHT, reliability = 1f, baseValue = 40
+    )
+    val TAILLIGHT = ItemDef(
+        id = "taillight", name = "Tail light", rarity = ItemRarity.COMMON,
+        weight = 3f, mountsTo = ComponentSlot.TAILLIGHT, reliability = 1f, baseValue = 22
+    )
+
     val ALL = listOf(
         FUEL_CAN, OIL_BOTTLE, COOLANT_BOTTLE, WATER,
         TIRE_POOR, TIRE, TIRE_SPORT, TIRE_OFFROAD, TIRE_WINTER, SNOW_CHAINS,
         BACKPACK, BOOT_CRATE, ROOF_RACK,
         BATTERY, BATTERY_GOOD,
-        ENGINE_A, ENGINE_B, ENGINE_C,
+        ENGINE_A, ENGINE_B, ENGINE_C, ENGINE_D, ENGINE_E,
         RADIATOR, RADIATOR_GOOD, RADIATOR_HD,
         BRAKES, BRAKES_GOOD,
         FUEL_TANK, FUEL_TANK_BIG, FUEL_TANK_LONG,
         ALTERNATOR, STARTER,
         SUSPENSION, SUSPENSION_LOW, SUSPENSION_GOOD, SUSPENSION_LIFT,
         DRIVE_RWD, DRIVE_FWD, DRIVE_AWD,
-        DOORS, HOOD, WINDOWS, FRONT_BUMPER, REAR_BUMPER
+        DOORS, HOOD, WINDOWS, FRONT_BUMPER, REAR_BUMPER,
+        TRUNK_LID, HEADLIGHT, TAILLIGHT, SEAT_FRONT, SEAT_REAR
     )
 
     fun byId(id: String): ItemDef? = ALL.find { it.id == id }
@@ -289,10 +329,41 @@ data class ItemStack(
     var health: Float = condition.maxHealth,
     var count: Int = 1,
     /** Len pre kvapaliny: 1 = čistá, menej = riedená vodou / znečistená. */
-    var purity: Float = 1f
+    var purity: Float = 1f,
+    /**
+     * Koľko kvapaliny zostalo vo vymontovanom diele (motor, chladič, nádrž).
+     * Vďaka tomu má vrátený starý motor svoj pôvodný olej – kvapalina sa
+     * pri výmene nikam neprelieva, ostáva tam, kde bola.
+     */
+    var heldFluidL: Float = 0f,
+    /** Čistota kvapaliny vo vnútri dielu (nezávislá od [purity] kanistra). */
+    var heldPurity: Float = 1f
 ) {
     val def: ItemDef get() = ItemCatalog.byId(defId) ?: ItemCatalog.FUEL_CAN
     val grade: FluidGrade get() = FluidGrade.of(purity)
+
+    /**
+     * Koľko kvapaliny v nádobe naozaj je.
+     *
+     * Nádoba sa vylieva po litroch, nie po celých kusoch – keď sa do motora
+     * zmestí 1.5 L, z päťlitrovej bandasky ostanú 3.5 L, nie prázdna nádoba.
+     * [heldFluidL] je 0 len pri čerstvo vytvorenom kuse, vtedy platí menovitý
+     * objem × počet; to drží spätnú kompatibilitu so starými záznamami.
+     */
+    val fluidLitres: Float
+        get() = if (def.fluid == null) 0f
+        else if (heldFluidL > 0f) heldFluidL
+        else def.fluidAmount * count
+
+    /** Nastaví zostatok a zosúladí s ním počet kusov (kvôli hmotnosti). */
+    fun setFluidLitres(litres: Float) {
+        val def = def
+        if (def.fluid == null) return
+        heldFluidL = litres.coerceAtLeast(0f)
+        count = if (def.fluidAmount > 0.01f) {
+            kotlin.math.ceil(heldFluidL / def.fluidAmount).toInt().coerceAtLeast(0)
+        } else 0
+    }
 
     /** Popis stavu do UI – kvapaliny majú čistotu, diely opotrebenie. */
     val stateLabel: String
@@ -302,3 +373,19 @@ data class ItemStack(
             "${condition.displayName} · ${(health * 100).toInt()} %"
         }
 }
+
+/**
+ * Diely použiteľné do slotu, zoradené od najlacnejšieho. Cena je v katalógu
+ * mierou kvality, takže „najlepší kus" sa nemusí nikde udržiavať ručne –
+ * nový diel sa do rebríčka zaradí sám.
+ *
+ * Reťaze sú vynechané zámerne: na suchu priľnavosť zhoršujú, takže ako
+ * „všetko namontované" by boli skôr prekážka než výbava.
+ */
+fun ItemCatalog.candidatesFor(slot: ComponentSlot): List<ItemDef> =
+    if (slot == ComponentSlot.CHAINS) emptyList()
+    else ALL.filter { it.canMountTo(slot) }.sortedBy { it.baseValue }
+
+fun ItemCatalog.basicFor(slot: ComponentSlot): ItemDef? = candidatesFor(slot).firstOrNull()
+
+fun ItemCatalog.bestFor(slot: ComponentSlot): ItemDef? = candidatesFor(slot).lastOrNull()

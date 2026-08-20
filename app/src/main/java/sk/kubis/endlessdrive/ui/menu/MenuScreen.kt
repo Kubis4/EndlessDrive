@@ -31,8 +31,14 @@ import sk.kubis.endlessdrive.ui.theme.GameColors
 fun MenuScreen(
     profile: PlayerProfile,
     canContinue: Boolean,
+    /** Kde sa rozohraná jazda práve nachádza – ukazuje sa nad CONTINUE. */
+    runDistanceKm: Float,
+    runClock: String,
     onContinue: () -> Unit,
-    onNewRun: () -> Unit
+    onNewRun: () -> Unit,
+    onSettings: () -> Unit,
+    /** true = beží aspoň jeden ladiaci prepínac. */
+    debugActive: Boolean = false
 ) {
     Box(
         modifier = Modifier
@@ -69,6 +75,19 @@ fun MenuScreen(
             )
 
             Spacer(Modifier.height(26.dp))
+            // Pri návrate z pauzy hráč potrebuje vedieť, čo mu tu vlastne beží.
+            if (canContinue) {
+                Text(
+                    text = String.format(
+                        "Run in progress · %.2f km · %s",
+                        runDistanceKm,
+                        runClock
+                    ),
+                    fontSize = 13.sp,
+                    color = GameColors.accent
+                )
+                Spacer(Modifier.height(6.dp))
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (canContinue) {
                     GameButton(
@@ -83,6 +102,22 @@ fun MenuScreen(
                     onNewRun,
                     style = if (canContinue) BtnStyle.Secondary else BtnStyle.Primary,
                     modifier = Modifier.width(190.dp).height(52.dp)
+                )
+                GameButton(
+                    "SETTINGS",
+                    onSettings,
+                    modifier = Modifier.width(150.dp).height(52.dp)
+                )
+            }
+
+            // Zapnuté ladenie musí byť vidieť z menu – inak sa ľahko stane,
+            // že sa hrá s plne vybaveným autom a nikto nevie prečo.
+            if (debugActive) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "Testing options are on — the next run starts kitted out.",
+                    color = GameColors.accent,
+                    fontSize = 13.sp
                 )
             }
 

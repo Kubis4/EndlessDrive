@@ -6,6 +6,7 @@ import sk.kubis.endlessdrive.core.SeededRandom
 import sk.kubis.endlessdrive.domain.model.BranchStyle
 import sk.kubis.endlessdrive.domain.model.BuildingType
 import sk.kubis.endlessdrive.domain.model.ComponentCondition
+import sk.kubis.endlessdrive.domain.model.FluidType
 import sk.kubis.endlessdrive.domain.model.ItemCatalog
 import sk.kubis.endlessdrive.domain.model.ItemDef
 import sk.kubis.endlessdrive.domain.model.ItemRarity
@@ -68,9 +69,14 @@ object LootGenerator {
         val result = ArrayList<ItemStack>(count + 1)
         val seen = HashSet<String>()
         repeat(count) {
-            val def = weightedPick(rng, table, distBonus, distance) ?: return@repeat
-            // Menej duplicít v jednej budove (okrem kanistrov).
-            if (def.fluid == null && !seen.add(def.id) && rng.chance(0.65f)) return@repeat
+            // Pri duplicite skús ešte raz iný los – zahodiť ťah znamenalo, že
+            // budova mala menej vecí práve vtedy, keď padla tá istá dvakrát.
+            var def = weightedPick(rng, table, distBonus, distance) ?: return@repeat
+            if (def.fluid == null && def.id in seen) {
+                def = weightedPick(rng, table, distBonus, distance) ?: def
+            }
+            // Dva rovnaké diely v jednej budove nedávajú zmysel; kanistre áno.
+            if (def.fluid == null && !seen.add(def.id)) return@repeat
             result += makeStack(rng, type, def, distance)
         }
 
@@ -86,7 +92,12 @@ object LootGenerator {
             result += makeStack(rng, type, rng.pick(fallback), distance)
         }
 
-        if (type == BuildingType.GAS_STATION && result.none { it.def.fluid != null }) {
+        // Kontrola musela byť na palivo, nie na „hocijakú kvapalinu“: stanica,
+        // ktorá si vylosovala olej a chladiacu, prešla ako zásobená a hráč
+        // dorazil na benzínku, kde benzín nebol vôbec.
+        if (type == BuildingType.GAS_STATION &&
+            result.none { it.def.fluid == FluidType.FUEL }
+        ) {
             result.add(
                 ItemStack(
                     defId = ItemCatalog.FUEL_CAN.id,
@@ -142,18 +153,33 @@ object LootGenerator {
     }
 
     private fun tableFor(type: BuildingType): List<Entry> = when (type) {
+        // Dom je najčastejšia budova, takže práve on určuje, či sa loot opakuje.
+        // Kvapaliny tu mali 64 % váhy a vypadávali stále dokola – teraz je
+        // z domu skôr zmes haraburdia než ďalší kanister.
         BuildingType.HOUSE -> listOf(
-            Entry(ItemCatalog.FUEL_CAN, 18f),
-            Entry(ItemCatalog.OIL_BOTTLE, 22f),
-            Entry(ItemCatalog.COOLANT_BOTTLE, 18f),
-            Entry(ItemCatalog.WATER, 16f),
-            Entry(ItemCatalog.HOOD, 8f),
-            Entry(ItemCatalog.BACKPACK, 7f),
-            Entry(ItemCatalog.FRONT_BUMPER, 6f),
-            Entry(ItemCatalog.REAR_BUMPER, 6f),
-            Entry(ItemCatalog.TIRE_POOR, 7f),
-            Entry(ItemCatalog.TIRE, 4f),
-            Entry(ItemCatalog.BATTERY, 4f)
+            Entry(ItemCatalog.FUEL_CAN, 11f),
+            Entry(ItemCatalog.OIL_BOTTLE, 12f),
+            Entry(ItemCatalog.COOLANT_BOTTLE, 10f),
+            Entry(ItemCatalog.WATER, 7f),
+            Entry(ItemCatalog.HOOD, 9f),
+            Entry(ItemCatalog.DOORS, 7f),
+            Entry(ItemCatalog.WINDOWS, 7f),
+            Entry(ItemCatalog.BACKPACK, 8f),
+            Entry(ItemCatalog.BOOT_CRATE, 5f),
+            Entry(ItemCatalog.ROOF_RACK, 4f),
+            Entry(ItemCatalog.FRONT_BUMPER, 7f),
+            Entry(ItemCatalog.TRUNK_LID, 7f),
+            Entry(ItemCatalog.HEADLIGHT, 6f),
+            Entry(ItemCatalog.TAILLIGHT, 7f),
+            Entry(ItemCatalog.SEAT_FRONT, 6f),
+            Entry(ItemCatalog.SEAT_REAR, 6f),
+            Entry(ItemCatalog.REAR_BUMPER, 7f),
+            Entry(ItemCatalog.TIRE_POOR, 8f),
+            Entry(ItemCatalog.TIRE, 5f),
+            Entry(ItemCatalog.BATTERY, 5f),
+            Entry(ItemCatalog.SNOW_CHAINS, 3f),
+            Entry(ItemCatalog.ALTERNATOR, 4f),
+            Entry(ItemCatalog.BRAKES, 4f)
         )
         BuildingType.GARAGE -> listOf(
             Entry(ItemCatalog.FUEL_CAN, 25f),
@@ -178,6 +204,11 @@ object LootGenerator {
             Entry(ItemCatalog.DOORS, 8f),
             Entry(ItemCatalog.HOOD, 10f),
             Entry(ItemCatalog.WINDOWS, 6f),
+            Entry(ItemCatalog.TRUNK_LID, 8f),
+            Entry(ItemCatalog.HEADLIGHT, 7f),
+            Entry(ItemCatalog.TAILLIGHT, 8f),
+            Entry(ItemCatalog.SEAT_FRONT, 7f),
+            Entry(ItemCatalog.SEAT_REAR, 6f),
             Entry(ItemCatalog.ENGINE_A, 2f)
         )
         BuildingType.GAS_STATION -> listOf(
@@ -190,8 +221,10 @@ object LootGenerator {
             Entry(ItemCatalog.FUEL_TANK, 3f)
         )
         BuildingType.AUTO_SHOP -> listOf(
-            Entry(ItemCatalog.ENGINE_A, 10f),
+            Entry(ItemCatalog.ENGINE_A, 8f),
+            Entry(ItemCatalog.ENGINE_D, 6f),
             Entry(ItemCatalog.ENGINE_B, 4f),
+            Entry(ItemCatalog.ENGINE_E, 3f),
             Entry(ItemCatalog.RADIATOR, 12f),
             Entry(ItemCatalog.RADIATOR_GOOD, 5f),
             Entry(ItemCatalog.BRAKES, 12f),
@@ -217,6 +250,11 @@ object LootGenerator {
             Entry(ItemCatalog.HOOD, 8f),
             Entry(ItemCatalog.WINDOWS, 10f),
             Entry(ItemCatalog.FRONT_BUMPER, 7f),
+            Entry(ItemCatalog.TRUNK_LID, 7f),
+            Entry(ItemCatalog.HEADLIGHT, 6f),
+            Entry(ItemCatalog.TAILLIGHT, 7f),
+            Entry(ItemCatalog.SEAT_FRONT, 6f),
+            Entry(ItemCatalog.SEAT_REAR, 6f),
             Entry(ItemCatalog.REAR_BUMPER, 7f),
             Entry(ItemCatalog.OIL_BOTTLE, 8f)
         )
@@ -247,11 +285,16 @@ object LootGenerator {
             // Zimná výbava sa objaví o kúsok skôr, než začne mrznúť – aby sa
             // hráč stihol pripraviť, nie aby ju zháňal už v snehu.
             if (e.def.id == ItemCatalog.TIRE_WINTER.id || e.def.id == ItemCatalog.SNOW_CHAINS.id) {
+                // Strop 1.35, nie 2.2: zimná výbava sa má dať nájsť, nie
+                // vytlačiť všetko ostatné. Pri 2.2 sa v neskorších budovách
+                // nachádzali prakticky len snehové gumy.
                 rarityBoost *= if (distance < GameConfig.WINTER_GEAR_FROM_M) 0f
                 else MathX.growth(distance - GameConfig.WINTER_GEAR_FROM_M, 5000f)
-                    .coerceIn(0.15f, 2.2f)
+                    .coerceIn(0.15f, 1.35f)
             }
-            val w = e.weight * rarityBoost
+            // Žiadna položka nesmie prerásť ostatné natoľko, že budova dá
+            // stále to isté – vzdialenosť má loot vylepšovať, nie zúžiť.
+            val w = e.weight * rarityBoost.coerceAtMost(3.2f)
             total += w
             e to w
         }

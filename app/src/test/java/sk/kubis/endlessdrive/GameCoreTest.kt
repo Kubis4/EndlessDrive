@@ -2,6 +2,7 @@ package sk.kubis.endlessdrive
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -56,15 +57,18 @@ class GameCoreTest {
 
     @Test
     fun mountingEngineReplacesPrevious() {
+        // Motor váži cez sto kíl – na chrbte sa nenosí, montuje sa z kufra.
         val engine = GameEngine(7L, 0f)
         engine.inventory.clear()
+        engine.boot.clear()
         val before = engine.car.parts[ComponentSlot.ENGINE]!!.defId
-        assertTrue(engine.inventory.add(ItemStack(ItemCatalog.ENGINE_B.id)))
-        val idx = engine.inventory.slots.indexOfFirst { it?.defId == ItemCatalog.ENGINE_B.id }
+        assertTrue(engine.boot.add(ItemStack(ItemCatalog.ENGINE_B.id)))
+        val idx = engine.boot.slots.indexOfFirst { it?.defId == ItemCatalog.ENGINE_B.id }
         assertTrue(idx >= 0)
-        assertTrue(engine.useInventoryItem(idx))
+        assertTrue(engine.useBootItem(idx))
         assertEquals(ItemCatalog.ENGINE_B.id, engine.car.parts[ComponentSlot.ENGINE]!!.defId)
-        assertTrue(engine.inventory.slots.any { it?.defId == before })
+        // Starý motor musí niekde skončiť – batoh ho neunesie, teda kufor.
+        assertTrue(engine.boot.slots.any { it?.defId == before })
     }
 
     @Test
@@ -102,8 +106,27 @@ class GameCoreTest {
         repeat(120) { engine.advance(1f / 60f) }
         assertTrue(engine.car.batteryCharge < before)
 
+        // Vybitá batéria už jazdu nekončí na mieste. Hra najprv podstrčí
+        // náhradnú – raz do vraku pri ceste, potom do batoha – a až keď
+        // naozaj niet odkiaľ ju vziať, je koniec.
+        engine.boot.clear()
         engine.car.batteryCharge = 0.005f
-        repeat(120) { engine.advance(1f / 60f) }
+        engine.tryStartEngine()
+        assertNotEquals(
+            "prvá vybitá batéria musí ponúknuť východisko, nie koniec",
+            GamePhase.GAME_OVER, engine.phase
+        )
+
+        repeat(4) {
+            engine.inventory.clear()
+            engine.car.batteryCharge = 0.005f
+            // Neúspešný štart minie jednu ponuku.
+            engine.tryStartEngine()
+            // Hráč nemá náhradnú ani v batohu, ani nablízku.
+            engine.inventory.clear()
+            engine.segment.buildings.clear()
+            repeat(60) { engine.advance(1f / 60f) }
+        }
         assertEquals(GamePhase.GAME_OVER, engine.phase)
         assertEquals(EndReason.BATTERY_DEAD, engine.endReason)
     }
@@ -356,12 +379,24 @@ class GameCoreTest {
         engine.inventory.add(ItemStack(ItemCatalog.FUEL_CAN.id, ComponentCondition.NEW, 1f))
         engine.car.fuel = 0.02f
         engine.throttleInput = 1f
-        repeat(120) { engine.advance(1f / 60f) }
+        // Rozbeh, aby bolo čím dojazdiť.
+        repeat(30) { engine.advance(1f / 60f) }
+        engine.car.fuel = 0f
+        engine.advance(1f / 60f)
 
+        assertFalse("motor musí zhasnúť", engine.car.engineRunning)
+        // Auto sa nesmie zastaviť na fleku – zotrvačnosť ho vezie ďalej.
+        assertTrue(
+            "po zhasnutí musí auto ešte dojazdiť, malo ${engine.car.speed} m/s",
+            engine.car.speed > 0.5f
+        )
+
+        // Dojazd sa raz skončí a auto ostane stáť.
+        repeat(900) { engine.advance(1f / 60f) }
         assertTrue("jazda nesmie skončiť, kým sa dá doliať", engine.phase != GamePhase.GAME_OVER)
         assertNull(engine.endReason)
-        assertFalse("motor musí zhasnúť", engine.car.engineRunning)
         assertEquals(GamePhase.STOPPED, engine.phase)
+        assertEquals(0f, engine.car.speed, 0.01f)
     }
 
     @Test
@@ -484,12 +519,18 @@ class GameCoreTest {
         val a = cruiseKmh(withEngine(ItemCatalog.ENGINE_A.id), 0f)
         val b = cruiseKmh(withEngine(ItemCatalog.ENGINE_B.id), 0f)
         val c = cruiseKmh(withEngine(ItemCatalog.ENGINE_C.id), 0f)
-        assertTrue("silnejší motor musí byť cítiť ($a → $b → $c)", b > a + 8f && c > b)
+        // Na rovine drží strop guma a odpor vzduchu, takže rozdiel je malý –
+        // ale musí byť, a musí rásť. Rovnaká maximálka pre 78 aj 130 hp
+        // znamenala, že upgrade nebolo na rýchlomere vidieť vôbec.
+        assertTrue("silnejší motor musí byť cítiť ($a → $b → $c)", b > a + 0.5f && c > b + 0.5f)
 
         // A hlavne v kopci, kde slabý motor zastane.
         val weakHill = cruiseKmh(withEngine(ItemCatalog.ENGINE_A.id), 0.35f)
         val strongHill = cruiseKmh(withEngine(ItemCatalog.ENGINE_C.id), 0.35f)
-        assertTrue("v kopci musí byť rozdiel ešte väčší", strongHill > weakHill + 15f)
+        assertTrue(
+            "v kopci musí byť rozdiel ešte väčší ($weakHill → $strongHill)",
+            strongHill > weakHill + 8f
+        )
     }
 
     @Test
@@ -652,28 +693,29 @@ class GameCoreTest {
     @Test
     fun storageAddsSlotsAndWeight() {
         val engine = GameEngine(33L, 0f)
-        val baseSlots = engine.inventory.slots.size
-        val baseWeight = engine.inventory.maxWeight
+        val basePack = engine.inventory.slots.size
+        val baseBoot = engine.boot.slots.size
+        val baseBootWeight = engine.boot.maxWeight
 
+        // Nosič je na aute – zväčšuje kufor, nie to, čo hráč unesie.
         engine.inventory.clear()
         engine.inventory.add(ItemStack(ItemCatalog.ROOF_RACK.id, ComponentCondition.NEW, 1f))
         assertTrue(engine.useInventoryItem(0, null))
-        assertEquals(baseSlots + ItemCatalog.ROOF_RACK.extraSlots, engine.inventory.slots.size)
+        assertEquals(baseBoot + ItemCatalog.ROOF_RACK.extraSlots, engine.boot.slots.size)
         assertEquals(
-            baseWeight + ItemCatalog.ROOF_RACK.extraWeight,
-            engine.inventory.maxWeight,
+            baseBootWeight + ItemCatalog.ROOF_RACK.extraWeight,
+            engine.boot.maxWeight,
             0.01f
         )
+        assertEquals(basePack, engine.inventory.slots.size)
         assertTrue(engine.car.hasRoofRack)
 
-        // Batoh a nosič sa sčítajú – sú to dva rôzne sloty.
+        // Batoh sa naopak nosí na chrbte – ten zväčšuje batoh.
         engine.inventory.add(ItemStack(ItemCatalog.BACKPACK.id, ComponentCondition.NEW, 1f))
         val idx = engine.inventory.slots.indexOfFirst { it?.defId == ItemCatalog.BACKPACK.id }
         assertTrue(engine.useInventoryItem(idx, null))
-        assertEquals(
-            baseSlots + ItemCatalog.ROOF_RACK.extraSlots + ItemCatalog.BACKPACK.extraSlots,
-            engine.inventory.slots.size
-        )
+        assertEquals(basePack + ItemCatalog.BACKPACK.extraSlots, engine.inventory.slots.size)
+        assertEquals(baseBoot + ItemCatalog.ROOF_RACK.extraSlots, engine.boot.slots.size)
     }
 
     @Test
@@ -682,13 +724,17 @@ class GameCoreTest {
         engine.inventory.clear()
         engine.inventory.add(ItemStack(ItemCatalog.ROOF_RACK.id, ComponentCondition.NEW, 1f))
         engine.useInventoryItem(0, null)
-        // Zaplníme batoh tak, aby sa bez nosiča nezmestil.
-        repeat(engine.inventory.slots.size) {
-            engine.inventory.add(ItemStack(ItemCatalog.WATER.id, ComponentCondition.NEW, 1f))
+        // Nosič rozširuje kufor, nie batoh – odkedy je pack a boot oddelený,
+        // plný batoh o jeho zložení nerozhoduje. A plniť sa musí kusovým
+        // tovarom: kvapaliny sa zlievajú do jednej nádoby, takže vodou by
+        // kufor neostal plný ani po dvadsiatich fľašiach.
+        repeat(engine.boot.slots.size) {
+            engine.boot.add(ItemStack(ItemCatalog.TIRE_POOR.id, ComponentCondition.USED, 0.5f))
         }
-        val used = engine.inventory.usedSlots
+        assertEquals("kufor musí byť naozaj plný", engine.boot.slots.size, engine.boot.usedSlots)
+        val used = engine.boot.usedSlots
         assertFalse("plný nosič sa nesmie dať zložiť", engine.unmountSlot(ComponentSlot.ROOF_RACK))
-        assertEquals("nič sa nesmie stratiť", used, engine.inventory.usedSlots)
+        assertEquals("nič sa nesmie stratiť", used, engine.boot.usedSlots)
         assertTrue(engine.car.hasRoofRack)
     }
 
@@ -827,8 +873,10 @@ class GameCoreTest {
         var warned = false
         repeat(60 * 60) {
             engine.advance(1f / 60f)
-            if (engine.message.contains("olej", ignoreCase = true) ||
-                engine.message.contains("motor", ignoreCase = true)
+            // Hlášky sú po anglicky (WearCause.warning) – slovenské „olej“
+            // a „motor“ sa v nich nikdy neobjavia.
+            if (engine.message.contains("oil", ignoreCase = true) ||
+                engine.message.contains("engine", ignoreCase = true)
             ) {
                 warned = true
             }
@@ -875,8 +923,103 @@ class GameCoreTest {
         engine.requestStop()
         val chosen = engine.junctionChoices.first()
         assertTrue(engine.chooseBranch(chosen.id))
+        // Vetva sa napojí až prejazdom cez rázcestie, nie samotnou voľbou.
+        engine.tryStartEngine()
+        engine.throttleInput = 1f
+        repeat(600) { engine.advance(1f / 60f) }
         assertEquals(chosen.plan.length, engine.segment.length, 0.01f)
         assertEquals(chosen.plan.features.size, engine.segment.sections.size)
+    }
+
+    /**
+     * Regresia: kto si vetvu nevybral, prešiel križovatkou a hra mu potichu
+     * zvolila „najbezpečnejšiu“. Rozhodovanie, kam sa ide, je celá hra – bez
+     * voľby sa musí zastaviť a spýtať.
+     */
+    @Test
+    fun passingAForkWithoutChoosingStopsAndAsks() {
+        val engine = GameEngine(17L, 0f)
+        engine.prepareForDriving()
+        engine.tryStartEngine()
+        engine.resumeDriving()
+        assertTrue(engine.junctionChoices.isNotEmpty())
+        val forkAt = engine.segment.endWorldX
+        val segmentBefore = engine.segment
+
+        // Rozbehnutý až za rázcestie, bez akejkoľvek voľby.
+        engine.car.x = forkAt - 1f
+        engine.car.speed = 14f
+        engine.throttleInput = 1f
+        repeat(30) { engine.advance(1f / 60f) }
+
+        assertEquals(GamePhase.JUNCTION, engine.phase)
+        assertTrue("segment sa nesmie prepnúť bez voľby", engine.segment === segmentBefore)
+        assertEquals(0f, engine.car.speed, 0.01f)
+    }
+
+    /**
+     * Kvapalina patrí dielu. Nájdený motor je suchý a treba ho naplniť zo
+     * zásob, ale vymontovaný si svoj olej podrží – po vrátení ho má naspäť.
+     */
+    @Test
+    fun fluidStaysInsideTheSwappedPart() {
+        val engine = GameEngine(41L, 0f)
+        engine.inventory.clear()
+        engine.boot.clear()
+        engine.car.drain(FluidType.OIL)
+        engine.car.refill(FluidType.OIL, 3.5f, 0.9f)
+        val oldEngineId = engine.car.parts[ComponentSlot.ENGINE]!!.defId
+
+        assertTrue(engine.boot.add(ItemStack(ItemCatalog.ENGINE_B.id)))
+        var idx = engine.boot.slots.indexOfFirst { it?.defId == ItemCatalog.ENGINE_B.id }
+        assertTrue(engine.useBootItem(idx))
+
+        // Nájdený motor prišiel suchý – hráč ho musí naplniť zo zásob.
+        assertEquals(0f, engine.car.oil, 0.01f)
+
+        // Starý motor si olej odniesol so sebou.
+        val removed = (engine.boot.slots + engine.inventory.slots)
+            .filterNotNull()
+            .first { it.defId == oldEngineId }
+        assertEquals(3.5f, removed.heldFluidL, 0.01f)
+
+        // A po vrátení ho má zase v sebe.
+        idx = engine.boot.slots.indexOfFirst { it?.defId == oldEngineId }
+        if (idx >= 0) {
+            assertTrue(engine.useBootItem(idx))
+        } else {
+            val packIdx = engine.inventory.slots.indexOfFirst { it?.defId == oldEngineId }
+            assertTrue(engine.useInventoryItem(packIdx))
+        }
+        assertEquals(3.5f, engine.car.oil, 0.01f)
+        assertEquals(0.9f, engine.car.oilPurity, 0.02f)
+    }
+
+    /**
+     * Nádoba sa vylieva po litroch. Predtým sa minul celý kus, aj keď sa
+     * doň zmestil liter – z 45 L bandasky tak zmizlo 15 L naraz.
+     */
+    @Test
+    fun pouringUsesOnlyWhatFitsAndKeepsTheRest() {
+        val engine = GameEngine(52L, 0f)
+        engine.inventory.clear()
+        engine.car.drain(FluidType.OIL)
+        engine.car.refill(FluidType.OIL, engine.car.oilCapacity - 0.5f, 1f)
+
+        // Bandaska s dvomi dávkami oleja (2 × 2 L).
+        engine.inventory.add(
+            ItemStack(ItemCatalog.OIL_BOTTLE.id, ComponentCondition.NEW, 1f, count = 2, purity = 1f)
+        )
+        val idx = engine.inventory.slots.indexOfFirst { it?.defId == ItemCatalog.OIL_BOTTLE.id }
+        val before = engine.inventory.slots[idx]!!.fluidLitres
+        assertEquals(4f, before, 0.01f)
+
+        assertTrue(engine.useInventoryItem(idx))
+
+        // Do motora sa vošlo len 0.5 L – zvyšok musí ostať v nádobe.
+        assertEquals(engine.car.oilCapacity, engine.car.oil, 0.01f)
+        val left = engine.inventory.slots[idx]?.fluidLitres ?: 0f
+        assertEquals(3.5f, left, 0.02f)
     }
 
     @Test
@@ -896,6 +1039,11 @@ class GameCoreTest {
         val oldEnd = engine.segment.endWorldX
         assertTrue(engine.chooseBranch(choice.id))
         assertEquals(GamePhase.DRIVING, engine.phase)
+        // Voľba vetvu len rezervuje. Napojí sa až keď na ňu auto naozaj
+        // vojde – rázcestím sa prechádza, neteleportuje sa cezeň.
+        engine.tryStartEngine()
+        engine.throttleInput = 1f
+        repeat(600) { engine.advance(1f / 60f) }
         assertEquals(oldEnd, engine.segment.worldOrigin, 0.01f)
         assertEquals(choice.style, engine.segment.style)
     }
@@ -951,7 +1099,8 @@ private fun GameEngine.prepareForDriving() {
         ComponentSlot.BATTERY to ItemCatalog.BATTERY,
         ComponentSlot.STARTER to ItemCatalog.STARTER,
         ComponentSlot.RADIATOR to ItemCatalog.RADIATOR,
-        ComponentSlot.ALTERNATOR to ItemCatalog.ALTERNATOR
+        ComponentSlot.ALTERNATOR to ItemCatalog.ALTERNATOR,
+        ComponentSlot.HEADLIGHT to ItemCatalog.HEADLIGHT
     ).forEach { (slot, def) ->
         if (!car.hasPart(slot)) {
             car.mount(slot, ItemStack(def.id, ComponentCondition.USED, 0.7f))

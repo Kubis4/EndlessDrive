@@ -3,7 +3,10 @@ package sk.kubis.endlessdrive.game.inventory
 import sk.kubis.endlessdrive.core.GameConfig
 import sk.kubis.endlessdrive.domain.model.ItemStack
 
-class Inventory(private val baseSlots: Int = GameConfig.INVENTORY_SLOTS) {
+class Inventory(
+    private val baseSlots: Int = GameConfig.INVENTORY_SLOTS,
+    private val baseWeight: Float = GameConfig.INVENTORY_MAX_WEIGHT
+) {
     val slots = ArrayList<ItemStack?>(baseSlots)
 
     init {
@@ -16,7 +19,7 @@ class Inventory(private val baseSlots: Int = GameConfig.INVENTORY_SLOTS) {
     var bonusWeight = 0f
         private set
 
-    val maxWeight: Float get() = GameConfig.INVENTORY_MAX_WEIGHT + bonusWeight
+    val maxWeight: Float get() = baseWeight + bonusWeight
 
     /**
      * Prepočíta kapacitu po (od)montovaní úložiska. Zmenšenie prejde len vtedy,
@@ -70,13 +73,15 @@ class Inventory(private val baseSlots: Int = GameConfig.INVENTORY_SLOTS) {
             val idx = slots.indexOfFirst { it?.defId == stack.defId }
             if (idx >= 0) {
                 val existing = slots[idx]!!
-                // Zlievame do jedného kanistra → čistota sa mieša podľa objemu.
-                val total = existing.count + stack.count
-                if (total > 0) {
-                    existing.purity =
-                        (existing.purity * existing.count + stack.purity * stack.count) / total
+                // Zlievame do jednej nádoby → čistota sa mieša podľa objemu,
+                // nie podľa počtu kusov; nádoby môžu byť načaté.
+                val have = existing.fluidLitres
+                val add = stack.fluidLitres
+                val total = have + add
+                if (total > 0.001f) {
+                    existing.purity = (existing.purity * have + stack.purity * add) / total
                 }
-                existing.count = total
+                existing.setFluidLitres(total)
                 return true
             }
         }

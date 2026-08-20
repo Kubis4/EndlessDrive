@@ -1,6 +1,7 @@
 package sk.kubis.endlessdrive.ui.game
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -25,7 +26,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,31 +57,31 @@ fun GameControls(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             PedalButton(
-                glyph = "◀",
                 tint = Color(0xFFD9584A),
-                label = "BRAKE / REVERSE",
+                label = "Brake / reverse",
+                wide = true,
                 onPressChanged = onBrakeChanged
             )
             PedalButton(
-                glyph = "▶",
                 tint = Color(0xFF7CB86A),
-                label = "THROTTLE",
+                label = "Throttle",
+                wide = false,
                 onPressChanged = onGasChanged
             )
         }
-        GameButton(
-            "STOP",
-            onStop,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp)
-        )
+        // STOP sedí v palubnej doske – tu by sa s ňou prekrýval.
     }
 }
 
+/**
+ * Pedál ako pedál – šliapadlo s ryhovaním a ramenom, nie textové tlačidlo.
+ * Brzdový je široký (v aute je tiež), plynový úzky a vysoký.
+ */
 @Composable
 private fun PedalButton(
-    glyph: String,
     tint: Color,
     label: String,
+    wide: Boolean,
     onPressChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -88,13 +96,14 @@ private fun PedalButton(
             .background(
                 brush = Brush.radialGradient(
                     listOf(
-                        tint.copy(alpha = if (pressed) 0.80f else 0.42f),
-                        tint.copy(alpha = 0.10f)
+                        tint.copy(alpha = if (pressed) 0.55f else 0.26f),
+                        tint.copy(alpha = 0.06f)
                     )
                 ),
                 shape = CircleShape
             )
-            .border(2.dp, tint.copy(alpha = if (pressed) 0.9f else 0.45f), CircleShape)
+            .border(2.dp, tint.copy(alpha = if (pressed) 0.9f else 0.40f), CircleShape)
+            .semantics { contentDescription = label }
             .pointerInput(Unit) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
@@ -109,14 +118,48 @@ private fun PedalButton(
             },
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(glyph, color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.Bold)
-            Text(
-                label,
-                color = GameColors.text.copy(alpha = 0.9f),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold
+        Canvas(Modifier.size(76.dp)) {
+            val w = size.width
+            val h = size.height
+            // Rameno pedála vedie od podlahy nahor k šliapadlu.
+            val padW = if (wide) w * 0.62f else w * 0.40f
+            val padH = if (wide) h * 0.52f else h * 0.72f
+            val padLeft = (w - padW) / 2f
+            val padTop = (h - padH) / 2f
+            val armColor = Color(0xFF2A2622)
+            drawLine(
+                armColor,
+                Offset(w * 0.5f, padTop + padH),
+                Offset(w * 0.5f, h),
+                strokeWidth = w * 0.10f,
+                cap = StrokeCap.Round
             )
+            // Gumené šliapadlo.
+            drawRoundRect(
+                color = Color(0xFF1E1B18),
+                topLeft = Offset(padLeft, padTop),
+                size = Size(padW, padH),
+                cornerRadius = CornerRadius(w * 0.06f)
+            )
+            drawRoundRect(
+                color = tint.copy(alpha = if (pressed) 0.95f else 0.75f),
+                topLeft = Offset(padLeft, padTop),
+                size = Size(padW, padH),
+                cornerRadius = CornerRadius(w * 0.06f),
+                style = Stroke(width = w * 0.035f)
+            )
+            // Ryhovanie proti šmyku.
+            val grooves = if (wide) 4 else 5
+            for (i in 1..grooves) {
+                val gy = padTop + padH * i / (grooves + 1f)
+                drawLine(
+                    Color.White.copy(alpha = 0.16f),
+                    Offset(padLeft + padW * 0.16f, gy),
+                    Offset(padLeft + padW * 0.84f, gy),
+                    strokeWidth = h * 0.026f,
+                    cap = StrokeCap.Round
+                )
+            }
         }
     }
 }

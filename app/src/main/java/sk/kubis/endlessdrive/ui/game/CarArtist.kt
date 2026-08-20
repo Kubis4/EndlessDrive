@@ -10,6 +10,9 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.withTransform
 import sk.kubis.endlessdrive.core.GameConfig
 import sk.kubis.endlessdrive.core.MathX
 import sk.kubis.endlessdrive.domain.model.ComponentSlot
@@ -55,11 +58,6 @@ class CarArtist {
         val sinA = sin(angle)
         val deg = -Math.toDegrees(angle.toDouble()).toFloat()
 
-        val hasDoors = car.hasPart(ComponentSlot.DOORS)
-        val hasHood = car.hasPart(ComponentSlot.HOOD)
-        val hasWindows = car.hasPart(ComponentSlot.WINDOWS)
-        val hasFrontBumper = car.hasPart(ComponentSlot.FRONT_BUMPER)
-        val hasRearBumper = car.hasPart(ComponentSlot.REAR_BUMPER)
         val hasFrontTire = car.hasPart(ComponentSlot.TIRE_FRONT)
         val hasRearTire = car.hasPart(ComponentSlot.TIRE_REAR)
 
@@ -68,25 +66,33 @@ class CarArtist {
         // Karoséria podľa fyziky; kolesá samostatne → viditeľné pruženie.
         val layout = spriteLayoutAtBody(layers, bodyX, bodyY, ppm)
         rotate(degrees = deg, pivot = Offset(bodyX, bodyY)) {
-            drawSpriteAssembly(
-                layers, layout,
-                hasDoors, hasHood, hasWindows, hasFrontBumper, hasRearBumper
-            )
+            drawSpriteAssembly(car, layers, layout)
         }
         // Nosič patrí na strechu – kreslí sa v rovine karosérie, teda spolu
         // s ňou aj rotuje.
         if (car.hasRoofRack) {
             rotate(degrees = deg, pivot = Offset(bodyX, bodyY)) {
-                drawRoofRack(layout, cargoFill)
+                drawRoofLoad(layers, layout, cargoFill)
             }
         }
         val blur = 1 + (kotlin.math.abs(car.speed) / 6f).toInt().coerceAtMost(3)
+        // Guma sa deformuje podľa toho, koľko na nej práve leží. Stlačenie
+        // pruženia je najbližšie, čo k zaťaženiu nápravy máme, a rozlišuje
+        // predok od zadku – pri brzdení sadne predok, pri plyne zadok.
+        val travel = car.suspTravel.coerceAtLeast(0.05f)
+        val rearLoad = (car.rearCompression / travel).coerceIn(0f, 1f)
+        val frontLoad = (car.frontCompression / travel).coerceIn(0f, 1f)
+        val flying = !car.grounded
         if (hasRearTire) {
             val tire = car.parts[ComponentSlot.TIRE_REAR]
             val r = layout.wheelR * car.wheelScale(ComponentSlot.TIRE_REAR)
             drawWheelScreen(
                 rearWheelX, rearWheelY, rearSpinDeg, r,
-                tire?.health ?: 0.5f, accent, blur, tire?.defId
+                tire?.health ?: 0.5f, accent, blur, tire?.defId,
+                layers.wheelImage(tire?.defId),
+                load = rearLoad,
+                airborne = flying,
+                blown = car.blownAxle == ComponentSlot.TIRE_REAR
             )
         }
         if (hasFrontTire) {
@@ -94,7 +100,11 @@ class CarArtist {
             val r = layout.wheelR * car.wheelScale(ComponentSlot.TIRE_FRONT)
             drawWheelScreen(
                 frontWheelX, frontWheelY, frontSpinDeg, r,
-                tire?.health ?: 0.5f, accent, blur, tire?.defId
+                tire?.health ?: 0.5f, accent, blur, tire?.defId,
+                layers.wheelImage(tire?.defId),
+                load = frontLoad,
+                airborne = flying,
+                blown = car.blownAxle == ComponentSlot.TIRE_FRONT
             )
         }
     }
@@ -123,30 +133,33 @@ class CarArtist {
             val hy = layout.originY + layers.headlightFy * layout.drawH
             val tx = layout.originX + layers.taillightFx * layout.drawW
             val ty = layout.originY + layers.taillightFy * layout.drawH
-            val len = ppm * 12f
+            // Dlhší a širší kužeľ: v noci je to jediný zdroj svetla, po ktorom sa
+            // dá jazdiť, takže musí naozaj osvetliť cestu pred autom.
+            val len = ppm * 19f
 
             bodyPath.reset()
             bodyPath.moveTo(hx, hy - ppm * 0.10f)
-            bodyPath.lineTo(hx + len, roadY - ppm * 2.1f)
-            bodyPath.lineTo(hx + len, roadY + ppm * 0.35f)
+            bodyPath.lineTo(hx + len, roadY - ppm * 3.4f)
+            bodyPath.lineTo(hx + len, roadY + ppm * 0.6f)
             bodyPath.lineTo(hx, hy + ppm * 0.14f)
             bodyPath.close()
             drawPath(
                 bodyPath,
                 brush = Brush.horizontalGradient(
                     colors = listOf(
-                        Color(0xFFFFF2C0).copy(alpha = 0.34f * strength),
-                        Color(0xFFFFF2C0).copy(alpha = 0.10f * strength),
+                        Color(0xFFFFF2C0).copy(alpha = 0.46f * strength),
+                        Color(0xFFFFF2C0).copy(alpha = 0.18f * strength),
                         Color.Transparent
                     ),
                     startX = hx,
                     endX = hx + len
                 )
             )
+            // Svetlo dopadajúce na vozovku – bez neho auto svieti „do vzduchu“.
             drawOval(
-                Color(0xFFFFF3C4).copy(alpha = 0.22f * strength),
-                topLeft = Offset(hx, roadY - ppm * 0.45f),
-                size = Size(len * 0.8f, ppm * 0.9f)
+                Color(0xFFFFF3C4).copy(alpha = 0.30f * strength),
+                topLeft = Offset(hx, roadY - ppm * 0.55f),
+                size = Size(len * 0.92f, ppm * 1.25f)
             )
             drawCircle(Color(0xFFFFF8DC).copy(alpha = 0.85f * strength), ppm * 0.14f, Offset(hx, hy))
             drawCircle(Color(0xFFFFEFA8).copy(alpha = 0.35f * strength), ppm * 0.34f, Offset(hx, hy))
@@ -158,34 +171,37 @@ class CarArtist {
     }
 
     /**
-     * Strešný nosič: dve pozdĺžne lišty na nožičkách a náklad podľa toho,
-     * koľko toho hráč naozaj vezie.
+     * Náklad na strešnom nosiči. Samotný nosič je kresba ako ostatné diely
+     * karosérie – tu sa dokresľuje len to, čo hráč naozaj vezie.
+     *
+     * Bedne rastú s obsadenosťou batoha, takže na streche je vidieť, či ide
+     * naprázdno alebo naložený.
      */
-    private fun DrawScope.drawRoofRack(layout: SpriteLayout, fill: Float) {
-        val roofY = layout.originY + layout.drawH * ROOF_FY
-        val x0 = layout.originX + layout.drawW * 0.30f
-        val x1 = layout.originX + layout.drawW * 0.68f
-        val barY = roofY - layout.drawH * 0.06f
-        val metal = Color(0xFF3A3D42)
-        val bar = (layout.drawH * 0.022f).coerceAtLeast(1.5f)
-
-        // Nožičky.
-        listOf(x0 + (x1 - x0) * 0.12f, x1 - (x1 - x0) * 0.12f).forEach { fx ->
-            drawLine(metal, Offset(fx, roofY), Offset(fx, barY), strokeWidth = bar)
-        }
-        drawLine(metal, Offset(x0, barY), Offset(x1, barY), strokeWidth = bar)
-
+    private fun DrawScope.drawRoofLoad(layers: SedanLayers, layout: SpriteLayout, fill: Float) {
         if (fill <= 0.02f) return
-        // Náklad: bedne rastú s obsadenosťou batoha.
+        val spec = BodyPartCatalog.specs[BodyPart.ROOF_RACK] ?: return
+        val rack = layers.partImage(BodyPart.ROOF_RACK, null) ?: return
+        val k = layout.drawW / layers.imageWidth
+        val x0 = layout.originX + spec.fx * layout.drawW
+        val x1 = x0 + rack.width * k
+        // Bedne stoja na lište, nie na jej spodnej hrane s nožičkami.
+        val barY = layout.originY + spec.fy * layout.drawH + rack.height * k * 0.35f
+
         val crates = (1 + (fill * 3f).toInt()).coerceAtMost(4)
         val slotW = (x1 - x0) / crates
         for (i in 0 until crates) {
             val h = layout.drawH * (0.05f + 0.035f * MathX.hash01(i, 91))
             val cx = x0 + slotW * i + slotW * 0.08f
+            val cw = slotW * 0.84f
             drawRect(
                 if (i % 2 == 0) Color(0xFF6B5334) else Color(0xFF4E4A44),
                 topLeft = Offset(cx, barY - h),
-                size = Size(slotW * 0.84f, h)
+                size = Size(cw, h)
+            )
+            drawRect(
+                Color(0xFF2A2621).copy(alpha = 0.55f),
+                topLeft = Offset(cx + cw * 0.38f, barY - h),
+                size = Size(cw * 0.10f, h)
             )
         }
     }
@@ -272,48 +288,58 @@ class CarArtist {
         )
     }
 
+    /**
+     * Auto sa skladá: základ karosérie s interiérom a na ňom to, čo je
+     * namontované.
+     *
+     * Predlohy sú v rovnakej mierke ako základ, takže sa nikam neťahajú –
+     * len sa posunú na svoje miesto a zmenšia rovnakým pomerom ako základ.
+     * Vďaka tomu si zachovajú proporcie a variant sa nakreslí presne tam,
+     * kde základný diel. Kresba sa vyberá podľa namontovaného kusu, nie
+     * podľa slotu.
+     */
     private fun DrawScope.drawSpriteAssembly(
+        car: Car,
         layers: SedanLayers,
-        layout: SpriteLayout,
-        hasDoors: Boolean,
-        hasHood: Boolean,
-        hasWindows: Boolean,
-        hasFront: Boolean,
-        hasRear: Boolean
+        layout: SpriteLayout
     ) {
         val originX = layout.originX
         val originY = layout.originY
         val drawW = layout.drawW
         val drawH = layout.drawH
+        // Rovnaký pomer ako pri základe – diel si drží svoju veľkosť voči autu.
+        val k = drawW / layers.imageWidth
 
-        fun blitFull(img: ImageBitmap, alpha: Float = 1f) {
+        fun blit(part: BodyPart, defId: String?) {
+            val spec = BodyPartCatalog.specs.getValue(part)
+            val img = layers.partImage(part, defId) ?: return
             drawImage(
                 image = img,
-                dstOffset = androidx.compose.ui.unit.IntOffset(originX.toInt(), originY.toInt()),
-                dstSize = androidx.compose.ui.unit.IntSize(drawW.toInt().coerceAtLeast(1), drawH.toInt().coerceAtLeast(1)),
-                alpha = alpha
+                dstOffset = androidx.compose.ui.unit.IntOffset(
+                    (originX + spec.fx * drawW).toInt(),
+                    (originY + spec.fy * drawH).toInt()
+                ),
+                dstSize = androidx.compose.ui.unit.IntSize(
+                    (img.width * k).toInt().coerceAtLeast(1),
+                    (img.height * k).toInt().coerceAtLeast(1)
+                )
             )
         }
 
-        fun blitPart(part: SedanLayers.Part) {
-            val dx = originX + part.fx * drawW
-            val dy = originY + part.fy * drawH
-            val dw = (part.fw * drawW).toInt().coerceAtLeast(1)
-            val dh = (part.fh * drawH).toInt().coerceAtLeast(1)
-            drawImage(
-                image = part.image,
-                dstOffset = androidx.compose.ui.unit.IntOffset(dx.toInt(), dy.toInt()),
-                dstSize = androidx.compose.ui.unit.IntSize(dw, dh)
-            )
+        // Sedadlá sú v kabíne, teda pod plechom; zvyšok naň.
+        BodyPartCatalog.order.filter { BodyPartCatalog.behindBody(it) }.forEach { part ->
+            car.parts[BodyPartCatalog.slotOf(part)]?.let { blit(part, it.defId) }
         }
-
-        // Celé auto vždy viditeľné; namontované diely jemne zvýrazníme.
-        blitFull(layers.stripped, 1f)
-        if (hasRear) blitPart(layers.rearBumper)
-        if (hasHood) blitPart(layers.hood)
-        if (hasDoors) blitPart(layers.doors)
-        if (hasWindows) blitPart(layers.windows)
-        if (hasFront) blitPart(layers.frontBumper)
+        drawImage(
+            image = layers.stripped,
+            dstOffset = androidx.compose.ui.unit.IntOffset(originX.toInt(), originY.toInt()),
+            dstSize = androidx.compose.ui.unit.IntSize(
+                drawW.toInt().coerceAtLeast(1), drawH.toInt().coerceAtLeast(1)
+            )
+        )
+        BodyPartCatalog.order.filterNot { BodyPartCatalog.behindBody(it) }.forEach { part ->
+            car.parts[BodyPartCatalog.slotOf(part)]?.let { blit(part, it.defId) }
+        }
     }
 
     /** Rovnaké koleso ako v hre – aj pre panel CAR. */
@@ -325,9 +351,24 @@ class CarArtist {
         tireHealth: Float,
         accent: Color,
         blurSteps: Int = 1,
-        tireId: String? = null
-    ) = drawWheelScreen(cx, cy, spinDeg, r, tireHealth, accent, blurSteps, tireId)
+        tireId: String? = null,
+        art: ImageBitmap? = null
+    ) = drawWheelScreen(cx, cy, spinDeg, r, tireHealth, accent, blurSteps, tireId, art)
 
+    /**
+     * Koleso z predlohy. Stred obrázka je stred kolesa, takže sa kreslí okolo
+     * osi a rotuje s ňou – guma aj disk sú v jednej kresbe.
+     *
+     * Pri rýchlosti sa dokresľuje niekoľko pootočených kópií so zníženou
+     * krytím: to je rozmazanie, vďaka ktorému koleso nevyzerá, že stojí.
+     * Zodratá guma má menší priemer, tak ako predtým.
+     *
+     * @param load 0..1 – ako je náprava zaťažená. Guma sa pod váhou sploští
+     *   na styčnej ploche a mierne vydutí do strán; bez toho pôsobí ako
+     *   nakreslený kotúč, ktorý sa len točí.
+     * @param airborne true = koleso visí vo vzduchu a guma sa uvoľní
+     * @param blown true = guma je na handry, ide sa prakticky na disku
+     */
     private fun DrawScope.drawWheelScreen(
         cx: Float,
         cy: Float,
@@ -336,83 +377,54 @@ class CarArtist {
         tireHealth: Float,
         accent: Color,
         blurSteps: Int = 1,
-        tireId: String? = null
+        tireId: String? = null,
+        art: ImageBitmap? = null,
+        load: Float = 0f,
+        airborne: Boolean = false,
+        blown: Boolean = false
     ) {
         val rr = r * (0.90f + 0.10f * tireHealth)
-        val offroad = tireId == "tire_offroad"
-        val sport = tireId == "tire_sport"
-        val poor = tireId == "tire_poor" || tireId == "tire_bald"
-        val standard = tireId == "tire_std" || (!offroad && !sport && !poor && tireId != null)
-        val sidewall = when {
-            offroad -> Color(0xFF121416)
-            poor -> Color(0xFF2A2E33)
-            sport -> Color(0xFF171A1E)
-            else -> Color(0xFF1B1E22)
+        val img = art ?: run {
+            // Bez predlohy aspoň čierny kotúč, nech koleso nezmizne.
+            drawCircle(Color(0xFF1B1E22), rr, Offset(cx, cy))
+            return
         }
-        val rubberOuter = when {
-            offroad -> rr * 1.02f
-            sport -> rr * 0.98f
-            else -> rr
+        val diameter = rr * 2f
+        // IntOffset/IntSize pri každom snímku zaokrúhlili stred inak. Pri
+        // pomalej jazde to vyzeralo ako poskakovanie kolesa vo blatníku.
+        // Transformácia drží os kolesa vo floatových súradniciach a bitmapu
+        // len plynulo škáluje okolo nej.
+        val artScale = diameter / img.width.toFloat()
+        val left = cx - rr
+        val top = cy - rr
+        // Deformácia gumy. Stláča sa okolo styčnej plochy, nie okolo osi –
+        // inak by sa pod záťažou zdvihla z vozovky namiesto toho, aby na nej
+        // sadla. Bočné vydutie je menšie než stlačenie, tak ako na skutočnej
+        // pneumatike, a roztrhaná guma sa zloží oveľa viac.
+        val squashFactor = if (blown) 0.34f else 0.075f
+        val squash = when {
+            airborne -> 0f
+            else -> load.coerceIn(0f, 1f) * squashFactor
         }
-        drawCircle(sidewall, rubberOuter, Offset(cx, cy))
-        if (offroad) {
-            // Hrubý dezén – zuby na obvode.
-            rotate(degrees = spinDeg, pivot = Offset(cx, cy)) {
-                for (i in 0 until 10) {
-                    val a = (i * 36f) * (Math.PI / 180.0).toFloat()
-                    drawCircle(
-                        Color(0xFF0E1012),
-                        rr * 0.10f,
-                        Offset(cx + cos(a) * rr * 0.92f, cy + sin(a) * rr * 0.92f)
-                    )
-                }
-            }
-        } else if (standard || sport) {
-            // Jemné drážky dezénu.
-            rotate(degrees = spinDeg, pivot = Offset(cx, cy)) {
-                val grooves = if (sport) 12 else 8
-                for (i in 0 until grooves) {
-                    val a = (i * (360f / grooves)) * (Math.PI / 180.0).toFloat()
-                    drawLine(
-                        Color(0xFF0C0E10).copy(alpha = if (sport) 0.85f else 0.55f),
-                        Offset(cx + cos(a) * rr * 0.72f, cy + sin(a) * rr * 0.72f),
-                        Offset(cx + cos(a) * rr * 0.96f, cy + sin(a) * rr * 0.96f),
-                        strokeWidth = rr * (if (sport) 0.045f else 0.055f)
-                    )
-                }
-            }
-        }
-        val rimOuter = when {
-            sport -> rr * 0.58f
-            offroad -> rr * 0.60f
-            poor -> rr * 0.70f
-            else -> rr * 0.66f
-        }
-        drawCircle(Color(0xFF32373D), rimOuter, Offset(cx, cy))
-        if (sport) {
-            // Športový disk – tenší kruh.
-            drawCircle(Color(0xFF1E242A), rr * 0.48f, Offset(cx, cy))
-        }
-        drawCircle(accent.copy(alpha = 0.85f), rr * (if (sport) 0.26f else 0.30f), Offset(cx, cy))
-        drawCircle(Color(0xFFCFD8DC), rr * 0.12f, Offset(cx, cy))
-        val spokes = when {
-            sport -> 6
-            offroad -> 5
-            poor -> 4
-            else -> 5
-        }
+        val squeezeY = 1f - squash
+        val bulgeX = 1f + squash * 0.45f
+        val contactY = cy + rr
+
         val blur = blurSteps.coerceIn(1, 4)
-        val alpha = 1f / blur
-        for (b in 0 until blur) {
-            rotate(degrees = spinDeg - b * 9f, pivot = Offset(cx, cy)) {
-                for (i in 0 until spokes) {
-                    val a = (i * (360f / spokes)) * (Math.PI / 180.0).toFloat()
-                    drawLine(
-                        Color(0xFFB0BEC5).copy(alpha = alpha * if (poor) 0.55f else 1f),
-                        Offset(cx + cos(a) * rr * 0.16f, cy + sin(a) * rr * 0.16f),
-                        Offset(cx + cos(a) * rr * 0.55f, cy + sin(a) * rr * 0.55f),
-                        strokeWidth = rr * (if (sport) 0.09f else 0.12f)
-                    )
+        // Stlačenie ide zvonku rotácie: styčná plocha musí ostať dole pri
+        // vozovke. Keby sa škálovalo vnútri, deformácia by sa točila spolu
+        // s kolesom a guma by vyzerala ako vajce.
+        withTransform({
+            scale(scaleX = bulgeX, scaleY = squeezeY, pivot = Offset(cx, contactY))
+        }) {
+            for (b in 0 until blur) {
+                rotate(degrees = spinDeg - b * 9f, pivot = Offset(cx, cy)) {
+                    withTransform({
+                        translate(left = left, top = top)
+                        scale(scaleX = artScale, scaleY = artScale, pivot = Offset.Zero)
+                    }) {
+                        drawImage(image = img, alpha = 1f / blur)
+                    }
                 }
             }
         }

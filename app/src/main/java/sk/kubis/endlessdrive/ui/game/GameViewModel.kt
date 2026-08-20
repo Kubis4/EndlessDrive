@@ -1,6 +1,7 @@
 package sk.kubis.endlessdrive.ui.game
 
 import androidx.compose.runtime.getValue
+import sk.kubis.endlessdrive.core.GameConfig
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -17,6 +18,7 @@ import sk.kubis.endlessdrive.domain.model.GamePhase
 import sk.kubis.endlessdrive.domain.repository.PlayerRepository
 import sk.kubis.endlessdrive.game.GameEngine
 import sk.kubis.endlessdrive.game.save.RunCodec
+import sk.kubis.endlessdrive.domain.model.DebugOptions
 import kotlin.random.Random
 
 class GameViewModel(
@@ -24,7 +26,15 @@ class GameViewModel(
     bestDistanceKm: Float
 ) : ViewModel() {
 
-    private var engine: GameEngine by mutableStateOf(GameEngine(Random.nextLong(), bestDistanceKm))
+    /**
+     * Ladiace prepínače z nastavení. Uplatnia sa až pri novej jazde – meniť
+     * ich uprostred rozohranej by znamenalo podvrhnúť auto pod rukami.
+     */
+    var debugOptions: DebugOptions = DebugOptions.OFF
+
+    private var engine: GameEngine by mutableStateOf(
+        GameEngine(Random.nextLong(), bestDistanceKm)
+    )
     private var recorded = false
     private var bestKm = bestDistanceKm
     private var hudTimer = 0f
@@ -225,6 +235,7 @@ class GameViewModel(
             isNight = e.isNight,
             clock = e.clock,
             hasNearbyBuilding = e.buildingNear() != null,
+            canRest = e.canRest,
             exploring = e.phase == GamePhase.EXPLORING && e.activeBuilding != null,
             pumpFuelL = e.activeBuilding?.pumpFuelL ?: 0f,
             paused = pausedByUser,
@@ -239,7 +250,53 @@ class GameViewModel(
             fittedDrive = e.car.fittedHudLabel(ComponentSlot.DRIVETRAIN),
             fittedTires = "${e.car.fittedHudLabel(ComponentSlot.TIRE_FRONT)}/${e.car.fittedHudLabel(ComponentSlot.TIRE_REAR)}",
             fittedSuspension = e.car.fittedHudLabel(ComponentSlot.SUSPENSION),
+            parts = partStatuses(e),
+            wearWarning = e.car.wearCause?.takeIf { e.car.wearRate > 0.0008f }?.warning,
             bagRevision = bagRevision
+        )
+    }
+
+    /**
+     * Stav dielov do HUD. Poradie je pevné, aby oko vedelo, kam sa pozerať,
+     * a chýbajúci diel sa ukáže tiež – jeho absencia je tiež porucha.
+     */
+    private fun partStatuses(e: GameEngine): List<PartStatus> {
+        val car = e.car
+        // Motor schytáva poškodenie z kvapalín a tepla; ostatné z jazdy.
+        val engineWearing = car.wearRate > 0.0008f
+        val braking = e.brakeInput > 0.25f
+        val slipping = car.wheelSlip > 0.25f
+
+        fun of(tag: String, slot: ComponentSlot, wearing: Boolean = false): PartStatus {
+            val part = car.parts[slot]
+            return PartStatus(
+                tag = tag,
+                label = car.fittedHudLabel(slot),
+                health = part?.health ?: 0f,
+                wearing = wearing && part != null,
+                fitted = part != null
+            )
+        }
+
+        val tyreHealth = minOf(
+            car.parts[ComponentSlot.TIRE_FRONT]?.health ?: 0f,
+            car.parts[ComponentSlot.TIRE_REAR]?.health ?: 0f
+        )
+        return listOf(
+            of("ENG", ComponentSlot.ENGINE, engineWearing),
+            of("RAD", ComponentSlot.RADIATOR, car.temperature > GameConfig.OVERHEAT_THRESHOLD - 6f),
+            PartStatus(
+                tag = "TYRES",
+                label = "${car.fittedHudLabel(ComponentSlot.TIRE_FRONT)}/" +
+                    car.fittedHudLabel(ComponentSlot.TIRE_REAR),
+                health = tyreHealth,
+                wearing = slipping,
+                fitted = car.parts.containsKey(ComponentSlot.TIRE_FRONT) &&
+                    car.parts.containsKey(ComponentSlot.TIRE_REAR)
+            ),
+            of("BRK", ComponentSlot.BRAKES, braking),
+            of("SUS", ComponentSlot.SUSPENSION),
+            of("BAT", ComponentSlot.BATTERY, e.headlightsOn)
         )
     }
 
@@ -287,8 +344,25 @@ class GameViewModel(
         if (ok) bumpBag() else bump()
     }
 
+    fun discardBootItem(i: Int) {
+        if (engine.discardBootItem(i)) bumpBag() else bump()
+    }
+
+    fun stowInBoot(i: Int) {
+        if (engine.stowInBoot(i)) bumpBag() else bump()
+    }
+
+    fun takeFromBoot(i: Int) {
+        if (engine.takeFromBoot(i)) bumpBag() else bump()
+    }
+
     fun useItem(i: Int, target: ComponentSlot? = null) {
         val ok = engine.useInventoryItem(i, target)
+        if (ok) bumpBag() else bump()
+    }
+
+    fun useBootItem(i: Int, target: ComponentSlot? = null) {
+        val ok = engine.useBootItem(i, target)
         if (ok) bumpBag() else bump()
     }
 
@@ -310,6 +384,11 @@ class GameViewModel(
     fun refuelFromPump() {
         engine.refuelFromPump()
         bumpBag()
+    }
+
+    fun restUntilDawn() {
+        engine.restUntilDawn()
+        bump()
     }
 
     fun toggleHeadlights() {
@@ -347,7 +426,18 @@ class GameViewModel(
         bump()
     }
 
-    fun endRun() = engine.endRun().also { bump() }
+    /**
+     * Vzdanie jazdy. Zápis do štatistiky spraví hneď – bežne ho robí snímková
+     * slučka pri GAME_OVER, tá sa však počas pauzy vôbec nevykoná a jazda
+     * ukončená z pauzy by sa do štatistík nedostala.
+     */
+    fun endRun() {
+        engine.endRun()
+        hasActiveRun = false
+        pausedByUser = false
+        maybeRecord()
+        bump()
+    }
 
     private fun maybeRecord() {
         if (recorded) return
@@ -371,7 +461,7 @@ class GameViewModel(
         brake = 0f
         pausedByLifecycle = false
         pausedByUser = false
-        engine = GameEngine(Random.nextLong(), bestKm)
+        engine = GameEngine(Random.nextLong(), bestKm, debugOptions)
         hudTimer = 0f
         bump()
     }

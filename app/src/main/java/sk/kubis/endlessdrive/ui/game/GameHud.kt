@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -35,147 +36,8 @@ import sk.kubis.endlessdrive.ui.theme.levelColor
 import sk.kubis.endlessdrive.ui.theme.purityColor
 
 /**
- * Dashboard: car vitals on the left in two compact rows.
- * Short labels and colour do the work so it stays readable while driving.
- */
-@Composable
-fun VitalsPanel(ui: GameUiState, modifier: Modifier = Modifier) {
-    val fuel = (ui.fuelL / ui.fuelCapacityL.coerceAtLeast(1f)).coerceIn(0f, 1f)
-    val oil = (ui.oilL / ui.oilCapacityL.coerceAtLeast(1f)).coerceIn(0f, 1f)
-    val cool = (ui.coolantL / ui.coolantCapacityL.coerceAtLeast(1f)).coerceIn(0f, 1f)
-    val temp = ((ui.temperature - 40f) / 90f).coerceIn(0f, 1f)
-
-    Column(
-        modifier
-            .background(GameColors.hudBg, RoundedCornerShape(12.dp))
-            .border(1.dp, GameColors.outline.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatBar(
-                "FUEL", fuel, "${ui.fuelL.toInt()} L", levelColor(fuel),
-                inner = ui.fuelPurity, innerColor = purityColor(ui.fuelPurity)
-            )
-            StatBar(
-                "OIL", oil, String.format("%.1f L", ui.oilL), levelColor(oil),
-                inner = ui.oilPurity, innerColor = purityColor(ui.oilPurity)
-            )
-            StatBar(
-                "COOLANT", cool, String.format("%.1f L", ui.coolantL), levelColor(cool),
-                inner = ui.coolantPurity, innerColor = purityColor(ui.coolantPurity)
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatBar(
-                "BATTERY", ui.batteryCharge, "${(ui.batteryCharge * 100).toInt()} %",
-                levelColor(ui.batteryCharge)
-            )
-            StatBar(
-                "TEMP", temp, "${ui.temperature.toInt()}°C",
-                when {
-                    ui.temperature > 110f -> GameColors.danger
-                    ui.temperature > 98f -> GameColors.warn
-                    else -> GameColors.ok
-                }
-            )
-            StatBar(
-                "CONDITION", ui.overallHealth, "${(ui.overallHealth * 100).toInt()} %",
-                levelColor(ui.overallHealth, 0.25f, 0.5f)
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            EquipChip("ENG", ui.fittedEngine)
-            EquipChip("DRV", ui.fittedDrive)
-            EquipChip("TYRES", ui.fittedTires)
-            EquipChip("SUS", ui.fittedSuspension)
-        }
-    }
-}
-
-@Composable
-private fun EquipChip(tag: String, value: String) {
-    Column(
-        Modifier
-            .background(GameColors.panelSoft, RoundedCornerShape(6.dp))
-            .border(1.dp, GameColors.outline.copy(alpha = 0.45f), RoundedCornerShape(6.dp))
-            .padding(horizontal = 6.dp, vertical = 3.dp)
-    ) {
-        Text(tag, color = GameColors.textDim, fontSize = 8.sp, fontWeight = FontWeight.SemiBold)
-        Text(
-            value,
-            color = GameColors.text,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1
-        )
-    }
-}
-
-/** Speed, distance and clock – always in the same spot. */
-@Composable
-fun TripPanel(ui: GameUiState, showFps: Boolean, modifier: Modifier = Modifier) {
-    val reversing = ui.speedKmh < -0.5f
-    Column(
-        modifier
-            .background(GameColors.hudBg, RoundedCornerShape(12.dp))
-            .border(1.dp, GameColors.outline.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalAlignment = Alignment.End
-    ) {
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(
-                (if (reversing) "R " else "") + kotlin.math.abs(ui.speedKmh).toInt(),
-                color = if (reversing) GameColors.warn else GameColors.text,
-                fontSize = 30.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.width(3.dp))
-            Text("km/h", color = GameColors.textDim, fontSize = 11.sp, modifier = Modifier.padding(bottom = 5.dp))
-        }
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(
-                String.format("%.2f", ui.distanceKm),
-                color = GameColors.accent,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.width(3.dp))
-            Text(
-                "km · best ${String.format("%.1f", ui.bestDistanceKm)}",
-                color = GameColors.textDim,
-                fontSize = 11.sp,
-                modifier = Modifier.padding(bottom = 4.dp)
-            )
-        }
-        Spacer(Modifier.height(2.dp))
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (showFps) {
-                Text(
-                    "${ui.fps} FPS",
-                    color = when {
-                        ui.fps >= 50 -> GameColors.ok
-                        ui.fps >= 30 -> GameColors.warn
-                        else -> GameColors.danger
-                    },
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            Text(
-                (if (ui.isNight) "☾" else "☀") + " " + ui.clock,
-                color = GameColors.text,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium
-            )
-        }
-    }
-}
-
-/**
- * Top strip: why the car is stuck, the current message and live warnings.
- * Anything already spelled out by the message is dropped from the warnings,
- * so the same thing is never shown twice.
+ * Hlášky a výstrahy hore v strede. Vitals a ovládanie sedia v palubnej
+ * doske dole, sem patrí len to, čo si žiada okamžitú pozornosť.
  */
 @Composable
 fun AlertColumn(ui: GameUiState, modifier: Modifier = Modifier) {
@@ -234,7 +96,11 @@ fun AlertColumn(ui: GameUiState, modifier: Modifier = Modifier) {
             val prefix = if (ui.engineRunning) "CAN'T MOVE" else "CAN'T START"
             Banner("$prefix: ${ui.blockedReason}", GameColors.danger.copy(alpha = pulse), strong = true)
         }
-        if (message.isNotBlank()) {
+        // Hláška sa neopakuje pod dôvodom blokácie – „Missing battery“ dvakrát
+        // pod sebou vyzeralo ako chyba, nie ako dôraz.
+        val duplicate = ui.blockedReason != null &&
+            message.equals(ui.blockedReason, ignoreCase = true)
+        if (message.isNotBlank() && !duplicate) {
             Banner(message, messageColor(message))
         }
         if (ui.events.isNotEmpty()) {
@@ -297,45 +163,51 @@ fun JunctionBar(
     modifier: Modifier = Modifier
 ) {
     if (!ui.approachingJunction || choices.isEmpty()) return
+    // Zvislý stĺpec nad plynom: voliť sa musí za jazdy jedným palcom, takže
+    // tlačidlá patria tam, kde ten palec už je. Hore v strede boli mimo dosahu.
     Column(
-        modifier
-            .background(GameColors.hudBg, RoundedCornerShape(12.dp))
-            .border(1.dp, GameColors.accent.copy(alpha = 0.55f), RoundedCornerShape(12.dp))
-            .padding(horizontal = 10.dp, vertical = 7.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         Text(
-            "FORK IN ${ui.junctionDistanceM.toInt()} m",
+            "FORK ${ui.junctionDistanceM.toInt()} m",
             color = GameColors.accent,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
+            letterSpacing = 1.sp,
+            style = androidx.compose.ui.text.TextStyle(
+                shadow = androidx.compose.ui.graphics.Shadow(
+                    color = Color(0xCC000000),
+                    blurRadius = 6f
+                )
+            )
         )
-        Spacer(Modifier.height(5.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            choices.forEach { (id, label) ->
-                val picked = ui.pendingChoiceId == id
-                Box(
-                    Modifier
-                        .background(
-                            if (picked) GameColors.accent else GameColors.panelHigh,
-                            RoundedCornerShape(8.dp)
-                        )
-                        .border(
-                            1.dp,
-                            if (picked) GameColors.accent else GameColors.outline,
-                            RoundedCornerShape(8.dp)
-                        )
-                        .clickable { onSelect(id) }
-                        .padding(horizontal = 14.dp, vertical = 7.dp)
-                ) {
-                    Text(
-                        label,
-                        color = if (picked) Color(0xFF1B1712) else GameColors.text,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
+        choices.forEach { (id, label) ->
+            val picked = ui.pendingChoiceId == id
+            Box(
+                Modifier
+                    .width(150.dp)
+                    .background(
+                        if (picked) GameColors.accent else GameColors.hudBg,
+                        RoundedCornerShape(10.dp)
                     )
-                }
+                    .border(
+                        1.dp,
+                        if (picked) GameColors.accent else GameColors.outline,
+                        RoundedCornerShape(10.dp)
+                    )
+                    .clickable { onSelect(id) }
+                    .padding(horizontal = 12.dp, vertical = 9.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    label,
+                    color = if (picked) Color(0xFF1B1712) else GameColors.text,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1
+                )
             }
         }
     }
@@ -351,10 +223,12 @@ fun SideIcons(
     onToggleFps: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
+    // Vodorovne v hornom rohu – zvislý stĺpec cez polovicu obrazovky bol
+    // zbytočne cez scénu a bil sa s kreslenou kulisou.
+    Row(
         modifier,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         IconToggleButton("☀", ui.headlightsOn, onToggleLights, label = "Headlights")
         IconToggleButton(if (ui.paused) "▶" else "❚❚", ui.paused, onTogglePause, label = "Pause")

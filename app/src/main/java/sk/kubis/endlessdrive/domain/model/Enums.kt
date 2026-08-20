@@ -24,6 +24,14 @@ enum class ComponentSlot(val displayName: String, val group: String) {
     DOORS("Doors", "Body"),
     HOOD("Hood", "Body"),
     WINDOWS("Windows", "Body"),
+    /** Sedadlá – vidno ich cez okná aj cez prázdne dverné otvory. */
+    SEAT_FRONT("Front seat", "Interior"),
+    SEAT_REAR("Rear seat", "Interior"),
+    /** Veko kufra – bez neho je zadok otvorený. */
+    TRUNK_LID("Boot lid", "Body"),
+    /** Bez svetlometu sa v noci nedá svietiť, nech je batéria akokoľvek plná. */
+    HEADLIGHT("Headlight", "Body"),
+    TAILLIGHT("Tail light", "Body"),
     FRONT_BUMPER("Front bumper", "Body"),
     REAR_BUMPER("Rear bumper", "Body"),
     /** Reťaze na kolesách – v zime pomáhajú, na suchu prekážajú. */
@@ -134,10 +142,36 @@ enum class BuildingType(val displayName: String) {
 enum class BiomeType(val displayName: String) {
     RURAL("Countryside"),
     INDUSTRIAL("Industry"),
-    WASTELAND("Wasteland")
+    WASTELAND("Wasteland"),
+    DESERT("Desert"),
+    /** Tá istá púšť po západe slnka – stolové hory proti fialovej oblohe. */
+    DESERT_DUSK("Mesa"),
+    /** Uschnutý les v hmle – kmene bez ihličia, všetko sivé. */
+    FOREST("Dead forest"),
+    /** Živý les – zeleň a modrá obloha, jediný bióm, kde je vidieť ďaleko. */
+    FOREST_ALIVE("Living forest"),
+    /** Púšť, do ktorej sa oprel vietor – vidieť je sotva na pár desiatok metrov. */
+    SANDSTORM("Sandstorm"),
+    /** Prachová stena nad mestom – v hnedej mrákave presvitajú domy. */
+    DUST_STORM("Dust storm");
+
+    /** Suché biómy – iná paleta zeme aj iná vzdušná perspektíva. */
+    val arid: Boolean
+        get() = this == DESERT || this == DESERT_DUSK ||
+            this == SANDSTORM || this == DUST_STORM
+
+    /** Les v ktoromkoľvek stave – hustá kulisa kmeňov po oboch stranách. */
+    val wooded: Boolean get() = this == FOREST || this == FOREST_ALIVE
 }
 
-/** Typ vetvy na križovatke – ovplyvňuje terén, loot, budovy a riziko. */
+/**
+ * Typ vetvy na križovatke – ovplyvňuje terén, loot, budovy a riziko.
+ *
+ * @param accentArgb farba vetvy naprieč celou hrou (panel križovatky, smerovka,
+ *   náhľad odbočky) – aby sa jedna vetva nikdy nekreslila dvoma farbami
+ * @param unlockDistance od akej vzdialenosti sa vetva vôbec ponúka
+ * @param pickWeight relatívna šanca, že vetva na križovatke padne
+ */
 enum class BranchStyle(
     val label: String,
     val hint: String,
@@ -150,21 +184,64 @@ enum class BranchStyle(
     /** 0 = takmer žiadne budovy, 1 = častejšie. */
     val buildingDensity: Float,
     /** Násobiteľ dĺžky segmentu. */
-    val lengthMul: Float
+    val lengthMul: Float,
+    val accentArgb: Long,
+    val unlockDistance: Float = 0f,
+    val pickWeight: Float = 1f
 ) {
     // Hint je nálada, nie zoznam – čo je za zákrutou, sa hráč dozvie až tam.
     SAFE_RURAL(
         "Countryside", "Fields, fences and silence",
-        BiomeType.RURAL, 0.85f, 0.12f, 1.15f, 0.72f, 0.60f, 1.20f
+        BiomeType.RURAL, 0.85f, 0.12f, 1.15f, 0.72f, 0.60f, 1.20f,
+        accentArgb = 0xFF6B8F5A, pickWeight = 1.15f
+    ),
+    FOREST(
+        "Dead forest", "Bare trunks and no birdsong",
+        BiomeType.FOREST, 0.95f, 0.16f, 1.12f, 0.95f, 0.45f, 1.15f,
+        accentArgb = 0xFF6E7A6A, pickWeight = 0.95f
+    ),
+    // Živý les je tá istá cesta v lepšom stave – viac tieňa, menej sucha.
+    FOREST_ALIVE(
+        "Living forest", "Cool shade between the trunks",
+        BiomeType.FOREST_ALIVE, 0.95f, 0.15f, 1.10f, 0.92f, 0.50f, 1.15f,
+        accentArgb = 0xFF3F7A4E, pickWeight = 1.05f
     ),
     INDUSTRIAL(
         "Industry", "Smoke on the horizon",
-        BiomeType.INDUSTRIAL, 1.25f, 0.18f, 1.28f, 0.88f, 0.85f, 1.05f
+        BiomeType.INDUSTRIAL, 1.25f, 0.18f, 1.28f, 0.88f, 0.85f, 1.05f,
+        accentArgb = 0xFF6A7A8A, pickWeight = 1.0f
     ),
+    DESERT(
+        "Desert", "Heat over an empty road",
+        BiomeType.DESERT, 1.20f, 0.22f, 1.38f, 0.82f, 0.35f, 1.10f,
+        accentArgb = 0xFFC9924A, unlockDistance = 1200f, pickWeight = 0.95f
+    ),
+    // Tá istá púšť, ale po západe – chladnejšie, tmavšie, menej vidieť.
+    DESERT_DUSK(
+        "Mesa", "Sunset over the plateaus",
+        BiomeType.DESERT_DUSK, 1.25f, 0.24f, 1.32f, 0.86f, 0.30f, 1.10f,
+        accentArgb = 0xFF9A5F6E, unlockDistance = 1800f, pickWeight = 0.85f
+    ),
+    // „Shortcut“ mýlilo – hráč nikam neskracuje, ide po horšej ceste.
     SHORTCUT_RISK(
-        "Shortcut", "An unmarked turn",
-        BiomeType.WASTELAND, 1.50f, 0.28f, 1.45f, 1.05f, 0.55f, 0.85f
-    )
+        "Backroad", "Unmarked and unmaintained",
+        BiomeType.WASTELAND, 1.50f, 0.28f, 1.45f, 1.05f, 0.55f, 0.85f,
+        accentArgb = 0xFFB85C38, pickWeight = 1.0f
+    ),
+    SANDSTORM(
+        "Sandstorm", "The horizon is gone",
+        BiomeType.SANDSTORM, 1.70f, 0.30f, 1.60f, 0.95f, 0.40f, 0.80f,
+        accentArgb = 0xFFA8763C, unlockDistance = 3000f, pickWeight = 0.70f
+    ),
+    // Búrka nad mestom – v prachu presvitajú domy, takže je čo prehľadať.
+    DUST_STORM(
+        "Dust storm", "Somewhere in there was a town",
+        BiomeType.DUST_STORM, 1.65f, 0.30f, 1.58f, 0.90f, 0.95f, 0.80f,
+        accentArgb = 0xFFB08A4E, unlockDistance = 3600f, pickWeight = 0.60f
+    );
+
+    /** Piesok si vyberá daň – vetvy, kde je vidieť horšie a všetko drie. */
+    val arid: Boolean get() = biome.arid
 }
 
 /**
@@ -173,7 +250,6 @@ enum class BranchStyle(
  */
 enum class RoadFeature(
     val displayName: String,
-    val warning: String,
     /** Násobiteľ členitosti terénu v úseku. */
     val hillMul: Float,
     /** Extra hrboľatosť (poškodzuje pneumatiky a spomaľuje). */
@@ -181,16 +257,18 @@ enum class RoadFeature(
     /** Strop rýchlosti v úseku (m/s), 0 = bez obmedzenia. */
     val speedCap: Float
 ) {
-    STRAIGHT("Straight", "", 0.45f, 0f, 0f),
-    HILLS("Hills", "Hills — watch the temperature", 1.15f, 0.12f, 0f),
+    STRAIGHT("Straight", 0.45f, 0f, 0f),
+    HILLS("Hills", 1.15f, 0.12f, 0f),
     /** Prudký hrebeň – rozbeh a skok ako v Hill Climb. */
-    CREST("Crests", "Crests — hang on", 1.40f, 0.16f, 0f),
+    CREST("Crests", 1.40f, 0.16f, 0f),
     /** Hlboké preliačiny medzi kopcami. */
-    RAVINE("Ravines", "Ravines — keep momentum", 1.30f, 0.20f, 14f),
-    SWITCHBACK("Switchbacks", "Switchbacks — take it slow", 1.05f, 0.28f, 14f),
-    BROKEN("Broken road", "Broken road — slow down", 0.90f, 1.0f, 11f),
-    // Most nemení terén, len naň položí rovnú mostovku.
-    BRIDGE("Bridge", "Bridge — keep to the middle", 0.85f, 0.05f, 18f)
+    RAVINE("Ravines", 1.30f, 0.20f, 14f),
+    SWITCHBACK("Switchbacks", 1.05f, 0.28f, 14f),
+    BROKEN("Broken road", 0.90f, 1.0f, 11f),
+    // Most nemení terén, len naň položí rovnú mostovku. Strop rýchlosti nemá –
+    // bola to neviditeľná brzda odôvodnená radou „drž sa v strede“, ktorá
+    // v hre bez riadenia nedávala zmysel.
+    BRIDGE("Bridge", 0.85f, 0.05f, 0f)
 }
 
 enum class GamePhase {
@@ -210,3 +288,19 @@ enum class EndReason(val message: String) {
     BATTERY_DEAD("The battery is dead"),
     MANUAL("Run over")
 }
+
+/** Plechy a interiér – to, čo na aute vidno a čo sa musí nájsť. */
+val BODY_SLOTS = listOf(
+    ComponentSlot.SEAT_FRONT,
+    ComponentSlot.SEAT_REAR,
+    ComponentSlot.DOORS,
+    ComponentSlot.HOOD,
+    ComponentSlot.WINDOWS,
+    ComponentSlot.TRUNK_LID,
+    ComponentSlot.HEADLIGHT,
+    ComponentSlot.TAILLIGHT,
+    ComponentSlot.FRONT_BUMPER,
+    ComponentSlot.REAR_BUMPER,
+    // Nosič je doplnok, ale kreslí sa ako diel – pri ladení polôh nech je vidieť.
+    ComponentSlot.ROOF_RACK
+)

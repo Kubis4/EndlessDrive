@@ -38,9 +38,11 @@ enum class RoadEvent(
     ABANDONED_WRECK("A stripped wreck sits in the ditch.", null, 0f, 7f, good = true),
 
     // --- Atmosféra ---
-    RADIO("Strange static on the radio…", null, 0f, 4f, good = true),
-    TRACKS("Tracks lead off into a field. Nothing else.", null, 0f, 4f, good = true),
-    ANIMAL("A deer watches you from the verge.", null, 0f, 4f, good = true);
+    // Nič nerobia, len píšu do hlášok. Nech sa neberú miesto udalostiam,
+    // ktoré na hru naozaj vplývajú.
+    RADIO("Strange static on the radio…", null, 0f, 2f, good = true),
+    TRACKS("Tracks lead off into a field. Nothing else.", null, 0f, 2f, good = true),
+    ANIMAL("A deer watches you from the verge.", null, 0f, 2f, good = true);
 
     val timed: Boolean get() = duration > 0f && chip != null
 }

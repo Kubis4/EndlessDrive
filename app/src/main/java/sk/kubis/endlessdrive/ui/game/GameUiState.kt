@@ -53,6 +53,8 @@ data class GameUiState(
     val isNight: Boolean = false,
     val clock: String = "08:00",
     val hasNearbyBuilding: Boolean = false,
+    /** Dá sa práve prespať do rána. */
+    val canRest: Boolean = false,
     val exploring: Boolean = false,
     /** Zásoba v stojane preskúmavanej benzínky. */
     val pumpFuelL: Float = 0f,
@@ -70,8 +72,25 @@ data class GameUiState(
     val fittedDrive: String = "—",
     val fittedTires: String = "—",
     val fittedSuspension: String = "—",
+    /** Stav jednotlivých dielov – aby bolo vidieť, čo sa práve kazí. */
+    val parts: List<PartStatus> = emptyList(),
+    /** Čo práve najviac ničí motor (null = nič mimoriadne). */
+    val wearWarning: String? = null,
     /** Invalidácia inventára / panelov auta. */
     val bagRevision: Int = 0
+)
+
+/**
+ * Riadok stavu dielu do HUD. [wearing] označuje diel, ktorý práve schytáva
+ * poškodenie – ten sa v paneli zvýrazní, nech je zrejmé, kam sa pozerať.
+ */
+data class PartStatus(
+    val tag: String,
+    val label: String,
+    val health: Float,
+    val wearing: Boolean = false,
+    /** false = diel v aute vôbec nie je. */
+    val fitted: Boolean = true
 )
 
 /** Krátky popis dielu do HUD (bez zbytočných slov). */
@@ -88,3 +107,20 @@ fun ItemDef.hudLabel(): String {
 
 fun Car.fittedHudLabel(slot: ComponentSlot): String =
     parts[slot]?.def?.hudLabel() ?: "—"
+
+/**
+ * Čím sa namontovaný diel líši od názvu slotu – teda to, čo sa vypisuje
+ * v zátvorke za „Radiator“, „Battery“ a spol.
+ *
+ * Zo štítku vypadnú slová, ktoré sú už v názve slotu: „Radiator (Radiator)“
+ * nič nehovorí a „Fuel tank (Long-range tank 110 L)“ je taký dlhý, že
+ * v riadku nezvýši miesto na percentá. Keď neostane nič, vráti prázdny
+ * reťazec a zátvorka sa vôbec nekreslí.
+ */
+fun ItemDef.slotDetail(slot: ComponentSlot): String {
+    val noise = slot.displayName.split(' ', '-').map { it.lowercase() }.toSet()
+    val kept = hudLabel()
+        .split(' ')
+        .filter { it.trim('(', ')', ',', '·').lowercase() !in noise }
+    return kept.joinToString(" ").trim('(', ')', ' ', '·')
+}
