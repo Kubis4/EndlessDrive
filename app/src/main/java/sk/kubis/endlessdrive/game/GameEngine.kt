@@ -35,7 +35,9 @@ import sk.kubis.endlessdrive.game.world.BranchChoice
 import sk.kubis.endlessdrive.game.world.RoadSegment
 import sk.kubis.endlessdrive.game.world.SurfacePatch
 import sk.kubis.endlessdrive.game.world.SegmentPlan
+import sk.kubis.endlessdrive.game.world.Terrain
 import sk.kubis.endlessdrive.game.world.TerrainProfile
+import sk.kubis.endlessdrive.game.world.TestTrackProfile
 import sk.kubis.endlessdrive.game.world.WorldBuilding
 import sk.kubis.endlessdrive.game.world.WorldGenerator
 
@@ -67,7 +69,12 @@ class GameEngine(
      */
     val boot = Inventory(GameConfig.BOOT_SLOTS, GameConfig.BOOT_MAX_WEIGHT)
     val camera = Camera2D()
-    val terrain = TerrainProfile(seed)
+    /**
+     * Profil terénu. Ladenie pruženia potrebuje známe prekážky v známom
+     * poradí – na náhodnej ceste sa na poriadny hrbol čaká pol kilometra.
+     */
+    val terrain: Terrain =
+        if (debugOptions.testTrack) TestTrackProfile() else TerrainProfile(seed)
 
     var segment: RoadSegment
         private set

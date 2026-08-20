@@ -9,14 +9,14 @@ import kotlin.math.pow
 /**
  * HillRush-štýl kopce: od začiatku jemné vlnky, neskôr ostré hrebene.
  */
-class TerrainProfile(seed: Long) {
+class TerrainProfile(seed: Long) : Terrain {
     private val noise = SimplexNoise(seed)
 
     /**
      * @param challengeMul násobiteľ členitosti z aktuálneho úseku trate
      *   (rovinka < 1, kopce > 1, most ≈ 0).
      */
-    fun heightAt(worldX: Float, style: BranchStyle, challengeMul: Float = 1f): Float {
+    override fun heightAt(worldX: Float, style: BranchStyle, challengeMul: Float): Float {
         val x = worldX
         // Rýchly nástup jemných vĺn – nie kilometer roviny.
         val intro = MathX.smoothstep(12f, 70f, x)

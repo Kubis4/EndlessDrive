@@ -99,7 +99,7 @@ class RoadSegment(
     val sections: List<RoadSection>,
     val choices: List<BranchChoice>,
     var worldOrigin: Float,
-    private val terrain: TerrainProfile,
+    private val terrain: Terrain,
     val paving: RoadPaving = RoadPaving.ASPHALT
 ) {
     /** Budovy sa dopĺňajú až po vzniku segmentu – potrebujú jeho výškový profil. */

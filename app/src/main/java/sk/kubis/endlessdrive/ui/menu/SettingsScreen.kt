@@ -108,6 +108,13 @@ fun SettingsScreen(
                 checked = options.fullFluids,
                 onToggle = { onChange(options.copy(fullFluids = it)) }
             )
+            Toggle(
+                title = "Test track",
+                detail = "Washboard, a sharp bump, a jump, a long climb, dips and " +
+                    "growing steps — on a loop, for tuning suspension and handling.",
+                checked = options.testTrack,
+                onToggle = { onChange(options.copy(testTrack = it)) }
+            )
 
             Spacer(Modifier.height(20.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

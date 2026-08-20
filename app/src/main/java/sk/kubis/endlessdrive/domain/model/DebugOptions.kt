@@ -13,11 +13,13 @@ data class DebugOptions(
     /** Plechy karosérie – na kontrolu polôh dielov bez zháňania lootu. */
     val fullBody: Boolean = false,
     /** Plné a čisté kvapaliny, nabitá batéria. */
-    val fullFluids: Boolean = false
+    val fullFluids: Boolean = false,
+    /** Jazda na pripravenej trati s prekážkami namiesto náhodnej cesty. */
+    val testTrack: Boolean = false
 ) {
     /** true = aspoň jeden prepínač je zapnutý; menu to hlási hráčovi. */
     val any: Boolean
-        get() = allComponents || fullUpgrades || fullBody || fullFluids
+        get() = allComponents || fullUpgrades || fullBody || fullFluids || testTrack
 
     companion object {
         val OFF = DebugOptions()

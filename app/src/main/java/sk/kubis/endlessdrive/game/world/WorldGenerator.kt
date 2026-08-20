@@ -128,7 +128,7 @@ object WorldGenerator {
         plan: SegmentPlan,
         worldOrigin: Float,
         tripDistance: Float,
-        terrain: TerrainProfile,
+        terrain: Terrain,
         isTutorial: Boolean = false
     ): RoadSegment {
         val rng = SeededRandom(plan.seed)
@@ -161,7 +161,7 @@ object WorldGenerator {
         style: BranchStyle,
         worldOrigin: Float,
         tripDistance: Float,
-        terrain: TerrainProfile,
+        terrain: Terrain,
         isTutorial: Boolean = false
     ): RoadSegment = createSegment(
         plan = planSegment(segmentSeed, style, tripDistance, isTutorial),

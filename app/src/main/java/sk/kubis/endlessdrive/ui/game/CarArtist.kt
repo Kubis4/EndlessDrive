@@ -76,23 +76,13 @@ class CarArtist {
             }
         }
         val blur = 1 + (kotlin.math.abs(car.speed) / 6f).toInt().coerceAtMost(3)
-        // Guma sa deformuje podľa toho, koľko na nej práve leží. Stlačenie
-        // pruženia je najbližšie, čo k zaťaženiu nápravy máme, a rozlišuje
-        // predok od zadku – pri brzdení sadne predok, pri plyne zadok.
-        val travel = car.suspTravel.coerceAtLeast(0.05f)
-        val rearLoad = (car.rearCompression / travel).coerceIn(0f, 1f)
-        val frontLoad = (car.frontCompression / travel).coerceIn(0f, 1f)
-        val flying = !car.grounded
         if (hasRearTire) {
             val tire = car.parts[ComponentSlot.TIRE_REAR]
             val r = layout.wheelR * car.wheelScale(ComponentSlot.TIRE_REAR)
             drawWheelScreen(
                 rearWheelX, rearWheelY, rearSpinDeg, r,
                 tire?.health ?: 0.5f, accent, blur, tire?.defId,
-                layers.wheelImage(tire?.defId),
-                load = rearLoad,
-                airborne = flying,
-                blown = car.blownAxle == ComponentSlot.TIRE_REAR
+                layers.wheelImage(tire?.defId)
             )
         }
         if (hasFrontTire) {
@@ -101,10 +91,7 @@ class CarArtist {
             drawWheelScreen(
                 frontWheelX, frontWheelY, frontSpinDeg, r,
                 tire?.health ?: 0.5f, accent, blur, tire?.defId,
-                layers.wheelImage(tire?.defId),
-                load = frontLoad,
-                airborne = flying,
-                blown = car.blownAxle == ComponentSlot.TIRE_FRONT
+                layers.wheelImage(tire?.defId)
             )
         }
     }
@@ -379,9 +366,6 @@ class CarArtist {
         blurSteps: Int = 1,
         tireId: String? = null,
         art: ImageBitmap? = null,
-        load: Float = 0f,
-        airborne: Boolean = false,
-        blown: Boolean = false
     ) {
         val rr = r * (0.90f + 0.10f * tireHealth)
         val img = art ?: run {
@@ -397,34 +381,18 @@ class CarArtist {
         val artScale = diameter / img.width.toFloat()
         val left = cx - rr
         val top = cy - rr
-        // Deformácia gumy. Stláča sa okolo styčnej plochy, nie okolo osi –
-        // inak by sa pod záťažou zdvihla z vozovky namiesto toho, aby na nej
-        // sadla. Bočné vydutie je menšie než stlačenie, tak ako na skutočnej
-        // pneumatike, a roztrhaná guma sa zloží oveľa viac.
-        val squashFactor = if (blown) 0.34f else 0.075f
-        val squash = when {
-            airborne -> 0f
-            else -> load.coerceIn(0f, 1f) * squashFactor
-        }
-        val squeezeY = 1f - squash
-        val bulgeX = 1f + squash * 0.45f
-        val contactY = cy + rr
-
+        // Koleso ostáva kruhové. Skúšal som ho pod záťažou splošťovať na
+        // styčnej ploche, ale aj pri pár percentách je predloha dosť veľká
+        // na to, aby to bolo vidieť ako vajce – a stojace auto tak vyzeralo
+        // na prázdnych gumách. Pruženie pohyb kolesa ukáže aj bez toho.
         val blur = blurSteps.coerceIn(1, 4)
-        // Stlačenie ide zvonku rotácie: styčná plocha musí ostať dole pri
-        // vozovke. Keby sa škálovalo vnútri, deformácia by sa točila spolu
-        // s kolesom a guma by vyzerala ako vajce.
-        withTransform({
-            scale(scaleX = bulgeX, scaleY = squeezeY, pivot = Offset(cx, contactY))
-        }) {
-            for (b in 0 until blur) {
-                rotate(degrees = spinDeg - b * 9f, pivot = Offset(cx, cy)) {
-                    withTransform({
-                        translate(left = left, top = top)
-                        scale(scaleX = artScale, scaleY = artScale, pivot = Offset.Zero)
-                    }) {
-                        drawImage(image = img, alpha = 1f / blur)
-                    }
+        for (b in 0 until blur) {
+            rotate(degrees = spinDeg - b * 9f, pivot = Offset(cx, cy)) {
+                withTransform({
+                    translate(left = left, top = top)
+                    scale(scaleX = artScale, scaleY = artScale, pivot = Offset.Zero)
+                }) {
+                    drawImage(image = img, alpha = 1f / blur)
                 }
             }
         }

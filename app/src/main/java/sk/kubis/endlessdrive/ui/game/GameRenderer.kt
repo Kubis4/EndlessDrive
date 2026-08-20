@@ -1452,8 +1452,23 @@ class GameRenderer(private val assets: GameAssets) {
             rearWell = well(layout.rearWx, layout.rearWy)
             frontWell = well(layout.frontWx, layout.frontWy)
         }
-        val rearWheel = rearWell
-        val frontWheel = frontWell
+        // Koleso sa drží vozovky pod sebou, nie priemeru oboch kontaktov.
+        // Kým sedelo napevno v blatníku, terén sa na ňom neprejavil vôbec –
+        // auto kĺzalo po kopcoch ako jeden kus. Teraz hrbol nadvihne to
+        // koleso, ktoré naň naozaj vošlo, a karoséria nad ním ostane pokojná.
+        //
+        // Výchylku obmedzuje zdvih namontovaného pruženia: znížený podvozok
+        // sa takmer nehýbe a každú nerovnosť prenesie do karosérie, zvýšený
+        // kolesami pekne artikuluje.
+        val travelPx = car.suspTravel * depth.ppm * GameConfig.SUSP_VISUAL_GAIN
+        fun onRoad(well: Offset, groundY: Float, radius: Float): Offset {
+            // Vo vzduchu niet čo sledovať – pruženie sa roztiahne na doraz.
+            if (!car.grounded) return Offset(well.x, well.y + travelPx * AIR_DROOP)
+            val target = groundY - radius
+            return Offset(well.x, well.y + (target - well.y).coerceIn(-travelPx, travelPx))
+        }
+        val rearWheel = onRoad(rearWell, rearGround.y, rearWheelR)
+        val frontWheel = onRoad(frontWell, frontGround.y, frontWheelR)
 
         return CarScreenPose(
             bodyX, bodyY, rearGround, frontGround, rearWheel, frontWheel,
@@ -1922,6 +1937,12 @@ class GameRenderer(private val assets: GameAssets) {
          * pri pravom okraji vidieť, ako trať „končí“ a dostavuje sa.
          */
         private const val EDGE_MARGIN = 24f
+
+        /**
+         * Koľko zo zdvihu pruženia sa vo vzduchu roztiahne. Kolesá vtedy
+         * visia nadol – auto v skoku pôsobí odľahčene, nie ako doska.
+         */
+        private const val AIR_DROOP = 0.45f
 
         /**
          * Koľko metrov okolo budovy ostane bez kulís. Najširšia budova
