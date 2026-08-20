@@ -10,3 +10,6 @@
 .cxx
 local.properties
 .kotlin
+
+# Zbalené APK – build výstup, nie zdroj.
+/apk
