@@ -28,6 +28,7 @@ import sk.kubis.endlessdrive.game.DepthProjection
 import sk.kubis.endlessdrive.game.GameEngine
 import sk.kubis.endlessdrive.game.event.RoadEvent
 import sk.kubis.endlessdrive.game.world.RoadSegment
+import sk.kubis.endlessdrive.game.world.BiomeBlend
 import kotlin.math.abs
 import kotlin.math.hypot
 
@@ -58,7 +59,8 @@ class GameRenderer(private val assets: GameAssets) {
     private val skidStamp = FloatArray(SKID_MAX)
     private var skidCount = 0
     private var skidHead = 0
-    private var lastSkidX = Float.NaN
+    private var lastFrontSkidX = Float.NaN
+    private var lastRearSkidX = Float.NaN
     /** Renderer prežije reštart jazdy – stopy z predošlej sa musia zahodiť. */
     private var lastEngine: GameEngine? = null
 
@@ -87,7 +89,8 @@ class GameRenderer(private val assets: GameAssets) {
         depth.begin(cam.x + cam.shakeX, cam.y + cam.shakeY, cam.ppm, halfW, halfH, cam.pitch)
 
         val day = engine.daylight
-        val biome = engine.segment.biome
+        val environment = engine.biomeBlend
+        val biome = environment.dominant
         // Horizont pozadia je vysoko a s cestou sa nehýbe – keď klesal spolu
         // s terénom, zníženie cesty neodhalilo nič. Pás medzi ním a lúkou
         // vypĺňa farba vzdialenej zeme, takže diera vzniknúť nemôže.
@@ -95,11 +98,22 @@ class GameRenderer(private val assets: GameAssets) {
 
         // Kreslené pozadie má dnes každý bióm a nesie si vlastnú oblohu aj
         // krajinu – procedurálne vrstvy by sa cezeň len bili.
-        val backdrop = assets.backdropFor(biome)
-        drawParallaxBackdrop(backdrop, cam, engine.car.x, horizonY, day, engine.timeOfDay)
+        updateBackdropScroll(cam, engine.car.x)
+        val backdrop = assets.backdropFor(environment.from)
+        drawParallaxBackdrop(backdrop, cam, horizonY, day, engine.timeOfDay)
+        if (environment.amount > 0.001f && environment.to != environment.from) {
+            drawParallaxBackdrop(
+                assets.backdropFor(environment.to), cam, horizonY, day, engine.timeOfDay,
+                opacity = environment.amount,
+                drawCelestial = false
+            )
+        }
         with(sky) {
             drawStarfield(day, cam.x, horizonY)
-            drawHaze(horizonY, day, biome, strength = 0.4f)
+            drawHaze(
+                horizonY, day, environment.from, strength = 0.4f,
+                nextBiome = environment.to, transition = environment.amount
+            )
         }
 
         collectTerrain(engine, cam.ppm, size.width, halfW)
@@ -112,12 +126,17 @@ class GameRenderer(private val assets: GameAssets) {
         val heightAt: (Float) -> Float = { wx -> groundFor(engine, wx) }
 
         // Poradie je dôležité: najprv zem, potom kulisy (stoja na nej), až potom cesta.
-        drawGround(engine.segment, day)
+        drawGround(engine.segment, environment, engine.winterAmount, day)
         // Kde stojí budova, tam kulisa nerastie.
         val builtOn: (Float) -> Boolean = { wx ->
             engine.segment.buildingOccupies(wx, BUILDING_CLEAR_M)
         }
-        with(scenery) { drawBackProps(visibleFrom, visibleTo, biome, day, depth, heightAt, builtOn) }
+        with(scenery) {
+            drawBackProps(
+                visibleFrom, visibleTo, engine.segment::biomeBlendAtWorld,
+                day, depth, heightAt, builtOn
+            )
+        }
         drawBridges(engine, day)
         drawRoadSurface(engine.segment, day)
         drawRoadHistory(engine.segment, day)
@@ -125,12 +144,16 @@ class GameRenderer(private val assets: GameAssets) {
         drawRoadEventDecals(engine, day, visibleFrom, visibleTo)
         recordSkid(engine)
         drawSkidMarks(engine, day)
-        drawJunctionPreview(engine)
         drawBuildings(engine, day)
         drawCarShadow(engine)
         drawCar(engine)
         drawCarEffects(engine, day)
-        with(scenery) { drawFrontProps(visibleFrom, visibleTo, biome, day, depth, heightAt) }
+        with(scenery) {
+            drawFrontProps(
+                visibleFrom, visibleTo, engine.segment::biomeBlendAtWorld,
+                day, depth, heightAt
+            )
+        }
         drawNight(engine, day)
         drawTailwind(engine, day)
         drawWeather(engine, day)
@@ -458,10 +481,11 @@ class GameRenderer(private val assets: GameAssets) {
     private fun DrawScope.drawParallaxBackdrop(
         backdrop: BiomeBackdrop,
         cam: Camera2D,
-        carX: Float,
         horizonY: Float,
         day: Float,
-        timeOfDay: Float
+        timeOfDay: Float,
+        opacity: Float = 1f,
+        drawCelestial: Boolean = true
     ) {
         // Nočné stmavenie a tón sady sa násobia – oboje ide cez Modulate naraz.
         val night = lerp(Color(0xFF1C2540), Color.White, day.coerceIn(0f, 1f)).let {
@@ -492,12 +516,6 @@ class GameRenderer(private val assets: GameAssets) {
         // Posun sa berie z polohy auta, nie kamery. Kamera si k cieľu pripočíta
         // predvídavosť (rýchlosť × look-ahead), takže pri brzdení couvne o pár
         // metrov dozadu – a pozadie, hlavne najbližšia vrstva, cuklo s ňou.
-        val dx = if (lastBackdropX.isNaN()) 0f else carX - lastBackdropX
-        lastBackdropX = carX
-        for (i in backdropShift.indices) {
-            backdropShift[i] += dx * ppm * BACKDROP_K[i]
-        }
-
         // Zvislá odozva je zámerne slabá – hráč chce mať rovnaký záber na
         // pozadie po celý čas, nie horizont, ktorý na každom kopci ujde preč.
         val riseM = cam.y + cam.shakeY - BACKDROP_REF_Y
@@ -516,7 +534,8 @@ class GameRenderer(private val assets: GameAssets) {
             Color(
                 backdrop.groundColor.red * night.red,
                 backdrop.groundColor.green * night.green,
-                backdrop.groundColor.blue * night.blue
+                backdrop.groundColor.blue * night.blue,
+                opacity
             ),
             topLeft = Offset(0f, farBase - 2f),
             size = Size(size.width, (size.height - farBase + 2f).coerceAtLeast(0f))
@@ -525,25 +544,34 @@ class GameRenderer(private val assets: GameAssets) {
             backdrop.far, backdropShift[0],
             baseY = farBase,
             height = horizonY * 1.18f,
-            tint = night, haze = haze, hazeAmount = 0f
+            tint = night, haze = haze, hazeAmount = 0f, opacity = opacity
         )
         // Slnko a mesiac idú nad oblohu, ale pod siluety – inak by z hry zmizol
         // denný cyklus. Kde ich má kresba namaľované, druhé nedávame.
-        if (!backdrop.bakedSun) {
+        if (drawCelestial && !backdrop.bakedSun) {
             with(sky) { drawCelestialOver(timeOfDay, day, horizonY + pitchPx) }
         }
         drawLayer(
             backdrop.mid, backdropShift[1],
             baseY = baseFor(BACKDROP_MID_K, 0.90f, size.height * 0.015f),
             height = size.height * BACKDROP_MID_HEIGHT,
-            tint = night, haze = haze, hazeAmount = 0.42f
+            tint = night, haze = haze, hazeAmount = 0.42f, opacity = opacity
         )
         drawLayer(
             backdrop.near, backdropShift[2],
             baseY = baseFor(BACKDROP_NEAR_K, 0.80f, size.height * 0.045f),
             height = size.height * BACKDROP_NEAR_HEIGHT,
-            tint = night, haze = haze, hazeAmount = 0.20f
+            tint = night, haze = haze, hazeAmount = 0.20f, opacity = opacity
         )
+    }
+
+    /** Posun parallaxu sa aktualizuje raz za snímku aj počas kreslenia dvoch biomov. */
+    private fun updateBackdropScroll(cam: Camera2D, carX: Float) {
+        val dx = if (lastBackdropX.isNaN()) 0f else carX - lastBackdropX
+        lastBackdropX = carX
+        for (i in backdropShift.indices) {
+            backdropShift[i] += dx * cam.ppm * BACKDROP_K[i]
+        }
     }
 
     /** Farba, do ktorej vrstvy blednú – teplá na púšti, chladná inde. */
@@ -558,7 +586,8 @@ class GameRenderer(private val assets: GameAssets) {
         height: Float,
         tint: Color,
         haze: Color,
-        hazeAmount: Float
+        hazeAmount: Float,
+        opacity: Float
     ) {
         // Šírka z pomeru strán – pozadie sa nesmie deformovať.
         val w = height * image.width / image.height.toFloat()
@@ -568,11 +597,14 @@ class GameRenderer(private val assets: GameAssets) {
         // z toho, ako sa float pozícia zaokrúhli na celé pixely.
         val tileW = kotlin.math.ceil(w).toInt() + 1
         val tileH = kotlin.math.ceil(height).toInt().coerceAtLeast(1)
+        val firstTile = kotlin.math.floor(scrolled / w).toInt()
         val shift = (scrolled % w + w) % w
         val src = IntSize(image.width, image.height)
 
         var x = -shift
-        var tile = 0
+        // Parita patrí dlaždici vo svete, nie jej poradiu v aktuálnom zábere.
+        // Inak sa po každom celom posune prvá dlaždica znovu otočila na začiatok.
+        var tile = firstTile
         while (x < size.width) {
             val dst = IntOffset(kotlin.math.floor(x).toInt(), top)
             // Predlohy nie sú maľované ako periodické textúry. Striedanie ich
@@ -585,6 +617,7 @@ class GameRenderer(private val assets: GameAssets) {
                     srcSize = src,
                     dstOffset = dst,
                     dstSize = IntSize(tileW, tileH),
+                    alpha = opacity,
                     colorFilter = ColorFilter.tint(tint, androidx.compose.ui.graphics.BlendMode.Modulate)
                 )
                 if (hazeAmount > 0.01f) {
@@ -596,7 +629,7 @@ class GameRenderer(private val assets: GameAssets) {
                         srcSize = src,
                         dstOffset = dst,
                         dstSize = IntSize(tileW, tileH),
-                        alpha = hazeAmount,
+                        alpha = hazeAmount * opacity,
                         colorFilter = ColorFilter.tint(haze, androidx.compose.ui.graphics.BlendMode.SrcIn)
                     )
                 }
@@ -640,8 +673,7 @@ class GameRenderer(private val assets: GameAssets) {
     private fun groundFor(engine: GameEngine, worldX: Float): Float =
         engine.segment.groundAtWorld(worldX)
 
-    private fun grassColor(segment: RoadSegment, day: Float) = shade(
-        if (segment.paving.winter) Color(0xFFDCE7EE) else when (segment.biome) {
+    private fun biomeGrassColor(biome: BiomeType) = when (biome) {
             BiomeType.RURAL -> Color(0xFF7A8F5A)
             BiomeType.INDUSTRIAL -> Color(0xFF6A7460)
             BiomeType.WASTELAND -> Color(0xFF8A7A4F)
@@ -652,22 +684,32 @@ class GameRenderer(private val assets: GameAssets) {
             BiomeType.DESERT_DUSK -> Color(0xFF8A6A6B)
             BiomeType.SANDSTORM -> Color(0xFFB49767)
             BiomeType.DUST_STORM -> Color(0xFFA98A5E)
-        },
-        day
-    )
+            BiomeType.ALPINE -> Color(0xFFC5D3D4)
+        }
+
+    private fun grassColor(blend: BiomeBlend, winterAmount: Float, day: Float): Color {
+        val region = lerp(biomeGrassColor(blend.from), biomeGrassColor(blend.to), blend.amount)
+        return shade(lerp(region, Color(0xFFDCE7EE), winterAmount.coerceIn(0f, 1f)), day)
+    }
 
     /** Pôda a lúka až za cestu – podklad, na ktorom stoja kulisy. */
-    private fun DrawScope.drawGround(segment: RoadSegment, day: Float) {
+    private fun DrawScope.drawGround(
+        segment: RoadSegment,
+        environment: BiomeBlend,
+        winterAmount: Float,
+        day: Float
+    ) {
         val n = terrainCount
         if (n < 2) return
-        val grass = grassColor(segment, day)
+        val grass = grassColor(environment, winterAmount, day)
         // Pod púšťou nie je hlina, ale piesok – inak by rez terénu vyzeral cudzo.
         val soilColor = shade(
             when {
-                segment.paving.winter -> Color(0xFF6B5340)
-                segment.biome == BiomeType.DESERT -> Color(0xFFA9855A)
-                segment.biome == BiomeType.SANDSTORM -> Color(0xFF9A7B52)
-                segment.biome == BiomeType.FOREST -> Color(0xFF54402D)
+                winterAmount >= 0.55f -> Color(0xFF6B5340)
+                environment.dominant == BiomeType.DESERT -> Color(0xFFA9855A)
+                environment.dominant == BiomeType.SANDSTORM -> Color(0xFF9A7B52)
+                environment.dominant == BiomeType.FOREST -> Color(0xFF54402D)
+                environment.dominant == BiomeType.ALPINE -> Color(0xFF657078)
                 else -> Color(0xFF6B5340)
             },
             day
@@ -694,11 +736,17 @@ class GameRenderer(private val assets: GameAssets) {
 
         // 2) Lúka siaha až za kulisy, inak by stromy „leteli“ v prázdne.
         buildBand(n, 0f, SCENERY_BACK_DEPTH + 0.5f, groundY)
-        val distanceHaze = if (segment.biome.arid) Color(0xFFE0C79A) else Color(0xFFAFC6D6)
-        drawPath(band, lerp(grass, shade(distanceHaze, day), if (segment.biome == BiomeType.SANDSTORM) 0.42f else 0.26f))
+        val aridAmount = MathX.lerp(
+            if (environment.from.arid) 1f else 0f,
+            if (environment.to.arid) 1f else 0f,
+            environment.amount
+        )
+        val distanceHaze = lerp(Color(0xFFAFC6D6), Color(0xFFE0C79A), aridAmount)
+        val stormAmount = if (environment.dominant == BiomeType.SANDSTORM) 0.42f else 0.26f
+        drawPath(band, lerp(grass, shade(distanceHaze, day), stormAmount))
         buildBand(n, 0f, GameConfig.ROAD_DEPTH + 0.7f, groundY)
         drawPath(band, grass)
-        drawGroundTexture(n, segment, day, grass, soilColor)
+        drawGroundTexture(n, segment, winterAmount, day, grass, soilColor)
     }
 
     /**
@@ -711,6 +759,7 @@ class GameRenderer(private val assets: GameAssets) {
     private fun DrawScope.drawGroundTexture(
         n: Int,
         segment: RoadSegment,
+        winterAmount: Float,
         day: Float,
         grass: Color,
         soil: Color
@@ -764,7 +813,7 @@ class GameRenderer(private val assets: GameAssets) {
         }
 
         // Tráva na hrane – krátke ťahy, ktoré rozbijú rovnú líniu.
-        if (!segment.paving.winter) {
+        if (winterAmount < 0.55f) {
             val blade = lerp(grass, Color.Black, 0.22f)
             var k = 0
             while (k < n) {
@@ -942,19 +991,18 @@ class GameRenderer(private val assets: GameAssets) {
     private fun DrawScope.drawRoadSurface(segment: RoadSegment, day: Float) {
         val n = terrainCount
         if (n < 2) return
-        val grass = grassColor(segment, day)
-        // Vzhľad vozovky určuje vetva, nie biom – každá odbočka je iná.
+        val sampleX = terrainW[n / 2]
+        val roadBlend = segment.biomeBlendAtWorld(sampleX)
+        val nextWinter = segment.choices.firstOrNull()?.plan?.paving?.winter == true
+        val winter = MathX.lerp(
+            if (segment.paving.winter) 1f else 0f,
+            if (nextWinter) 1f else 0f,
+            roadBlend.amount
+        )
+        val grass = grassColor(roadBlend, winter, day)
+        val nextPaving = segment.choices.firstOrNull()?.plan?.paving ?: segment.paving
         val road = shade(
-            when (segment.paving) {
-                RoadPaving.ASPHALT -> Color(0xFF3E3E42)
-                RoadPaving.CRACKED -> Color(0xFF4A4844)
-                RoadPaving.CONCRETE -> Color(0xFF6E6C66)
-                RoadPaving.DIRT -> Color(0xFF6A5340)
-                RoadPaving.GRAVEL_ROAD -> Color(0xFF6E675C)
-                RoadPaving.SAND_TRACK -> Color(0xFFB49A6A)
-                RoadPaving.SNOW -> Color(0xFFE6EDF2)
-                RoadPaving.PACKED_SNOW -> Color(0xFFCBD7DE)
-            },
+            lerp(pavingColor(segment.paving), pavingColor(nextPaving), roadBlend.amount),
             day
         )
 
@@ -992,6 +1040,17 @@ class GameRenderer(private val assets: GameAssets) {
             shade(Color(0xFF6B7A4A), day).copy(alpha = 0.55f),
             style = Stroke(width = (0.07f * depth.ppm).coerceAtLeast(1.5f))
         )
+    }
+
+    private fun pavingColor(paving: RoadPaving): Color = when (paving) {
+        RoadPaving.ASPHALT -> Color(0xFF3E3E42)
+        RoadPaving.CRACKED -> Color(0xFF4A4844)
+        RoadPaving.CONCRETE -> Color(0xFF6E6C66)
+        RoadPaving.DIRT -> Color(0xFF6A5340)
+        RoadPaving.GRAVEL_ROAD -> Color(0xFF6E675C)
+        RoadPaving.SAND_TRACK -> Color(0xFFB49A6A)
+        RoadPaving.SNOW -> Color(0xFFE6EDF2)
+        RoadPaving.PACKED_SNOW -> Color(0xFFCBD7DE)
     }
 
     /** Farby naplavenín – každá prekážka musí byť na prvý pohľad iná. */
@@ -1381,6 +1440,7 @@ class GameRenderer(private val assets: GameAssets) {
     /** Jednotný výpočet pozície auta, kolies a tieňa v obrazovkových súradniciach. */
     private fun carScreenPose(engine: GameEngine): CarScreenPose {
         val car = engine.car
+        val visualContact = car.visuallyGrounded
         val d = carDepth()
         val wb = SedanSpec.wheelOffsetX
         val layers = assets.sedan
@@ -1423,10 +1483,13 @@ class GameRenderer(private val assets: GameAssets) {
             .coerceIn(0f, wellBelowCenter * 0.55f)
         val rideBiasPx = (car.rideHeight - GameConfig.CAR_RIDE_HEIGHT) * depth.ppm
         val bodyLiftPx = GameConfig.BODY_VISUAL_LIFT * depth.ppm
-        var bodyY = if (car.grounded) {
-            wheelMidY - wellBelowCenter + sinkPx - rideBiasPx - bodyLiftPx
+        val roadBodyY = wheelMidY - wellBelowCenter + sinkPx - rideBiasPx - bodyLiftPx
+        var bodyY = if (visualContact) {
+            roadBodyY
         } else {
-            sy(car.y)
+            // Aj pri skutočnom skoku nesmie numerická poloha vykresliť stred
+            // karosérie nižšie než jej kontaktnú polohu na vozovke.
+            minOf(sy(car.y), roadBodyY)
         }
 
         var layout = carArtist.layoutAtBody(layers, bodyX, bodyY, depth.ppm)
@@ -1441,7 +1504,7 @@ class GameRenderer(private val assets: GameAssets) {
 
         var rearWell = well(layout.rearWx, layout.rearWy)
         var frontWell = well(layout.frontWx, layout.frontWy)
-        if (car.grounded) {
+        if (visualContact) {
             // Karosériu posadíme podľa priemeru oboch kontaktov. Kolesá potom
             // ostávajú v otočených otvoroch blatníkov, namiesto samostatného
             // poskakovania podľa každej vzorky terénu.
@@ -1463,7 +1526,7 @@ class GameRenderer(private val assets: GameAssets) {
         val travelPx = car.suspTravel * depth.ppm * GameConfig.SUSP_VISUAL_GAIN
         fun onRoad(well: Offset, groundY: Float, radius: Float): Offset {
             // Vo vzduchu niet čo sledovať – pruženie sa roztiahne na doraz.
-            if (!car.grounded) return Offset(well.x, well.y + travelPx * AIR_DROOP)
+            if (!visualContact) return Offset(well.x, well.y + travelPx * AIR_DROOP)
             val target = groundY - radius
             return Offset(well.x, well.y + (target - well.y).coerceIn(-travelPx, travelPx))
         }
@@ -1531,7 +1594,8 @@ class GameRenderer(private val assets: GameAssets) {
     private fun resetTrails() {
         skidCount = 0
         skidHead = 0
-        lastSkidX = Float.NaN
+        lastFrontSkidX = Float.NaN
+        lastRearSkidX = Float.NaN
         backdropShift.fill(0f)
         lastBackdropX = Float.NaN
     }
@@ -1541,17 +1605,30 @@ class GameRenderer(private val assets: GameAssets) {
         val car = engine.car
         val slip = car.wheelSlip
         val moving = kotlin.math.abs(car.speed) > 0.35f
-        if (slip < 0.22f || (!moving && !car.wheelsLocked)) {
-            if (slip < 0.15f) lastSkidX = Float.NaN
+        if (slip < 0.22f || (!moving && !car.wheelsLocked && slip < 0.35f)) {
+            if (slip < 0.15f) {
+                lastFrontSkidX = Float.NaN
+                lastRearSkidX = Float.NaN
+            }
             return
         }
-        if (!lastSkidX.isNaN() && kotlin.math.abs(car.x - lastSkidX) < 0.4f) return
-        lastSkidX = car.x
-        skidX[skidHead] = car.x
-        skidPower[skidHead] = slip
-        skidStamp[skidHead] = engine.elapsed
-        skidHead = (skidHead + 1) % SKID_MAX
-        if (skidCount < SKID_MAX) skidCount++
+
+        fun stamp(slot: ComponentSlot) {
+            val front = slot == ComponentSlot.TIRE_FRONT
+            val wx = car.x + if (front) SedanSpec.wheelOffsetX else -SedanSpec.wheelOffsetX
+            val last = if (front) lastFrontSkidX else lastRearSkidX
+            if (!last.isNaN() && kotlin.math.abs(wx - last) < 0.32f) return
+            if (front) lastFrontSkidX = wx else lastRearSkidX = wx
+            skidX[skidHead] = wx
+            skidPower[skidHead] = slip
+            skidStamp[skidHead] = engine.elapsed
+            skidHead = (skidHead + 1) % SKID_MAX
+            if (skidCount < SKID_MAX) skidCount++
+        }
+
+        // Pri wheelspine značkuje iba hnaná náprava; pri zablokovaných brzdách obe.
+        if (car.wheelsLocked || car.drives(ComponentSlot.TIRE_REAR)) stamp(ComponentSlot.TIRE_REAR)
+        if (car.wheelsLocked || car.drives(ComponentSlot.TIRE_FRONT)) stamp(ComponentSlot.TIRE_FRONT)
     }
 
     /** Čierne pásy na vozovke – držia sa zeme a pomaly blednú. */
@@ -1906,6 +1983,18 @@ class GameRenderer(private val assets: GameAssets) {
         if (!engine.headlightsOn) return
 
         val car = engine.car
+        val headlightHealth = car.parts[ComponentSlot.HEADLIGHT]?.health ?: 0f
+        val damageFlicker = if (headlightHealth >= 0.72f) {
+            1f
+        } else {
+            // Poškodený kontakt nebliká pravidelne ako smerovka. V krátkych
+            // intervaloch náhodne zoslabne; čím horší diel, tým častejšie.
+            val tick = (engine.elapsed * 17f).toInt()
+            val roll = MathX.hash01(tick, 0x1A17)
+            val dropChance = ((0.72f - headlightHealth) * 0.95f).coerceIn(0f, 0.62f)
+            if (roll < dropChance) 0.06f
+            else (0.42f + headlightHealth * 0.75f).coerceIn(0.42f, 0.95f)
+        }
         val pose = carScreenPose(engine)
         with(carArtist) {
             drawHeadlightBeam(
@@ -1916,9 +2005,10 @@ class GameRenderer(private val assets: GameAssets) {
                 proj = depth,
                 layers = assets.sedan,
                 // Odtrhnutý remeň = nič nedobíja; svetlá to priznajú blikaním.
-                strength = (0.3f + night * 0.7f) * if (engine.hasEvent(RoadEvent.BELT_SNAPPED)) {
+                strength = (0.3f + night * 0.7f) * damageFlicker * if (engine.hasEvent(RoadEvent.BELT_SNAPPED)) {
                     0.45f + 0.55f * MathX.hash01((engine.elapsed * 11f).toInt(), 733)
                 } else 1f,
+                highBeam = engine.highBeamsOn,
                 braking = engine.brakeInput > 0.25f && car.speed >= 0f,
                 roadY = pose.midGround.y
             )

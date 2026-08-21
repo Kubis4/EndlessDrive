@@ -1,10 +1,12 @@
 package sk.kubis.endlessdrive.game.world
 
+import sk.kubis.endlessdrive.core.GameConfig
 import sk.kubis.endlessdrive.core.MathX
 import sk.kubis.endlessdrive.domain.model.BiomeType
 import sk.kubis.endlessdrive.domain.model.BranchStyle
 import sk.kubis.endlessdrive.domain.model.BuildingType
 import sk.kubis.endlessdrive.domain.model.ItemStack
+import sk.kubis.endlessdrive.domain.model.FuelKind
 import sk.kubis.endlessdrive.domain.model.RoadPaving
 import sk.kubis.endlessdrive.domain.model.RoadFeature
 import sk.kubis.endlessdrive.domain.model.RoadSurface
@@ -15,13 +17,18 @@ data class WorldBuilding(
     val localX: Float,
     val loot: MutableList<ItemStack> = mutableListOf(),
     /** Zásoba v stojane – len benzínová stanica. */
+    /** Benzín v stojane. */
     var pumpFuelL: Float = 0f,
+    /** Diesel má vlastnú hadicu a vlastnú zásobu. */
+    var pumpDieselL: Float = 0f,
     /** Čistota paliva v stojane. */
     var pumpPurity: Float = 1f,
+    /** Druh paliva označený na stojane. */
+    var pumpFuelKind: FuelKind = FuelKind.PETROL,
     /** Depo na míľniku – vždy stojí za zastavenie. */
     val landmark: Boolean = false
 ) {
-    val looted: Boolean get() = loot.isEmpty() && pumpFuelL <= 0.05f
+    val looted: Boolean get() = loot.isEmpty() && pumpFuelL <= 0.05f && pumpDieselL <= 0.05f
 }
 
 /**
@@ -87,6 +94,15 @@ data class BranchChoice(
     val hint: String get() = style.hint
 }
 
+/** Prostredie v konkrétnom bode cesty; [amount] 0..1 mieša [from] do [to]. */
+data class BiomeBlend(
+    val from: BiomeType,
+    val to: BiomeType,
+    val amount: Float
+) {
+    val dominant: BiomeType get() = if (amount < 0.5f) from else to
+}
+
 /**
  * Úsek cesty medzi križovatkami. Skladá sa z [RoadSection] – rovinky, kopce,
  * serpentíny, rozbitá cesta a mosty. Výška vychádza z [TerrainProfile],
@@ -110,6 +126,20 @@ class RoadSegment(
 
     val biome: BiomeType get() = style.biome
     val endWorldX: Float get() = worldOrigin + length
+    val nextStyle: BranchStyle? get() = choices.firstOrNull()?.style
+    val transitionLength: Float
+        get() = MathX.lerp(
+            GameConfig.BIOME_TRANSITION_MIN,
+            GameConfig.BIOME_TRANSITION_MAX,
+            MathX.hash01(seed.toInt(), TRANSITION_SALT)
+        ).coerceAtMost(length * 0.72f)
+    val transitionStartWorldX: Float get() = endWorldX - transitionLength
+
+    fun biomeBlendAtWorld(worldX: Float): BiomeBlend {
+        val next = nextStyle ?: return BiomeBlend(biome, biome, 0f)
+        val amount = MathX.smoothstep(transitionStartWorldX, endWorldX, worldX)
+        return BiomeBlend(biome, next.biome, amount)
+    }
 
     /**
      * Hĺbka rokliny pod mostom (m). Pri 3.4 m sedela mostovka prakticky na
@@ -168,7 +198,7 @@ class RoadSegment(
      */
     fun groundAtWorld(worldX: Float): Float {
         val local = worldX - worldOrigin
-        val base = terrain.heightAt(worldX, style, challengeAtLocal(local))
+        val base = blendedTerrainHeight(worldX, challengeAtLocal(local))
         val sec = sectionAtLocal(local) ?: return base
         if (sec.feature != RoadFeature.BRIDGE || sec.length < 1f) return base
         return base - gorgeDepth * deckRamp(sec, local)
@@ -184,7 +214,7 @@ class RoadSegment(
     /** Vozovka – to, po čom jazdí auto. */
     fun heightAtWorld(worldX: Float): Float {
         val local = worldX - worldOrigin
-        val base = terrain.heightAt(worldX, style, challengeAtLocal(local))
+        val base = blendedTerrainHeight(worldX, challengeAtLocal(local))
         val sec = sectionAtLocal(local) ?: return base
         if (sec.feature != RoadFeature.BRIDGE || sec.length < 1f) return base
         // Mostovka je rovná lávka medzi koncami úseku.
@@ -203,12 +233,22 @@ class RoadSegment(
 
     // Konce mostovky musia sedieť presne na terén, inak vznikne schod.
     private fun deckStart(sec: RoadSection): Float =
-        terrain.heightAt(worldOrigin + sec.start, style, challengeAtLocal(sec.start))
+        blendedTerrainHeight(worldOrigin + sec.start, challengeAtLocal(sec.start))
 
     private fun deckEnd(sec: RoadSection): Float =
-        terrain.heightAt(worldOrigin + sec.end, style, challengeAtLocal(sec.end))
+        blendedTerrainHeight(worldOrigin + sec.end, challengeAtLocal(sec.end))
 
     fun heightAtLocal(localX: Float): Float = heightAtWorld(worldOrigin + localX)
+
+    /** Posledné kilometre regiónu už tvarujú kopce nasledujúcej oblasti. */
+    private fun blendedTerrainHeight(worldX: Float, challenge: Float): Float {
+        val from = terrain.heightAt(worldX, style, challenge)
+        val next = nextStyle ?: return from
+        val amount = biomeBlendAtWorld(worldX).amount
+        if (amount <= 0f) return from
+        val nextChallenge = MathX.lerp(challenge, RoadFeature.STRAIGHT.hillMul, amount)
+        return MathX.lerp(from, terrain.heightAt(worldX, next, nextChallenge), amount)
+    }
 
     fun slopeAtLocal(localX: Float): Float {
         val d = 0.55f
@@ -224,11 +264,25 @@ class RoadSegment(
         patches.firstOrNull { it.start > localX && it.start - localX <= within }
 
     /** Hrboľatosť pod autom = štýl vetvy + aktuálny úsek. */
-    fun bumpinessAtLocal(localX: Float): Float =
-        style.bumpiness + (sectionAtLocal(localX)?.feature?.roughness ?: 0f)
+    fun bumpinessAtLocal(localX: Float): Float {
+        val worldX = worldOrigin + localX
+        val next = nextStyle
+        val base = if (next == null) style.bumpiness else MathX.lerp(
+            style.bumpiness,
+            next.bumpiness,
+            biomeBlendAtWorld(worldX).amount
+        )
+        val sectionRoughness = sectionAtLocal(localX)?.feature?.roughness ?: 0f
+        // Každý nový región začína rovinkou. Poslednú lokálnu hrboľatosť
+        // preto pred švom stíšime, aby grip ani kamera na hranici neskočili.
+        val seam = MathX.smoothstep(length - SEAM_SMOOTHING, length, localX)
+        return base + sectionRoughness * (1f - seam)
+    }
 
     private companion object {
         const val TRANSITION = 26f
+        const val SEAM_SMOOTHING = 90f
         const val BRIDGE_RAMP = 12f
+        const val TRANSITION_SALT = 0x4B10
     }
 }

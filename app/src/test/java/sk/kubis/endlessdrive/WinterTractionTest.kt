@@ -74,4 +74,27 @@ class WinterTractionTest {
             share < 0.30f
         )
     }
+
+    @Test
+    fun winterTyresWearFasterOnARegularRoad() {
+        val dryRoad = carWith(ItemCatalog.TIRE_WINTER.id, ItemCatalog.TIRE_WINTER.id)
+        val snowRoad = carWith(ItemCatalog.TIRE_WINTER.id, ItemCatalog.TIRE_WINTER.id)
+        dryRoad.speed = 30f
+        snowRoad.speed = 30f
+        dryRoad.engineRunning = true
+        snowRoad.engineRunning = true
+
+        repeat(7_200) {
+            dryRoad.tickWear(1f / 60f, bumpMul = 0.15f, brake = 0f, winterRoad = false)
+            snowRoad.tickWear(1f / 60f, bumpMul = 0.15f, brake = 0f, winterRoad = true)
+        }
+
+        val dryHealth = dryRoad.parts[ComponentSlot.TIRE_FRONT]!!.health
+        val snowHealth = snowRoad.parts[ComponentSlot.TIRE_FRONT]!!.health
+        assertTrue(
+            "zimná guma na suchej ceste sa musí opotrebovať citeľne rýchlejšie " +
+                "($dryHealth oproti $snowHealth)",
+            dryHealth < snowHealth - 0.005f
+        )
+    }
 }

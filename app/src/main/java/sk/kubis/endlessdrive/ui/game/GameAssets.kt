@@ -24,14 +24,21 @@ class GameAssets(context: Context) {
     val sedan = SedanLayers(
         // Základ aj diely v rovnakom zmenšení – inak by si nesedeli mierkou.
         decodeBitmap(R.drawable.car_base_body, HALF),
-        BodyPartCatalog.specs.mapValues { (_, spec) -> decode(spec.res, HALF) },
+        BodyPartCatalog.specs.mapValues { (_, spec) ->
+            SedanLayers.splitPaintLayers(decodeBitmap(spec.res, HALF))
+        },
         BodyPartCatalog.variants.mapValues { (_, parts) ->
-            parts.mapValues { (_, res) -> decode(res, HALF) }
+            parts.mapValues { (_, res) ->
+                SedanLayers.splitPaintLayers(decodeBitmap(res, HALF))
+            }
         },
         // Kolesá v plnom rozlíšení – sú malé (256 px) a v paneli CAR veľké.
         // Zdrojové gumy nemajú rovnaký transparentný okraj; pred kreslením ich
         // preto zrovnáme na rovnaký priemer aj os otáčania.
-        WheelCatalog.all.associateWith { decodeWheel(it) }
+        WheelCatalog.all.associateWith { decodeWheel(it) },
+        // Iba kovová vrstva reťazí: kreslí sa nad ľubovoľnú namontovanú gumu,
+        // takže sport/off-road disk pod ňou vizuálne nezmizne.
+        decodeWheel(R.drawable.wheel_chains_overlay)
     )
 
     /**
@@ -293,6 +300,10 @@ object BackdropCatalog {
         BiomeType.WASTELAND to BackdropSpec(
             desert.first, desert.second, desert.third,
             tint = Color(0xFFD6CEC4), bakedSun = true
+        ),
+        BiomeType.ALPINE to BackdropSpec(
+            forestAlive.first, forestAlive.second, forestAlive.third,
+            tint = Color(0xFFC7D7DF)
         )
     )
 }
@@ -317,17 +328,20 @@ data class BiomeBackdrop(
  * Teraz je základ naozaj holá škrupina a každý plech je vlastná kresba, takže
  * hráč na aute vidí presne to, čo naň zatiaľ našiel.
  */
+data class PaintedSprite(val fixed: ImageBitmap, val paint: ImageBitmap)
+
 class SedanLayers(
     shellRaw: Bitmap,
-    private val partImages: Map<BodyPart, ImageBitmap>,
+    private val partImages: Map<BodyPart, PaintedSprite>,
     /** Kresby pre konkrétne kusy: id predmetu → diel → obrázok. */
-    private val variantImages: Map<String, Map<BodyPart, ImageBitmap>> = emptyMap(),
+    private val variantImages: Map<String, Map<BodyPart, PaintedSprite>> = emptyMap(),
     /** Kresby kolies podľa zdroja – vyberá sa z nich podľa namontovanej gumy. */
-    private val wheelImages: Map<Int, ImageBitmap> = emptyMap()
+    private val wheelImages: Map<Int, ImageBitmap> = emptyMap(),
+    private val chainOverlayImage: ImageBitmap? = null
 ) {
 
     /** Holá karoséria – to, s čím jazda začína. */
-    val stripped: ImageBitmap
+    val stripped: PaintedSprite
     val imageWidth: Int
     val imageHeight: Int
     val worldWidthM = 5.6f
@@ -351,17 +365,20 @@ class SedanLayers(
         val cropped = cropToOpaque(shellRaw, pad = 0)
         imageWidth = cropped.width
         imageHeight = cropped.height
-        stripped = cropped.asImageBitmap()
+        stripped = splitPaintLayers(cropped)
 
         // Kužeľ svieti zo stredu svetlometu, nie z jeho rohu.
         fun centre(part: BodyPart): Pair<Float, Float> {
             val spec = BodyPartCatalog.specs.getValue(part)
             val img = partImages[part]
-            val w = (img?.width ?: 0) * 0.5f / imageWidth
-            val h = (img?.height ?: 0) * 0.5f / imageHeight
+            val w = (img?.fixed?.width ?: 0) * 0.5f / imageWidth
+            val h = (img?.fixed?.height ?: 0) * 0.5f / imageHeight
             return (spec.fx + w) to (spec.fy + h)
         }
-        centre(BodyPart.HEADLIGHT).let { headlightFx = it.first; headlightFy = it.second }
+        centre(BodyPart.HEADLIGHT).let {
+            headlightFx = it.first + 0.012f
+            headlightFy = it.second
+        }
         centre(BodyPart.TAILLIGHT).let { taillightFx = it.first; taillightFy = it.second }
     }
 
@@ -369,14 +386,53 @@ class SedanLayers(
      * Kresba dielu podľa toho, aký kus je namontovaný. [defId] rozhoduje len
      * vtedy, keď preň existuje vlastná predloha – inak sa použije základná.
      */
-    fun partImage(part: BodyPart, defId: String?): ImageBitmap? =
+    fun partImage(part: BodyPart, defId: String?): PaintedSprite? =
         variantImages[defId]?.get(part) ?: partImages[part]
 
     /** Kresba kolesa podľa namontovanej gumy; neznáma dostane štandardnú. */
-    fun wheelImage(tyreId: String?): ImageBitmap? =
-        wheelImages[WheelCatalog.resFor(tyreId)] ?: wheelImages[WheelCatalog.DEFAULT]
+    fun wheelImage(tyreId: String?): ImageBitmap? {
+        wheelImages[WheelCatalog.resFor(tyreId)]?.let { return it }
+        return wheelImages.values.firstOrNull()
+    }
+
+    fun chainOverlay(): ImageBitmap? = chainOverlayImage
 
     companion object {
+        /**
+         * Rozdelí sprite na nemenné sklá/plasty a lakovateľný plech.
+         * Zdrojové obrázky sú oranžové; maska vyberá iba ich žlto-oranžové
+         * pixely, takže nový lak nepremaľuje modré sklo ani čierne zrkadlo.
+         */
+        fun splitPaintLayers(src: Bitmap): PaintedSprite {
+            val w = src.width
+            val h = src.height
+            val original = IntArray(w * h)
+            src.getPixels(original, 0, w, 0, 0, w, h)
+            val fixedPx = original.copyOf()
+            val paintPx = IntArray(original.size)
+            for (i in original.indices) {
+                val c = original[i]
+                val a = (c ushr 24) and 0xFF
+                val r = (c ushr 16) and 0xFF
+                val g = (c ushr 8) and 0xFF
+                val b = c and 0xFF
+                val painted = a > 8 && r >= g && g > b + 24 && r > b + 68 && r > 105
+                if (painted) {
+                    fixedPx[i] = 0
+                    // Sivá maska drží svetlá a tiene pôvodného laku. Násobenie
+                    // vybranou farbou potom nevyrába oranžové medzivýsledky.
+                    val luma = ((r * 35 + g * 50 + b * 15) / 100 * 1.28f)
+                        .toInt().coerceIn(45, 255)
+                    paintPx[i] = (a shl 24) or (luma shl 16) or (luma shl 8) or luma
+                }
+            }
+            val fixed = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            val paint = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            fixed.setPixels(fixedPx, 0, w, 0, 0, w, h)
+            paint.setPixels(paintPx, 0, w, 0, 0, w, h)
+            return PaintedSprite(fixed.asImageBitmap(), paint.asImageBitmap())
+        }
+
         /**
          * Flood-fill z okrajov: čierne pozadie → alpha 0.
          * Vnútorné čierne (B-stĺpik, zrkadlo) ostane.

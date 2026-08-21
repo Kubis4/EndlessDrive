@@ -76,31 +76,40 @@ fun GameButton(
     compact: Boolean = false
 ) {
     val bg = when (style) {
-        BtnStyle.Primary -> Color(0xFF4F6B3A)
-        BtnStyle.Secondary -> GameColors.panelHigh
-        BtnStyle.Danger -> Color(0xFF4E2A26)
-        BtnStyle.Ghost -> Color.Transparent
+        BtnStyle.Primary -> listOf(Color(0xFF66884A), Color(0xFF405A31))
+        BtnStyle.Secondary -> listOf(Color(0xFF342B22), GameColors.panelHigh)
+        BtnStyle.Danger -> listOf(Color(0xFF68372F), Color(0xFF44231F))
+        BtnStyle.Ghost -> listOf(Color.Transparent, Color.Transparent)
     }
     val fg = when (style) {
         BtnStyle.Primary -> Color(0xFFF2FFE8)
         BtnStyle.Danger -> Color(0xFFF0A9A0)
         else -> GameColors.text
     }
+    val edge = when (style) {
+        BtnStyle.Primary -> Color(0xFF8FAE70)
+        BtnStyle.Secondary -> GameColors.outline
+        BtnStyle.Danger -> Color(0xFF895047)
+        BtnStyle.Ghost -> GameColors.outline
+    }
+    val shape = RoundedCornerShape(10.dp)
     Box(
         modifier
             .background(
-                if (enabled) bg else bg.copy(alpha = 0.4f),
-                RoundedCornerShape(8.dp)
+                Brush.verticalGradient(
+                    if (enabled) bg else bg.map { it.copy(alpha = 0.38f) }
+                ),
+                shape
             )
             .border(
                 width = 1.dp,
-                color = if (style == BtnStyle.Ghost) GameColors.outline else Color.Transparent,
-                shape = RoundedCornerShape(8.dp)
+                color = if (enabled) edge else edge.copy(alpha = 0.35f),
+                shape = shape
             )
             .clickable(enabled = enabled, onClick = onClick)
             .padding(
                 horizontal = if (compact) 10.dp else 16.dp,
-                vertical = if (compact) 6.dp else 10.dp
+                vertical = if (compact) 7.dp else 11.dp
             ),
         contentAlignment = Alignment.Center
     ) {

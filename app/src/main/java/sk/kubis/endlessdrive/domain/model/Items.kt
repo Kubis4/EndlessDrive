@@ -19,6 +19,8 @@ data class ItemDef(
     /** Ak ide o kvapalinu – typ a množstvo v jednej položke. */
     val fluid: FluidType? = null,
     val fluidAmount: Float = 0f,
+    /** Palivo v kanistri alebo palivo vyžadované motorom. */
+    val fuelKind: FuelKind? = null,
     /** Parametre komponentu (HP, spotreba…). */
     val powerHp: Float = 0f,
     val fuelUse: Float = 1f,
@@ -51,6 +53,9 @@ data class ItemDef(
     val dragAdd: Float = 0f,
     val baseValue: Int = 10
 ) {
+    /** Úložné upgrady sú trvalá kapacita, nie mechanické diely na opotrebenie. */
+    val hasDurability: Boolean get() = extraSlots <= 0
+
     /** Sloty, do ktorých sa dá namontovať (1 alebo 2 pre pneumatiky). */
     fun mountTargets(): List<ComponentSlot> = when {
         axleTire -> TIRE_SLOTS
@@ -64,7 +69,13 @@ data class ItemDef(
 object ItemCatalog {
     val FUEL_CAN = ItemDef(
         id = "fuel_can", name = "Petrol", rarity = ItemRarity.COMMON,
-        weight = 5f, fluid = FluidType.FUEL, fluidAmount = 15f, baseValue = 15
+        weight = 5f, fluid = FluidType.FUEL, fluidAmount = 15f,
+        fuelKind = FuelKind.PETROL, baseValue = 15
+    )
+    val DIESEL_CAN = ItemDef(
+        id = "diesel_can", name = "Diesel", rarity = ItemRarity.COMMON,
+        weight = 5f, fluid = FluidType.FUEL, fluidAmount = 15f,
+        fuelKind = FuelKind.DIESEL, baseValue = 15
     )
     val OIL_BOTTLE = ItemDef(
         id = "oil", name = "Engine oil", rarity = ItemRarity.COMMON,
@@ -134,35 +145,35 @@ object ItemCatalog {
     // Motory sa volajú podľa objemu a výkonu, nie A/B/C – z písmena sa nedalo
     // zistiť, či je nález lepší než to, čo je práve v aute.
     val ENGINE_A = ItemDef(
-        id = "engine_a", name = "1.4 petrol · 78 hp", rarity = ItemRarity.RARE,
-        weight = 120f, mountsTo = ComponentSlot.ENGINE, powerHp = 78f,
-        fuelUse = 1.15f, reliability = 0.7f, baseValue = 120
+        id = "engine_a", name = "1.4 petrol · 92 hp", rarity = ItemRarity.RARE,
+        weight = 120f, mountsTo = ComponentSlot.ENGINE, powerHp = 92f,
+        fuelUse = 1.15f, fuelKind = FuelKind.PETROL, reliability = 0.7f, baseValue = 120
     )
     /** Malý úsporný diesel – slabší, ale spotreba je najnižšia z malých. */
     val ENGINE_D = ItemDef(
-        id = "engine_d", name = "1.6 diesel · 88 hp", rarity = ItemRarity.RARE,
-        weight = 132f, mountsTo = ComponentSlot.ENGINE, powerHp = 88f,
-        fuelUse = 0.80f, reliability = 0.95f, baseValue = 175
+        id = "engine_d", name = "1.6 diesel · 110 hp", rarity = ItemRarity.RARE,
+        weight = 132f, mountsTo = ComponentSlot.ENGINE, powerHp = 110f,
+        fuelUse = 0.80f, fuelKind = FuelKind.DIESEL, reliability = 0.95f, baseValue = 175
     )
     val ENGINE_B = ItemDef(
-        id = "engine_b", name = "2.0 petrol · 95 hp", rarity = ItemRarity.VERY_RARE,
-        weight = 145f, mountsTo = ComponentSlot.ENGINE, powerHp = 95f,
-        fuelUse = 0.85f, reliability = 1.1f, baseValue = 220
+        id = "engine_b", name = "2.0 petrol · 135 hp", rarity = ItemRarity.VERY_RARE,
+        weight = 145f, mountsTo = ComponentSlot.ENGINE, powerHp = 135f,
+        fuelUse = 0.85f, fuelKind = FuelKind.PETROL, reliability = 1.1f, baseValue = 220
     )
     /** Ťažký vidlicový šesťvalec – sila za cenu spotreby aj hmotnosti. */
     val ENGINE_E = ItemDef(
-        id = "engine_e", name = "2.5 V6 · 112 hp", rarity = ItemRarity.VERY_RARE,
-        weight = 158f, mountsTo = ComponentSlot.ENGINE, powerHp = 112f,
-        fuelUse = 1.05f, reliability = 1.0f, baseValue = 290
+        id = "engine_e", name = "2.5 V6 · 180 hp", rarity = ItemRarity.VERY_RARE,
+        weight = 158f, mountsTo = ComponentSlot.ENGINE, powerHp = 180f,
+        fuelUse = 1.05f, fuelKind = FuelKind.PETROL, reliability = 1.0f, baseValue = 290
     )
     /**
      * Tretí stupeň – vydrží až do neskorej jazdy a nájde sa prakticky len
      * v depách. Bez neho by chase skončil, keď je auto raz vybavené.
      */
     val ENGINE_C = ItemDef(
-        id = "engine_c", name = "2.2 turbodiesel · 130 hp", rarity = ItemRarity.LEGENDARY,
-        weight = 160f, mountsTo = ComponentSlot.ENGINE, powerHp = 130f,
-        fuelUse = 0.78f, reliability = 1.35f, baseValue = 420
+        id = "engine_c", name = "2.2 turbodiesel · 230 hp", rarity = ItemRarity.LEGENDARY,
+        weight = 160f, mountsTo = ComponentSlot.ENGINE, powerHp = 230f,
+        fuelUse = 0.78f, fuelKind = FuelKind.DIESEL, reliability = 1.35f, baseValue = 420
     )
     val RADIATOR = ItemDef(
         id = "radiator", name = "Radiator", rarity = ItemRarity.UNCOMMON,
@@ -258,17 +269,17 @@ object ItemCatalog {
         extraSlots = 5, extraWeight = 40f, dragAdd = 0.35f, baseValue = 60
     )
 
-    val DOORS = ItemDef(
-        id = "doors", name = "Doors (pair)", rarity = ItemRarity.UNCOMMON,
-        weight = 22f, mountsTo = ComponentSlot.DOORS, reliability = 1f, baseValue = 35
+    val DOOR_FRONT = ItemDef(
+        id = "door_front", name = "Front door", rarity = ItemRarity.COMMON,
+        weight = 12f, mountsTo = ComponentSlot.DOOR_FRONT, reliability = 1f, baseValue = 22
+    )
+    val DOOR_REAR = ItemDef(
+        id = "door_rear", name = "Rear door", rarity = ItemRarity.COMMON,
+        weight = 11f, mountsTo = ComponentSlot.DOOR_REAR, reliability = 1f, baseValue = 20
     )
     val HOOD = ItemDef(
         id = "hood", name = "Hood", rarity = ItemRarity.COMMON,
         weight = 12f, mountsTo = ComponentSlot.HOOD, reliability = 1f, baseValue = 20
-    )
-    val WINDOWS = ItemDef(
-        id = "windows", name = "Windows", rarity = ItemRarity.UNCOMMON,
-        weight = 8f, mountsTo = ComponentSlot.WINDOWS, reliability = 1f, baseValue = 28
     )
     val FRONT_BUMPER = ItemDef(
         id = "bumper_f", name = "Front bumper", rarity = ItemRarity.COMMON,
@@ -304,7 +315,7 @@ object ItemCatalog {
     )
 
     val ALL = listOf(
-        FUEL_CAN, OIL_BOTTLE, COOLANT_BOTTLE, WATER,
+        FUEL_CAN, DIESEL_CAN, OIL_BOTTLE, COOLANT_BOTTLE, WATER,
         TIRE_POOR, TIRE, TIRE_SPORT, TIRE_OFFROAD, TIRE_WINTER, SNOW_CHAINS,
         BACKPACK, BOOT_CRATE, ROOF_RACK,
         BATTERY, BATTERY_GOOD,
@@ -315,7 +326,7 @@ object ItemCatalog {
         ALTERNATOR, STARTER,
         SUSPENSION, SUSPENSION_LOW, SUSPENSION_GOOD, SUSPENSION_LIFT,
         DRIVE_RWD, DRIVE_FWD, DRIVE_AWD,
-        DOORS, HOOD, WINDOWS, FRONT_BUMPER, REAR_BUMPER,
+        DOOR_FRONT, DOOR_REAR, HOOD, FRONT_BUMPER, REAR_BUMPER,
         TRUNK_LID, HEADLIGHT, TAILLIGHT, SEAT_FRONT, SEAT_REAR
     )
 
@@ -337,7 +348,11 @@ data class ItemStack(
      */
     var heldFluidL: Float = 0f,
     /** Čistota kvapaliny vo vnútri dielu (nezávislá od [purity] kanistra). */
-    var heldPurity: Float = 1f
+    var heldPurity: Float = 1f,
+    /** Podiel dieselu v palive, ktoré zostalo vo vymontovanej nádrži. */
+    var heldDieselFraction: Float = 0f,
+    /** Farba konkrétneho nájdeného plechu; -1 = starý/nefarbený predmet. */
+    var paintIndex: Int = -1
 ) {
     val def: ItemDef get() = ItemCatalog.byId(defId) ?: ItemCatalog.FUEL_CAN
     val grade: FluidGrade get() = FluidGrade.of(purity)
@@ -369,8 +384,28 @@ data class ItemStack(
     val stateLabel: String
         get() = if (def.fluid != null) {
             "${grade.displayName} · ${(purity * 100).toInt()} %"
+        } else if (!def.hasDurability) {
+            "Permanent upgrade"
         } else {
             "${condition.displayName} · ${(health * 100).toInt()} %"
+        }
+
+    /**
+     * Materiál získaný rozobratím predmetu. Hodnotnejšie a zachovalejšie
+     * súčiastky dajú viac, ale vždy výrazne menej než stojí ich výroba alebo
+     * upgrade — zošrotovať dobrý motor len kvôli okamžitému zisku sa neoplatí.
+     */
+    val scrapValue: Int
+        get() {
+            val units = count.coerceAtLeast(1)
+            val recovery = when {
+                def.fluid != null -> 0.06f
+                !def.hasDurability -> 0.20f
+                else -> 0.08f + 0.12f * health.coerceIn(0f, 1f)
+            }
+            return kotlin.math.round(def.baseValue * recovery * units)
+                .toInt()
+                .coerceAtLeast(units)
         }
 }
 

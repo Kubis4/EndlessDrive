@@ -67,7 +67,12 @@ fun AlertColumn(ui: GameUiState, modifier: Modifier = Modifier) {
         if (ui.oilL < 0.4f) add("LOW OIL" to GameColors.danger)
         if (ui.coolantL < 0.5f) add("LOW COOLANT" to GameColors.danger)
         if (ui.oilPurity < 0.55f) add("DIRTY OIL" to GameColors.warn)
-        if (ui.fuelPurity < 0.55f) add("BAD FUEL" to GameColors.warn)
+        if (ui.wrongFuelFraction >= 0.15f) add("WRONG FUEL" to GameColors.danger)
+        else if (ui.fuelPurity < 0.55f) add("BAD FUEL" to GameColors.warn)
+        // Slabé dobíjanie je porucha alternátora, nie prázdna batéria.
+        if (ui.engineRunning && ui.alternatorOutput in 0.005f..0.22f) {
+            add("ALTERNATOR WEAK" to GameColors.warn)
+        }
         if (ui.batteryCharge < 0.2f) add("BATTERY LOW" to GameColors.danger)
         if (ui.isNight && !ui.headlightsOn) add("NO HEADLIGHTS" to GameColors.danger)
         if (ui.overallHealth < 0.25f) add("CAR FALLING APART" to GameColors.danger)
@@ -230,7 +235,17 @@ fun SideIcons(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconToggleButton("☀", ui.headlightsOn, onToggleLights, label = "Headlights")
+        AutomotiveIconToggleButton(
+            if (ui.highBeamsOn) AutomotiveIcon.HIGH_BEAM else AutomotiveIcon.LOW_BEAM,
+            ui.headlightsOn,
+            onToggleLights,
+            activeColor = if (ui.highBeamsOn) Color(0xFF4D8DFF) else Color(0xFF45C96B),
+            label = when {
+                !ui.headlightsOn -> "Switch on low beams"
+                !ui.highBeamsOn -> "Switch on high beams"
+                else -> "Switch headlights off"
+            }
+        )
         IconToggleButton(if (ui.paused) "▶" else "❚❚", ui.paused, onTogglePause, label = "Pause")
         IconToggleButton("⏱", showFps, onToggleFps, label = "FPS")
     }

@@ -62,7 +62,7 @@ object BodyPartCatalog {
      * len vtedy, keď sa vymení samotná predloha – nie pri ladení niečoho iného.
      */
     val specs: Map<BodyPart, BodyPartSpec> = mapOf(
-        BodyPart.REAR_SEAT to at(R.drawable.car_seat_rear, 450, 85),
+        BodyPart.REAR_SEAT to at(R.drawable.car_seat_rear, 430, 120),
         BodyPart.FRONT_SEAT to at(R.drawable.car_seat_front, 750, 85),
         BodyPart.TRUNK to at(R.drawable.car_trunk, -15, 120),
         BodyPart.HOOD to at(R.drawable.car_hood, 1120, 153),
@@ -77,8 +77,8 @@ object BodyPartCatalog {
 
     /** Čo na aute pribudne, keď je slot obsadený. */
     fun partsOf(slot: ComponentSlot): List<BodyPart> = when (slot) {
-        // Dvere sa nachádzajú aj montujú v páre – jeden diel, dva plechy.
-        ComponentSlot.DOORS -> listOf(BodyPart.DOOR_REAR, BodyPart.DOOR_FRONT)
+        ComponentSlot.DOOR_FRONT -> listOf(BodyPart.DOOR_FRONT)
+        ComponentSlot.DOOR_REAR -> listOf(BodyPart.DOOR_REAR)
         ComponentSlot.SEAT_FRONT -> listOf(BodyPart.FRONT_SEAT)
         ComponentSlot.SEAT_REAR -> listOf(BodyPart.REAR_SEAT)
         ComponentSlot.HOOD -> listOf(BodyPart.HOOD)
@@ -93,7 +93,8 @@ object BodyPartCatalog {
 
     /** Slot, ktorý daný diel zobrazuje. */
     fun slotOf(part: BodyPart): ComponentSlot = when (part) {
-        BodyPart.DOOR_REAR, BodyPart.DOOR_FRONT -> ComponentSlot.DOORS
+        BodyPart.DOOR_FRONT -> ComponentSlot.DOOR_FRONT
+        BodyPart.DOOR_REAR -> ComponentSlot.DOOR_REAR
         BodyPart.FRONT_SEAT -> ComponentSlot.SEAT_FRONT
         BodyPart.REAR_SEAT -> ComponentSlot.SEAT_REAR
         BodyPart.HOOD -> ComponentSlot.HOOD

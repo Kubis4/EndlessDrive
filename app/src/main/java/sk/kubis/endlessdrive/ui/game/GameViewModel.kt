@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import sk.kubis.endlessdrive.core.MathX
 import sk.kubis.endlessdrive.domain.model.ComponentSlot
+import sk.kubis.endlessdrive.domain.model.FluidType
+import sk.kubis.endlessdrive.domain.model.FuelKind
 import sk.kubis.endlessdrive.domain.model.GamePhase
 import sk.kubis.endlessdrive.domain.repository.PlayerRepository
 import sk.kubis.endlessdrive.game.GameEngine
@@ -208,6 +210,8 @@ class GameViewModel(
             oilCapacityL = e.car.oilCapacity,
             coolantCapacityL = e.car.coolantCapacity,
             fuelPurity = e.car.fuelPurity,
+            fuelDieselFraction = e.car.fuelDieselFraction,
+            wrongFuelFraction = e.car.wrongFuelFraction,
             oilPurity = e.car.oilPurity,
             coolantPurity = e.car.coolantPurity,
             roadFeature = e.currentFeature,
@@ -228,16 +232,20 @@ class GameViewModel(
             temperature = e.car.temperature,
             speedKmh = e.car.speedKmh,
             distanceKm = e.distanceKm,
+            scrap = e.scrap,
             overallHealth = e.car.overallHealth,
             batteryCharge = e.car.batteryCharge,
+            alternatorOutput = e.car.alternatorOutput,
+            batteryChargeCeiling = e.car.batteryChargeCeiling,
             engineRunning = e.car.engineRunning,
             headlightsOn = e.headlightsOn,
+            highBeamsOn = e.highBeamsOn,
             isNight = e.isNight,
             clock = e.clock,
             hasNearbyBuilding = e.buildingNear() != null,
             canRest = e.canRest,
             exploring = e.phase == GamePhase.EXPLORING && e.activeBuilding != null,
-            pumpFuelL = e.activeBuilding?.pumpFuelL ?: 0f,
+            pumpFuelL = e.activeBuilding?.let { it.pumpFuelL + it.pumpDieselL } ?: 0f,
             paused = pausedByUser,
             fps = fps,
             endReason = e.endReason,
@@ -348,6 +356,14 @@ class GameViewModel(
         if (engine.discardBootItem(i)) bumpBag() else bump()
     }
 
+    fun scrapItem(i: Int) {
+        if (engine.scrapInventoryItem(i)) bumpBag() else bump()
+    }
+
+    fun scrapBootItem(i: Int) {
+        if (engine.scrapBootItem(i)) bumpBag() else bump()
+    }
+
     fun stowInBoot(i: Int) {
         if (engine.stowInBoot(i)) bumpBag() else bump()
     }
@@ -367,7 +383,21 @@ class GameViewModel(
     }
 
     fun repair(slot: ComponentSlot) {
+        if (!debugOptions.repairControls) return
         engine.repairSlot(slot)
+        bumpBag()
+    }
+
+    fun repairWithScrap(slot: ComponentSlot) {
+        if (engine.repairWithScrap(slot)) bumpBag() else bump()
+    }
+
+    fun upgradeWithScrap(slot: ComponentSlot) {
+        if (engine.upgradeWithScrap(slot)) bumpBag() else bump()
+    }
+
+    fun drainFluid(fluid: FluidType, litres: Float? = null) {
+        engine.drainFluid(fluid, litres)
         bumpBag()
     }
 
@@ -381,8 +411,8 @@ class GameViewModel(
         bumpBag()
     }
 
-    fun refuelFromPump() {
-        engine.refuelFromPump()
+    fun refuelFromPump(kind: FuelKind = FuelKind.PETROL) {
+        engine.refuelFromPump(kind)
         bumpBag()
     }
 

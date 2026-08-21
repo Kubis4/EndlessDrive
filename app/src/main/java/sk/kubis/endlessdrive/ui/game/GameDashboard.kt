@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -25,6 +26,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -39,7 +41,6 @@ import sk.kubis.endlessdrive.domain.model.GamePhase
 import sk.kubis.endlessdrive.ui.theme.BtnStyle
 import sk.kubis.endlessdrive.ui.theme.GameButton
 import sk.kubis.endlessdrive.ui.theme.GameColors
-import sk.kubis.endlessdrive.ui.theme.IconToggleButton
 import sk.kubis.endlessdrive.ui.theme.Space
 import sk.kubis.endlessdrive.ui.theme.Type
 import androidx.compose.ui.graphics.Shadow
@@ -56,7 +57,7 @@ private val OnSceneText = TextStyle(
 )
 
 /** Koniec stupnice tachometra (km/h) – nad MAX_SPEED s rezervou. */
-private const val SPEEDO_MAX = 140f
+private const val SPEEDO_MAX = 180f
 
 /**
  * Palubná doska cez spodok obrazovky. Nahrádza tabuľku prúžkov v rohu –
@@ -76,20 +77,23 @@ fun Dashboard(
     onLeave: () -> Unit,
     onDrive: () -> Unit,
     onRest: () -> Unit,
-    onStopDriving: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Bez podkladu – budíky a kontrolky ležia priamo na scéne. Tmavý blok cez
     // spodok obrazovky ukrajoval z kreslenej kulisy, ktorá je na ňom to pekné.
     val driving = ui.phase == GamePhase.DRIVING
     Row(
-        modifier.padding(start = Space.l, end = Space.l, top = Space.xs, bottom = Space.s),
+        modifier
+            .fillMaxWidth()
+            .padding(start = Space.l, end = Space.l, top = Space.xs, bottom = Space.s),
         // Za jazdy je obsah len budíky + ručná brzda, takže sa dá vycentrovať.
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Space.l, Alignment.CenterHorizontally)
     ) {
         // --- Budíky, pod nimi kontrolky -----------------------------------
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            val diesel = ui.fuelDieselFraction.coerceIn(0f, 1f)
+            val coolantWater = (1f - ui.coolantPurity).coerceIn(0f, 1f)
             Row(
                 horizontalArrangement = Arrangement.spacedBy(Space.m),
                 verticalAlignment = Alignment.Bottom
@@ -98,7 +102,11 @@ fun Dashboard(
                     label = "TEMP",
                     ratio = ((ui.temperature - 40f) / 100f).coerceIn(0f, 1f),
                     value = "${ui.temperature.toInt()}°",
-                    redFrom = (GameConfig.OVERHEAT_THRESHOLD - 40f) / 100f
+                    redFrom = (GameConfig.OVERHEAT_THRESHOLD - 40f) / 100f,
+                    mixRatio = coolantWater,
+                    mixBaseColor = GameColors.ok,
+                    mixColor = GameColors.info,
+                    mixLabel = "C ${(ui.coolantPurity * 100f).toInt()} · W ${(coolantWater * 100f).toInt()}"
                 )
                 // Tachometer je najväčší – tak to má auto aj tak sa to číta.
                 Gauge(
@@ -115,7 +123,11 @@ fun Dashboard(
                     ratio = (ui.fuelL / ui.fuelCapacityL.coerceAtLeast(1f)).coerceIn(0f, 1f),
                     value = "${ui.fuelL.toInt()} L",
                     redFrom = 0f,
-                    redTo = 0.15f
+                    redTo = 0.15f,
+                    mixRatio = diesel,
+                    mixBaseColor = Color(0xFFE1A84F),
+                    mixColor = GameColors.info,
+                    mixLabel = "P ${((1f - diesel) * 100f).toInt()} · D ${(diesel * 100f).toInt()}"
                 )
             }
             Spacer(Modifier.height(Space.xs))
@@ -123,15 +135,7 @@ fun Dashboard(
         }
 
         // --- Ovládanie ----------------------------------------------------
-        if (driving) {
-            // Ručná brzda ako ikona – patrí k prístrojovke a nemá kričať.
-            IconToggleButton(
-                glyph = "🅿",
-                active = false,
-                onClick = onStopDriving,
-                label = "Parking brake"
-            )
-        } else {
+        if (!driving) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(Space.s),
                 verticalAlignment = Alignment.CenterVertically
@@ -185,6 +189,12 @@ fun TripBadge(ui: GameUiState, showFps: Boolean, modifier: Modifier = Modifier) 
                 modifier = Modifier.padding(bottom = 6.dp)
             )
         }
+        Text(
+            "${ui.scrap} SCRAP",
+            color = GameColors.accent,
+            fontSize = Type.label,
+            fontWeight = FontWeight.Bold
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
             Text(
                 (if (ui.isNight) "☾ " else "☀ ") + ui.clock,
@@ -228,7 +238,12 @@ private fun Gauge(
     // Nie „size“ – to by v Canvas zatienilo DrawScope.size.
     diameter: androidx.compose.ui.unit.Dp = 54.dp,
     valueSize: androidx.compose.ui.unit.TextUnit = Type.body,
-    accent: Color = GameColors.accent
+    accent: Color = GameColors.accent,
+    /** Druhá zložka zmesi (diesel v palive, voda v chladiacej zmesi). */
+    mixRatio: Float? = null,
+    mixBaseColor: Color = GameColors.ok,
+    mixColor: Color = GameColors.info,
+    mixLabel: String? = null
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.size(diameter), contentAlignment = Alignment.Center) {
@@ -309,6 +324,36 @@ private fun Gauge(
             letterSpacing = 0.8.sp,
             style = OnSceneText
         )
+        if (mixRatio != null && mixLabel != null) {
+            val second = mixRatio.coerceIn(0f, 1f)
+            Row(
+                Modifier
+                    .width(diameter * 0.78f)
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(2.dp))
+            ) {
+                Box(
+                    Modifier
+                        .weight((1f - second).coerceAtLeast(0.001f))
+                        .fillMaxHeight()
+                        .background(mixBaseColor)
+                )
+                Box(
+                    Modifier
+                        .weight(second.coerceAtLeast(0.001f))
+                        .fillMaxHeight()
+                        .background(mixColor)
+                )
+            }
+            Text(
+                mixLabel,
+                color = GameColors.text.copy(alpha = 0.82f),
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.2.sp,
+                style = OnSceneText
+            )
+        }
     }
 }
 
@@ -325,7 +370,7 @@ private fun TellTales(ui: GameUiState) {
 
     Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
         Lamp(
-            glyph = "OIL",
+            icon = AutomotiveIcon.OIL,
             // Málo oleja svieti načerveno, špinavý oranžovo – iná porucha, iná farba.
             state = when {
                 oilRatio < 0.25f -> LampState.Alarm
@@ -334,7 +379,7 @@ private fun TellTales(ui: GameUiState) {
             }
         )
         Lamp(
-            glyph = "TEMP",
+            icon = AutomotiveIcon.TEMPERATURE,
             state = when {
                 ui.temperature > GameConfig.OVERHEAT_THRESHOLD -> LampState.Alarm
                 ui.temperature > GameConfig.OVERHEAT_THRESHOLD - 12f -> LampState.Warn
@@ -342,7 +387,7 @@ private fun TellTales(ui: GameUiState) {
             }
         )
         Lamp(
-            glyph = "BAT",
+            icon = AutomotiveIcon.BATTERY,
             state = when {
                 ui.batteryCharge < 0.2f -> LampState.Alarm
                 ui.batteryCharge < 0.4f -> LampState.Warn
@@ -350,7 +395,7 @@ private fun TellTales(ui: GameUiState) {
             }
         )
         Lamp(
-            glyph = "ENG",
+            icon = AutomotiveIcon.ENGINE,
             state = when {
                 // Aktívne opotrebenie bliká – motor sa práve teraz ničí.
                 ui.wearWarning != null -> LampState.Alarm
@@ -360,7 +405,7 @@ private fun TellTales(ui: GameUiState) {
             }
         )
         Lamp(
-            glyph = "COOL",
+            icon = AutomotiveIcon.COOLANT,
             state = when {
                 coolRatio < 0.2f -> LampState.Alarm
                 coolRatio < 0.4f || ui.coolantPurity < 0.5f -> LampState.Warn
@@ -369,17 +414,22 @@ private fun TellTales(ui: GameUiState) {
         )
         // Gumy a brzdy nemajú kvapalinu ani budík – bez kontrolky by sa hráč
         // o ich stave dozvedel až v paneli auta.
-        PartLamp("TYRE", ui, "TYRES")
-        PartLamp("BRK", ui, "BRK")
-        Lamp(glyph = "LGT", state = if (ui.headlightsOn) LampState.On else LampState.Off)
+        PartLamp(AutomotiveIcon.TYRE, ui, "TYRES")
+        PartLamp(AutomotiveIcon.BRAKE, ui, "BRK")
+        Lamp(
+            icon = if (ui.highBeamsOn) AutomotiveIcon.HIGH_BEAM else AutomotiveIcon.LOW_BEAM,
+            state = if (ui.headlightsOn) LampState.On else LampState.Off,
+            // Reálne kontrolky: stretávacie zelené, diaľkové modré.
+            onColor = if (ui.highBeamsOn) Color(0xFF4D8DFF) else Color(0xFF45C96B)
+        )
     }
 }
 
 @Composable
-private fun PartLamp(glyph: String, ui: GameUiState, tag: String) {
+private fun PartLamp(icon: AutomotiveIcon, ui: GameUiState, tag: String) {
     val part = ui.parts.firstOrNull { it.tag == tag }
     Lamp(
-        glyph = glyph,
+        icon = icon,
         state = when {
             part == null -> LampState.Off
             !part.fitted -> LampState.Alarm
@@ -396,7 +446,11 @@ private fun PartLamp(glyph: String, ui: GameUiState, tag: String) {
 private enum class LampState { Off, On, Warn, Alarm }
 
 @Composable
-private fun Lamp(glyph: String, state: LampState) {
+private fun Lamp(
+    icon: AutomotiveIcon,
+    state: LampState,
+    onColor: Color = GameColors.info
+) {
     val pulse by rememberInfiniteTransition(label = "lamp").animateFloat(
         initialValue = 0.45f,
         targetValue = 1f,
@@ -407,7 +461,7 @@ private fun Lamp(glyph: String, state: LampState) {
         // Zhasnutá kontrolka musí ostať čitateľná aj na svetlej oblohe aj na
         // tmavej hline – preto nie priehľadná, ale tlmená svetlá.
         LampState.Off -> GameColors.text.copy(alpha = 0.40f)
-        LampState.On -> GameColors.info
+        LampState.On -> onColor
         LampState.Warn -> GameColors.warn
         // Len skutočná porucha bliká – inak by prístrojovka blikala stále.
         LampState.Alarm -> GameColors.danger.copy(alpha = pulse)
@@ -424,13 +478,6 @@ private fun Lamp(glyph: String, state: LampState) {
             .border(1.dp, color.copy(alpha = if (state == LampState.Off) 0.55f else 1f), RoundedCornerShape(6.dp)),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            glyph,
-            color = color,
-            fontSize = Type.micro,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 0.4.sp,
-            style = OnSceneText
-        )
+        AutomotiveIconView(icon, color, Modifier.size(16.dp))
     }
 }

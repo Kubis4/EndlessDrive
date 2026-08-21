@@ -6,6 +6,7 @@ import sk.kubis.endlessdrive.core.SeededRandom
 import sk.kubis.endlessdrive.domain.model.BranchStyle
 import sk.kubis.endlessdrive.domain.model.BuildingType
 import sk.kubis.endlessdrive.domain.model.FluidType
+import sk.kubis.endlessdrive.domain.model.FuelKind
 import sk.kubis.endlessdrive.game.world.LootGenerator
 
 class GasStationLootTest {
@@ -17,6 +18,7 @@ class GasStationLootTest {
      */
     @Test
     fun everyGasStationCarriesFuel() {
+        val fuelKinds = mutableSetOf<FuelKind>()
         for (seed in 1L..400L) {
             val rng = SeededRandom(seed)
             val loot = LootGenerator.generate(
@@ -30,6 +32,8 @@ class GasStationLootTest {
                     loot.joinToString { it.def.name },
                 loot.any { it.def.fluid == FluidType.FUEL }
             )
+            loot.mapNotNullTo(fuelKinds) { it.def.fuelKind }
         }
+        assertTrue("v loote musí byť benzín aj diesel, bolo: $fuelKinds", fuelKinds.containsAll(FuelKind.entries))
     }
 }

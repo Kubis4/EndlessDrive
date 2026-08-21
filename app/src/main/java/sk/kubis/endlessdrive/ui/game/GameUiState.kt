@@ -24,6 +24,10 @@ data class GameUiState(
     val coolantCapacityL: Float = 6f,
     /** Čistota kvapalín v nádržiach (1 = čistá). */
     val fuelPurity: Float = 1f,
+    /** Zloženie nádrže: 0 = benzín, 1 = diesel; medzi tým je reálna zmes. */
+    val fuelDieselFraction: Float = 0f,
+    /** Podiel nesprávneho paliva vzhľadom na namontovaný motor. */
+    val wrongFuelFraction: Float = 0f,
     val oilPurity: Float = 1f,
     val coolantPurity: Float = 1f,
     val roadFeature: RoadFeature = RoadFeature.STRAIGHT,
@@ -46,10 +50,16 @@ data class GameUiState(
     val temperature: Float = 0f,
     val speedKmh: Float = 0f,
     val distanceKm: Float = 0f,
+    /** Materiál zo zošrotovaných predmetov; viditeľný stále pri vzdialenosti. */
+    val scrap: Int = 0,
     val overallHealth: Float = 0f,
     val batteryCharge: Float = 0f,
+    /** Výkon alternátora a maximum, na ktorom pri ňom vie batéria zostať. */
+    val alternatorOutput: Float = 0f,
+    val batteryChargeCeiling: Float = 0f,
     val engineRunning: Boolean = false,
     val headlightsOn: Boolean = false,
+    val highBeamsOn: Boolean = false,
     val isNight: Boolean = false,
     val clock: String = "08:00",
     val hasNearbyBuilding: Boolean = false,

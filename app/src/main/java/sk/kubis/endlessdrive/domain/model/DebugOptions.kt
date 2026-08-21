@@ -15,11 +15,13 @@ data class DebugOptions(
     /** Plné a čisté kvapaliny, nabitá batéria. */
     val fullFluids: Boolean = false,
     /** Jazda na pripravenej trati s prekážkami namiesto náhodnej cesty. */
-    val testTrack: Boolean = false
+    val testTrack: Boolean = false,
+    /** Zobrazí ladiace tlačidlo REPAIR v paneli auta. */
+    val repairControls: Boolean = false
 ) {
     /** true = aspoň jeden prepínač je zapnutý; menu to hlási hráčovi. */
     val any: Boolean
-        get() = allComponents || fullUpgrades || fullBody || fullFluids || testTrack
+        get() = allComponents || fullUpgrades || fullBody || fullFluids || testTrack || repairControls
 
     companion object {
         val OFF = DebugOptions()

@@ -3,10 +3,16 @@ package sk.kubis.endlessdrive.domain.model
 enum class ItemRarity { COMMON, UNCOMMON, RARE, VERY_RARE, LEGENDARY }
 
 enum class FluidType(val displayName: String, val unit: String) {
-    FUEL("Petrol", "L"),
+    FUEL("Fuel", "L"),
     OIL("Engine oil", "L"),
     COOLANT("Coolant", "L"),
     BRAKE_FLUID("Brake fluid", "L")
+}
+
+/** Druh paliva. Nádrž môže obsahovať zmes, motor však vyžaduje jeden typ. */
+enum class FuelKind(val displayName: String) {
+    PETROL("Petrol"),
+    DIESEL("Diesel")
 }
 
 enum class ComponentSlot(val displayName: String, val group: String) {
@@ -21,9 +27,9 @@ enum class ComponentSlot(val displayName: String, val group: String) {
     TIRE_REAR("Rear tyre", "Wheels"),
     DRIVETRAIN("Drivetrain", "Chassis"),
     SUSPENSION("Suspension", "Chassis"),
-    DOORS("Doors", "Body"),
+    DOOR_FRONT("Front door", "Body"),
+    DOOR_REAR("Rear door", "Body"),
     HOOD("Hood", "Body"),
-    WINDOWS("Windows", "Body"),
     /** Sedadlá – vidno ich cez okná aj cez prázdne dverné otvory. */
     SEAT_FRONT("Front seat", "Interior"),
     SEAT_REAR("Rear seat", "Interior"),
@@ -132,10 +138,28 @@ enum class ComponentCondition(val displayName: String, val maxHealth: Float) {
     CRITICAL("Critical", 0.20f)
 }
 
+/** Lak karosérie a jednotlivých nájdených plechov. */
+enum class VehiclePaint(val displayName: String, val argb: Long) {
+    ORANGE("Amber", 0xFFFFA000),
+    RED("Crimson", 0xFFB3262E),
+    BLUE("Midnight blue", 0xFF285A9F),
+    CYAN("Turquoise", 0xFF168C91),
+    GREEN("Forest green", 0xFF39734C),
+    OLIVE("Olive", 0xFF77733B),
+    CREAM("Ivory", 0xFFE4D7B7),
+    SILVER("Silver", 0xFF9DA7AE),
+    CHARCOAL("Charcoal", 0xFF3D444B),
+    VIOLET("Violet", 0xFF6E4D8A);
+
+    companion object {
+        fun at(index: Int): VehiclePaint = entries[index.mod(entries.size)]
+    }
+}
+
 enum class BuildingType(val displayName: String) {
     HOUSE("House"),
     GARAGE("Garage"),
-    GAS_STATION("Petrol station"),
+    GAS_STATION("Fuel station"),
     AUTO_SHOP("Repair shop")
 }
 
@@ -153,7 +177,9 @@ enum class BiomeType(val displayName: String) {
     /** Púšť, do ktorej sa oprel vietor – vidieť je sotva na pár desiatok metrov. */
     SANDSTORM("Sandstorm"),
     /** Prachová stena nad mestom – v hnedej mrákave presvitajú domy. */
-    DUST_STORM("Dust storm");
+    DUST_STORM("Dust storm"),
+    /** Vysoké skalnaté pásmo; s nadmorskou výškou pribúda sneh. */
+    ALPINE("Snowy mountains");
 
     /** Suché biómy – iná paleta zeme aj iná vzdušná perspektíva. */
     val arid: Boolean
@@ -238,6 +264,11 @@ enum class BranchStyle(
         "Dust storm", "Somewhere in there was a town",
         BiomeType.DUST_STORM, 1.65f, 0.30f, 1.58f, 0.90f, 0.95f, 0.80f,
         accentArgb = 0xFFB08A4E, unlockDistance = 3600f, pickWeight = 0.60f
+    ),
+    ALPINE(
+        "Snowy mountains", "Rock, thin air and a white road",
+        BiomeType.ALPINE, 1.35f, 0.24f, 1.42f, 1.35f, 0.28f, 1.10f,
+        accentArgb = 0xFF8FB7CC, unlockDistance = 9000f, pickWeight = 0.75f
     );
 
     /** Piesok si vyberá daň – vetvy, kde je vidieť horšie a všetko drie. */
@@ -254,7 +285,7 @@ enum class RoadFeature(
     val hillMul: Float,
     /** Extra hrboľatosť (poškodzuje pneumatiky a spomaľuje). */
     val roughness: Float,
-    /** Strop rýchlosti v úseku (m/s), 0 = bez obmedzenia. */
+    /** Bezpečná rýchlosť pre opotrebenie v úseku (m/s), 0 = bez prahu. */
     val speedCap: Float
 ) {
     STRAIGHT("Straight", 0.45f, 0f, 0f),
@@ -293,9 +324,9 @@ enum class EndReason(val message: String) {
 val BODY_SLOTS = listOf(
     ComponentSlot.SEAT_FRONT,
     ComponentSlot.SEAT_REAR,
-    ComponentSlot.DOORS,
+    ComponentSlot.DOOR_FRONT,
+    ComponentSlot.DOOR_REAR,
     ComponentSlot.HOOD,
-    ComponentSlot.WINDOWS,
     ComponentSlot.TRUNK_LID,
     ComponentSlot.HEADLIGHT,
     ComponentSlot.TAILLIGHT,

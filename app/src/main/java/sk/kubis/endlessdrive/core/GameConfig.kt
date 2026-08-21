@@ -7,14 +7,20 @@ package sk.kubis.endlessdrive.core
 object GameConfig {
     const val FIXED_TIME_STEP = 1f / 60f
     const val MAX_FRAME_TIME = 0.25f
+    /** 0.25 s frame potrebuje 15 krokov po 1/60 s; čas sa pri nízkom FPS nesmie stratiť. */
+    const val MAX_FIXED_STEPS_PER_FRAME = 15
     const val TARGET_FPS = 60
     const val TARGET_FRAME_NANOS = 1_000_000_000L / TARGET_FPS
     const val FRAME_LOCK_TOLERANCE_NANOS = 2_000_000L
 
     // --- Segmenty / križovatky (dlhé cesty = veľké nádrže majú zmysel) ---
-    const val SEGMENT_LENGTH_MIN = 720f
-    const val SEGMENT_LENGTH_MAX = 980f
-    const val TUTORIAL_SEGMENT_LENGTH = 820f
+    /** Regióny sú dlhé; prostredie sa v nich stihne ustáliť aj plynulo zmeniť. */
+    const val SEGMENT_LENGTH_MIN = 5000f
+    const val SEGMENT_LENGTH_MAX = 7200f
+    const val TUTORIAL_SEGMENT_LENGTH = 3400f
+    /** Plynulé prelínanie dvoch susedných regiónov. */
+    const val BIOME_TRANSITION_MIN = 1600f
+    const val BIOME_TRANSITION_MAX = 3000f
     /** Prvá budova nie hneď za štartom. */
     const val BUILDING_MIN_GAP_FROM_START = 200f
     /** Väčší odstup – viac budov celkovo cez dlhšie segmenty, nie hustá osada. */
@@ -25,7 +31,7 @@ object GameConfig {
     const val BUILDING_INTERACT_RANGE = 7f
 
     // --- Jazda / fyzika auta (Hill Climb arcade) ---
-    const val MAX_SPEED = 26f
+    const val MAX_SPEED = 42f
     const val REVERSE_MAX_SPEED = 8f
     const val REVERSE_ACCEL = 6f
     /**
@@ -46,7 +52,7 @@ object GameConfig {
     const val BRAKE = 18f
     /** Valivý odpor (m/s²) – veľká fixná brzda pri nízkej rýchlosti. */
     const val COAST_DRAG = 1.15f
-    const val AERO_DRAG = 0.028f
+    const val AERO_DRAG = 0.014f
     const val STOP_SPEED = 1.0f
     /** Voľná výška stredu nad vozovkou pri stlačenom pružení. */
     const val CAR_RIDE_HEIGHT = 0.42f
@@ -54,18 +60,51 @@ object GameConfig {
     const val AIR_GRAVITY = 22f
     /** Normovaná hmotnosť – sily sú v „m/s² * mass“. */
     const val CAR_MASS = 1f
+    /** Holá samonosná karoséria; namontované diely a náklad sa pripočítavajú. */
+    const val VEHICLE_BASE_MASS_KG = 720f
+    /** Hmotnosť, pri ktorej ostáva pôvodné fyzikálne škálovanie 1.0. */
+    const val VEHICLE_REFERENCE_MASS_KG = 1000f
+    /** Holá karoséria je mierne ťažšia vpredu (podiel na zadnej náprave). */
+    const val VEHICLE_BASE_REAR_BIAS = 0.44f
+    /** Batoh leží pri predných sedadlách, kufor/nosič za zadnou nápravou. */
+    const val PACK_LOAD_REAR_BIAS = 0.38f
+    const val BOOT_LOAD_REAR_BIAS = 0.88f
     /** Zotrvačnosť náklonu. */
     const val PITCH_INERTIA = 2.4f
     /** Tvrdosť pruženia (na 1 m stlačenia) – mäkšie = viditeľný bob. */
     const val SUSP_SPRING = 52f
     /** Tlmenie pruženia. */
     const val SUSP_DAMPER = 7.5f
+    /** High-speed blow-off tlmiča: ostrý hrebeň nesmie vystreliť karosériu. */
+    const val SUSP_DAMPER_VELOCITY_LIMIT = 5.5f
+    /** Max sila jednej nápravy ako násobok celej statickej váhy auta. */
+    const val SUSP_AXLE_FORCE_LIMIT = 2.2f
+    /** Tvrdý kontakt nesmie premeniť sklon kopca na katapult karosérie. */
+    const val ROAD_CONTACT_MAX_UP_SPEED = 3.6f
+    /** Max zmena vertikálnej rýchlosti z jedného korekčného kontaktu pri 60 Hz. */
+    const val ROAD_CONTACT_MAX_VY_CORRECTION = 0.70f
+    /** Minimálna svetlá výška podlahy medzi nápravami na ostrých hrebeňoch. */
+    const val ROAD_CHASSIS_CLEARANCE = 0.12f
+    /**
+     * Jemný aerodynamický prítlak (m/s² na druhú mocninu rýchlosti).
+     * Pri 130 km/h pridá približne 4.2 m/s², takže malé vlny auto neodhodia,
+     * ale veľký hrebeň stále dovolí normálny skok.
+     */
+    const val HIGH_SPEED_DOWNFORCE_COEFF = 0.0032f
+    const val HIGH_SPEED_DOWNFORCE_MAX = 6.0f
+    /** Rozsah rozdielu sklonov medzi nápravami, ktorý označuje krátky ostrý crest. */
+    const val SHARP_CREST_SLOPE_DELTA_START = 0.08f
+    const val SHARP_CREST_SLOPE_DELTA_FULL = 0.28f
+    /** Koľko pružinovej špičky sa na ostrom creste absorbuje v pneumatike/tlmiči. */
+    const val SHARP_CREST_FORCE_RELIEF = 0.82f
     /** Max stlačenie pruženia (m). */
     const val SUSP_MAX_TRAVEL = 0.55f
     /** Vizuálne zosilnenie zdvihu pruženia (render). */
     const val SUSP_VISUAL_GAIN = 1.15f
     /** Ako silno pitch sleduje sklon (nižšie = viac voľného náklonu z váhy). */
     const val PITCH_SLOPE_TRACK = 3.2f
+    /** Dodatočné tlmenie náklonu pri diaľničnej rýchlosti. */
+    const val HIGH_SPEED_PITCH_DAMPING = 1.6f
     /** Náklon z plynu/brzdy na zemi (squat / dive). */
     const val GROUND_PITCH_TORQUE = 3.8f
     /** μ gúm pri grip=1.0 na čistom asfalte. */
@@ -79,7 +118,7 @@ object GameConfig {
     const val LANDING_IMPACT = 7f
     const val LANDING_WEAR = 0.04f
     /** Moment plynu/brzdy vo vzduchu (náklon). */
-    const val AIR_PITCH_TORQUE = 2.2f
+    const val AIR_PITCH_TORQUE = 0.75f
     /** Transfer hmotnosti pri akcelerácii (ovplyvní grip zadnej nápravy). */
     const val WEIGHT_TRANSFER = 0.22f
     /**
@@ -98,15 +137,7 @@ object GameConfig {
      * takže mierny prebytok momentu sa chytí; pretáčať začne až nad touto
      * hranicou. Bez toho sa 2WD auto pálilo na mieste a zožralo gumy.
      */
-    const val TRACTION_SLACK = 1.30f
-    /**
-     * Statické rozloženie váhy na zadnú nápravu podľa pohonu. FWD auto má
-     * motor nad hnanými kolesami – bez toho by predok neuniesol nič a auto
-     * by sa len pretáčalo.
-     */
-    const val REAR_BIAS_FWD = 0.32f
-    const val REAR_BIAS_RWD = 0.52f
-    const val REAR_BIAS_AWD = 0.46f
+    const val TRACTION_SLACK = 1.82f
     /**
      * Mäkká kontrola trakcie: keď kolesá preklzávajú, vodič uberie. Bez toho
      * sa 2WD auto točilo na mieste a za pár sto metrov zjedlo gumy.
@@ -119,10 +150,10 @@ object GameConfig {
      *
      * Guma je strop, ale nie úplný – silnejší motor si aj na klzkom nájde
      * o kúsok viac (nižší prevod, jemnejšie dávkovanie). Bez toho sa výkon
-     * nad grip iba zahodil: na zodratých gumách mal 78 hp motor presne tú
-     * istú rýchlosť ako 130 hp a auto sa na piesku nerozbehlo vôbec.
+     * nad grip iba zahodil: na zodratých gumách mal slabý motor presne tú
+     * istú rýchlosť ako silný a auto sa na piesku nerozbehlo vôbec.
      */
-    const val GRIP_OVERDRIVE = 0.20f
+    const val GRIP_OVERDRIVE = 0.32f
 
     // --- Zima ---
     /** Od akej vzdialenosti sa môže objaviť zasnežená vetva (m). */
@@ -161,6 +192,8 @@ object GameConfig {
     const val ENGINE_WEAR_OVERHEAT = 0.012f
     /** Opotrebenie motora zo znečisteného paliva (na plnú „vodu“, za sekundu). */
     const val ENGINE_WEAR_BAD_FUEL = 0.0030f
+    /** Nesprávny druh paliva ničí motor výrazne rýchlejšie než nečistoty. */
+    const val ENGINE_WEAR_WRONG_FUEL = 0.012f
     /** Opotrebenie motora z riedeného oleja. */
     const val ENGINE_WEAR_BAD_OIL = 0.0035f
     /**
@@ -195,6 +228,8 @@ object GameConfig {
     // --- Priebežné opotrebenie (za sekundu jazdy) ---
     /** Gumy: zodierajú sa rýchlosťou, preklzom a hrboľatosťou. */
     const val WEAR_TIRES = 0.00022f
+    /** Mäkká zimná zmes sa na teplej/suchej ceste zoderie rýchlejšie. */
+    const val WINTER_TIRE_DRY_WEAR_MULTIPLIER = 1.75f
     /** Brzdy: len keď sa brzdí. */
     const val WEAR_BRAKES = 0.00060f
     /** Pruženie: podľa hrbolatosti a dopadov. */
@@ -224,13 +259,14 @@ object GameConfig {
     const val HEADLIGHT_DRAIN_OFF = 0.007f
     /** Odber svetlami pri bežiacom motore (alternátor to väčšinou pokryje). */
     const val HEADLIGHT_DRAIN_ON = 0.004f
+    /** Diaľkové svetlá majú dva silnejšie okruhy a väčší odber. */
+    const val HIGH_BEAM_DRAIN_MULTIPLIER = 1.55f
     /** Nabíjanie alternátorom počas jazdy. */
     const val ALTERNATOR_CHARGE = 0.015f
+    /** Zapaľovanie, čerpadlá a palubná elektrika pri bežiacom motore. */
+    const val RUNNING_ELECTRICAL_DRAIN = 0.002f
     /** Pod touto hodnotou denného svetla treba svetlá (iba skutočná tma). */
     const val NIGHT_THRESHOLD = 0.22f
-    /** Bez svetiel v noci nevidíš – rýchlosť je zastropovaná. */
-    const val NIGHT_BLIND_SPEED = 7f
-
     // --- Benzínová pumpa ---
     const val PUMP_FUEL_MIN = 18f
     const val PUMP_FUEL_MAX = 70f

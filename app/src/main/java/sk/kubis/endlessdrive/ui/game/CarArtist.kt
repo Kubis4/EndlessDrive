@@ -4,7 +4,9 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -17,6 +19,7 @@ import sk.kubis.endlessdrive.core.GameConfig
 import sk.kubis.endlessdrive.core.MathX
 import sk.kubis.endlessdrive.domain.model.ComponentSlot
 import sk.kubis.endlessdrive.domain.model.SedanSpec
+import sk.kubis.endlessdrive.domain.model.VehiclePaint
 import sk.kubis.endlessdrive.game.DepthProjection
 import sk.kubis.endlessdrive.game.car.Car
 import kotlin.math.cos
@@ -84,6 +87,13 @@ class CarArtist {
                 tire?.health ?: 0.5f, accent, blur, tire?.defId,
                 layers.wheelImage(tire?.defId)
             )
+            if (car.hasChains) {
+                drawWheelScreen(
+                    rearWheelX, rearWheelY, rearSpinDeg, r,
+                    tire?.health ?: 0.5f, accent, blur, tire?.defId,
+                    layers.chainOverlay()
+                )
+            }
         }
         if (hasFrontTire) {
             val tire = car.parts[ComponentSlot.TIRE_FRONT]
@@ -93,6 +103,13 @@ class CarArtist {
                 tire?.health ?: 0.5f, accent, blur, tire?.defId,
                 layers.wheelImage(tire?.defId)
             )
+            if (car.hasChains) {
+                drawWheelScreen(
+                    frontWheelX, frontWheelY, frontSpinDeg, r,
+                    tire?.health ?: 0.5f, accent, blur, tire?.defId,
+                    layers.chainOverlay()
+                )
+            }
         }
     }
 
@@ -108,6 +125,7 @@ class CarArtist {
         proj: DepthProjection,
         layers: SedanLayers,
         strength: Float,
+        highBeam: Boolean,
         braking: Boolean,
         roadY: Float
     ) {
@@ -116,37 +134,49 @@ class CarArtist {
         // bodyX/Y = obrazovkový stred karosérie.
         val layout = spriteLayoutAtBody(layers, bodyX, bodyY, ppm)
         rotate(degrees = deg, pivot = Offset(bodyX, bodyY)) {
-            val hx = layout.originX + layers.headlightFx * layout.drawW
+            val hx = layout.originX + layers.headlightFx * layout.drawW + ppm * 0.08f
             val hy = layout.originY + layers.headlightFy * layout.drawH
             val tx = layout.originX + layers.taillightFx * layout.drawW
             val ty = layout.originY + layers.taillightFy * layout.drawH
-            // Dlhší a širší kužeľ: v noci je to jediný zdroj svetla, po ktorom sa
-            // dá jazdiť, takže musí naozaj osvetliť cestu pred autom.
-            val len = ppm * 19f
-
-            bodyPath.reset()
-            bodyPath.moveTo(hx, hy - ppm * 0.10f)
-            bodyPath.lineTo(hx + len, roadY - ppm * 3.4f)
-            bodyPath.lineTo(hx + len, roadY + ppm * 0.6f)
-            bodyPath.lineTo(hx, hy + ppm * 0.14f)
-            bodyPath.close()
-            drawPath(
-                bodyPath,
-                brush = Brush.horizontalGradient(
-                    colors = listOf(
-                        Color(0xFFFFF2C0).copy(alpha = 0.46f * strength),
-                        Color(0xFFFFF2C0).copy(alpha = 0.18f * strength),
-                        Color.Transparent
-                    ),
-                    startX = hx,
-                    endX = hx + len
+            // Dve vrstvy lúča: mäkký široký okraj a jasné stretávacie svetlo.
+            // Kužeľ smeruje mierne k vozovke, nie vysoko do oblohy.
+            fun cone(lenM: Float, upper: Float, lower: Float, alpha: Float) {
+                val len = ppm * lenM
+                bodyPath.reset()
+                bodyPath.moveTo(hx, hy - ppm * 0.07f)
+                bodyPath.lineTo(hx + len, hy + ppm * upper)
+                bodyPath.lineTo(hx + len, hy + ppm * lower)
+                bodyPath.lineTo(hx, hy + ppm * 0.12f)
+                bodyPath.close()
+                drawPath(
+                    bodyPath,
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color(0xFFFFF4CC).copy(alpha = alpha * strength),
+                            Color(0xFFFFEDB0).copy(alpha = alpha * 0.58f * strength),
+                            Color.Transparent
+                        ),
+                        startX = hx,
+                        endX = hx + len
+                    )
                 )
-            )
-            // Svetlo dopadajúce na vozovku – bez neho auto svieti „do vzduchu“.
+            }
+            if (highBeam) {
+                // Diaľkové: dlhší a užší kužeľ, ktorý svieti vyššie do diaľky.
+                cone(lenM = 39f, upper = -0.72f, lower = 1.02f, alpha = 0.27f)
+                cone(lenM = 31f, upper = -0.32f, lower = 0.50f, alpha = 0.58f)
+            } else {
+                // Stretávacie: kratší kužeľ s ostrým spádom k vozovke.
+                cone(lenM = 21f, upper = -0.08f, lower = 1.22f, alpha = 0.21f)
+                cone(lenM = 14f, upper = 0.12f, lower = 0.67f, alpha = 0.46f)
+            }
+
+            // Mäkký hotspot na asfalte drží svetlo pri povrchu aj na kopci.
+            val len = ppm * if (highBeam) 32f else 18f
             drawOval(
-                Color(0xFFFFF3C4).copy(alpha = 0.30f * strength),
-                topLeft = Offset(hx, roadY - ppm * 0.55f),
-                size = Size(len * 0.92f, ppm * 1.25f)
+                Color(0xFFFFF3C4).copy(alpha = (if (highBeam) 0.26f else 0.20f) * strength),
+                topLeft = Offset(hx + ppm * 1.5f, roadY - ppm * 0.38f),
+                size = Size(len * 0.88f, ppm * if (highBeam) 0.72f else 0.90f)
             )
             drawCircle(Color(0xFFFFF8DC).copy(alpha = 0.85f * strength), ppm * 0.14f, Offset(hx, hy))
             drawCircle(Color(0xFFFFEFA8).copy(alpha = 0.35f * strength), ppm * 0.34f, Offset(hx, hy))
@@ -170,9 +200,9 @@ class CarArtist {
         val rack = layers.partImage(BodyPart.ROOF_RACK, null) ?: return
         val k = layout.drawW / layers.imageWidth
         val x0 = layout.originX + spec.fx * layout.drawW
-        val x1 = x0 + rack.width * k
+        val x1 = x0 + rack.fixed.width * k
         // Bedne stoja na lište, nie na jej spodnej hrane s nožičkami.
-        val barY = layout.originY + spec.fy * layout.drawH + rack.height * k * 0.35f
+        val barY = layout.originY + spec.fy * layout.drawH + rack.fixed.height * k * 0.35f
 
         val crates = (1 + (fill * 3f).toInt()).coerceAtMost(4)
         val slotW = (x1 - x0) / crates
@@ -219,6 +249,22 @@ class CarArtist {
     fun wheelRadiusPx(layers: SedanLayers, ppm: Float): Float {
         val scale = (layers.worldWidthM * ppm) / layers.imageWidth
         return layers.wheelRadiusFx * layers.imageWidth * scale
+    }
+
+    /** Rovnaká poskladaná karoséria ako v jazde, prispôsobená panelu CAR. */
+    fun DrawScope.drawBodyPreview(
+        car: Car,
+        layers: SedanLayers,
+        originX: Float,
+        originY: Float,
+        drawW: Float,
+        drawH: Float
+    ) {
+        drawSpriteAssembly(
+            car,
+            layers,
+            SpriteLayout(originX, originY, drawW, drawH, 0f, 0f, 0f, 0f, layers.wheelRadiusFx * drawW)
+        )
     }
 
     /** Karoséria: vizuálny stred na [bodyPy]. */
@@ -297,36 +343,88 @@ class CarArtist {
         // Rovnaký pomer ako pri základe – diel si drží svoju veľkosť voči autu.
         val k = drawW / layers.imageWidth
 
-        fun blit(part: BodyPart, defId: String?) {
+        fun blit(part: BodyPart, defId: String?, health: Float, paintIndex: Int) {
             val spec = BodyPartCatalog.specs.getValue(part)
             val img = layers.partImage(part, defId) ?: return
+            val painted = part == BodyPart.TRUNK || part == BodyPart.HOOD ||
+                part == BodyPart.BUMPER_REAR || part == BodyPart.BUMPER_FRONT ||
+                part == BodyPart.DOOR_REAR || part == BodyPart.DOOR_FRONT
+            val paintColor = if (painted) {
+                partPaint(paintIndex, BodyPartCatalog.slotOf(part), defId)
+            } else null
+            val dstOffset = androidx.compose.ui.unit.IntOffset(
+                (originX + spec.fx * drawW).toInt(),
+                (originY + spec.fy * drawH).toInt()
+            )
+            val dstSize = androidx.compose.ui.unit.IntSize(
+                (img.fixed.width * k).toInt().coerceAtLeast(1),
+                (img.fixed.height * k).toInt().coerceAtLeast(1)
+            )
             drawImage(
-                image = img,
-                dstOffset = androidx.compose.ui.unit.IntOffset(
-                    (originX + spec.fx * drawW).toInt(),
-                    (originY + spec.fy * drawH).toInt()
-                ),
-                dstSize = androidx.compose.ui.unit.IntSize(
-                    (img.width * k).toInt().coerceAtLeast(1),
-                    (img.height * k).toInt().coerceAtLeast(1)
+                image = img.fixed,
+                dstOffset = dstOffset,
+                dstSize = dstSize
+            )
+            drawImage(
+                image = img.paint,
+                dstOffset = dstOffset,
+                dstSize = dstSize,
+                colorFilter = ColorFilter.tint(
+                    paintColor ?: Color(VehiclePaint.ORANGE.argb),
+                    BlendMode.Modulate
                 )
             )
+            // Nízky stav plechu sa vizuálne prizná hrdzavou patinou. Druhý
+            // priechod rešpektuje alfa masku obrázka, takže nefarbí okolie dielu.
+            val rust = if (painted) ((0.62f - health) / 0.60f).coerceIn(0f, 0.48f) else 0f
+            if (rust > 0.01f) {
+                drawImage(
+                    image = img.paint,
+                    dstOffset = dstOffset,
+                    dstSize = dstSize,
+                    alpha = rust,
+                    colorFilter = ColorFilter.tint(Color(0xFF9A4F22), BlendMode.SrcIn)
+                )
+            }
         }
 
         // Sedadlá sú v kabíne, teda pod plechom; zvyšok naň.
         BodyPartCatalog.order.filter { BodyPartCatalog.behindBody(it) }.forEach { part ->
-            car.parts[BodyPartCatalog.slotOf(part)]?.let { blit(part, it.defId) }
+            car.parts[BodyPartCatalog.slotOf(part)]?.let {
+                blit(part, it.defId, it.health, it.paintIndex)
+            }
         }
         drawImage(
-            image = layers.stripped,
+            image = layers.stripped.fixed,
             dstOffset = androidx.compose.ui.unit.IntOffset(originX.toInt(), originY.toInt()),
             dstSize = androidx.compose.ui.unit.IntSize(
                 drawW.toInt().coerceAtLeast(1), drawH.toInt().coerceAtLeast(1)
             )
         )
+        drawImage(
+            image = layers.stripped.paint,
+            dstOffset = androidx.compose.ui.unit.IntOffset(originX.toInt(), originY.toInt()),
+            dstSize = androidx.compose.ui.unit.IntSize(
+                drawW.toInt().coerceAtLeast(1), drawH.toInt().coerceAtLeast(1)
+            ),
+            colorFilter = ColorFilter.tint(
+                Color(VehiclePaint.at(car.bodyPaintIndex).argb),
+                BlendMode.Modulate
+            )
+        )
         BodyPartCatalog.order.filterNot { BodyPartCatalog.behindBody(it) }.forEach { part ->
-            car.parts[BodyPartCatalog.slotOf(part)]?.let { blit(part, it.defId) }
+            car.parts[BodyPartCatalog.slotOf(part)]?.let {
+                blit(part, it.defId, it.health, it.paintIndex)
+            }
         }
+    }
+
+    /** Plechy z rôznych nálezov nemusia ladiť; pár dverí však drží jednu farbu. */
+    private fun partPaint(paintIndex: Int, slot: ComponentSlot, defId: String?): Color {
+        if (slot == ComponentSlot.ROOF_RACK) return Color(0xFF73787A)
+        if (paintIndex >= 0) return Color(VehiclePaint.at(paintIndex).argb)
+        val seed = (defId.orEmpty().hashCode() * 31 + slot.ordinal * 17) and Int.MAX_VALUE
+        return Color(VehiclePaint.at(seed).argb)
     }
 
     /** Rovnaké koleso ako v hre – aj pre panel CAR. */

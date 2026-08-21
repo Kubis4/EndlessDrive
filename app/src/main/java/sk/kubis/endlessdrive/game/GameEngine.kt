@@ -12,6 +12,7 @@ import sk.kubis.endlessdrive.domain.model.TIRE_SLOTS
 import sk.kubis.endlessdrive.domain.model.EndReason
 import sk.kubis.endlessdrive.domain.model.FluidGrade
 import sk.kubis.endlessdrive.domain.model.FluidType
+import sk.kubis.endlessdrive.domain.model.FuelKind
 import sk.kubis.endlessdrive.domain.model.GamePhase
 import sk.kubis.endlessdrive.domain.model.ItemCatalog
 import sk.kubis.endlessdrive.domain.model.ItemDef
@@ -19,8 +20,11 @@ import sk.kubis.endlessdrive.domain.model.ItemStack
 import sk.kubis.endlessdrive.domain.model.RoadFeature
 import sk.kubis.endlessdrive.domain.model.RoadSurface
 import sk.kubis.endlessdrive.domain.model.SedanSpec
+import sk.kubis.endlessdrive.domain.model.VehiclePaint
+import sk.kubis.endlessdrive.domain.model.candidatesFor
 import sk.kubis.endlessdrive.game.car.Car
 import sk.kubis.endlessdrive.game.car.EndCause
+import sk.kubis.endlessdrive.game.car.MountedPart
 import sk.kubis.endlessdrive.game.event.ActiveEvent
 import sk.kubis.endlessdrive.game.event.RoadEvent
 import sk.kubis.endlessdrive.game.inventory.Inventory
@@ -51,7 +55,7 @@ enum class PrepStep(val hint: String) {
 }
 
 /**
- * Herný engine – bočný arcade pohyb + segmenty s križovatkami.
+ * Herný engine – bočný arcade pohyb cez plynulo nadväzujúce regióny.
  */
 class GameEngine(
     val seed: Long,
@@ -115,6 +119,9 @@ class GameEngine(
         private set
     var headlightsOn: Boolean = false
         private set
+    /** true = diaľkové; pri zhasnutých svetlách je vždy false. */
+    var highBeamsOn: Boolean = false
+        private set
     private var nightWarned = false
     private var altWarned = false
 
@@ -140,6 +147,9 @@ class GameEngine(
     var itemsLooted: Int = 0
         private set
     var buildingsVisited: Int = 0
+        private set
+    /** Materiál z rozobratých predmetov; patrí aktuálnej jazde. */
+    var scrap: Int = 0
         private set
     private val visitedBuildingIds = HashSet<Long>()
 
@@ -169,6 +179,9 @@ class GameEngine(
     private var accumulator = 0f
     private var eventCooldown = 14f
     private var screenHeightPx = 720f
+    private var transitionAnnounced = false
+    /** Hotový nasledujúci región – hranica potom nerobí generovanie v jednom frame. */
+    private var preparedContinuation: RoadSegment? = null
 
     init {
         val startRng = SeededRandom(seed xor 0x57A27L)
@@ -177,17 +190,20 @@ class GameEngine(
 
         segment = WorldGenerator.createSegment(
             segmentSeed = seed,
-            style = BranchStyle.SAFE_RURAL,
+            style = WorldGenerator.startingStyle(seed),
             worldOrigin = 0f,
             tripDistance = 0f,
             terrain = terrain,
             isTutorial = true
         )
         car.x = 4f
+        car.setCargoLoad(inventory.totalWeight, boot.totalWeight)
         car.snapToGround(segment.heightAtWorld(car.x))
         maxReachedX = car.x
         camera.snapTo(car.x, car.y)
         stockStarterShed(startRng)
+        // Prvý región pripravíme počas načítania jazdy, nie počas rýchlej jazdy.
+        prepareContinuation()
         message = "An abandoned sedan. Search the shed beside it and get the car running."
     }
 
@@ -208,8 +224,6 @@ class GameEngine(
                 )
             )
         }
-        // Voda je núdzovka do chladiča – motor po nej ide horúci.
-        add(ItemCatalog.WATER, count = 2, purity = 0.05f)
         add(ItemCatalog.OIL_BOTTLE, purity = rng.nextFloat(0.70f, 0.92f))
         add(ItemCatalog.FUEL_CAN, purity = rng.nextFloat(0.72f, 0.95f))
         // Jedna náhradná vec do začiatku – nie vždy tá istá.
@@ -271,44 +285,58 @@ class GameEngine(
         if (!car.hasPart(ComponentSlot.ALTERNATOR)) {
             shed.loot.add(ItemStack(ItemCatalog.ALTERNATOR.id, ComponentCondition.DAMAGED, rng.nextFloat(0.4f, 0.7f)))
         }
-        // Sedadlá sú v kôlni vždy. Auto je na štarte holá škrupina a prvé
-        // hľadanie má ukázať, že sa dá aj skladať, nielen opravovať – bez
-        // nich nemá hráč čo namontovať a interiér ostane prázdny.
-        shed.loot.add(
-            ItemStack(ItemCatalog.SEAT_FRONT.id, ComponentCondition.USED, rng.nextFloat(0.55f, 0.85f))
+        // Len jeden ukážkový interiérový/karosársky diel. Kôlňa má hráča
+        // sprevádzkovať, nie mu hneď odovzdať polovicu hotového auta.
+        val showcase = rng.pick(
+            listOf(
+                ItemCatalog.SEAT_FRONT, ItemCatalog.SEAT_REAR,
+                ItemCatalog.DOOR_FRONT, ItemCatalog.DOOR_REAR, ItemCatalog.HOOD
+            )
         )
-        // Nech sa oplatí pozrieť aj keď auto nič nepotrebuje.
-        if (rng.chance(0.5f)) {
-            shed.loot.add(ItemStack(ItemCatalog.HOOD.id, ComponentCondition.USED, rng.nextFloat(0.5f, 0.8f)))
-        }
+        shed.loot.add(
+            ItemStack(
+                showcase.id,
+                ComponentCondition.USED,
+                rng.nextFloat(0.52f, 0.82f),
+                paintIndex = if (showcase.mountsTo?.group == "Body") {
+                    rng.nextInt(VehiclePaint.entries.size)
+                } else -1
+            )
+        )
         segment.buildings.add(0, shed)
     }
 
     val distanceKm: Float get() = distanceM / 1000f
     val isNewRecord: Boolean get() = distanceKm > bestDistanceKm && distanceKm > 0.05f
     val localX: Float get() = car.x - segment.worldOrigin
-    val inJunctionZone: Boolean
-        get() = localX >= segment.length - GameConfig.JUNCTION_ZONE
+    val inJunctionZone: Boolean get() = false
 
     /** Koľko metrov zostáva k rázcestiu. */
     val junctionDistanceM: Float get() = (segment.endWorldX - car.x).coerceAtLeast(0f)
 
     /** true, kým sa dá vetva vybrať za jazdy (posledných pár sto metrov). */
-    val approachingJunction: Boolean
-        get() = phase == GamePhase.DRIVING &&
-            junctionDistanceM <= GameConfig.JUNCTION_APPROACH &&
-            segment.choices.isNotEmpty()
+    val approachingJunction: Boolean get() = false
+
+    /** Aktuálne prelínanie prostredia; renderer aj fyzika čítajú tú istú hodnotu. */
+    val biomeBlend get() = segment.biomeBlendAtWorld(car.x)
+    private val nextPaving get() = segment.choices.firstOrNull()?.plan?.paving
+    val winterAmount: Float
+        get() {
+            val from = if (segment.paving.winter) 1f else 0f
+            val to = if (nextPaving?.winter == true) 1f else 0f
+            return MathX.lerp(from, to, biomeBlend.amount)
+        }
 
     /** 0 = normálne počasie, 1 = poriadny mráz. Riadi ho zasnežená vetva. */
     val cold: Float
         get() {
-            if (!segment.paving.winter) return 0f
+            if (winterAmount <= 0.01f) return 0f
             // V noci mrzne viac než cez deň.
-            return 0.75f + 0.25f * (1f - daylight)
+            return winterAmount * (0.75f + 0.25f * (1f - daylight))
         }
 
     /** true = jazdí sa v zime (sneh pod kolesami). */
-    val isWinter: Boolean get() = segment.paving.winter
+    val isWinter: Boolean get() = winterAmount >= 0.45f
 
     /** Povrch pod kolesami – asfalt, bahno, piesok, voda, štrk. */
     var currentSurface: RoadSurface = RoadSurface.ASPHALT
@@ -327,8 +355,7 @@ class GameEngine(
      * Zastavenie pri rázcestí otvára panel len vtedy, keď hráč ešte nevolil.
      * Kto si vetvu vybral za jazdy, môže pri odbočke normálne lootovať.
      */
-    private val needsJunctionCall: Boolean
-        get() = inJunctionZone && pendingChoiceId == null && segment.choices.isNotEmpty()
+    private val needsJunctionCall: Boolean get() = false
 
     fun setScreenHeight(px: Float) {
         screenHeightPx = px.coerceAtLeast(320f)
@@ -338,7 +365,14 @@ class GameEngine(
         val dt = frameDt.coerceAtMost(GameConfig.MAX_FRAME_TIME)
         accumulator += dt
         var steps = 0
-        while (accumulator >= GameConfig.FIXED_TIME_STEP && steps < 5) {
+        // Päť krokov stačilo iba od ~12 FPS vyššie. Na slabšom zariadení
+        // potom tachometer ukazoval správnu okamžitú rýchlosť, ale herný čas
+        // a kilometre bežali pomalšie než skutočný čas. MAX_FRAME_TIME je
+        // 0.25 s = presne 15 bezpečných krokov, takže celý prijatý frame
+        // dobehneme bez straty fyzikálneho času.
+        while (accumulator >= GameConfig.FIXED_TIME_STEP &&
+            steps < GameConfig.MAX_FIXED_STEPS_PER_FRAME
+        ) {
             fixedUpdate(GameConfig.FIXED_TIME_STEP)
             accumulator -= GameConfig.FIXED_TIME_STEP
             steps++
@@ -362,6 +396,7 @@ class GameEngine(
     }
 
     private fun fixedUpdate(dt: Float) {
+        car.setCargoLoad(inventory.totalWeight, boot.totalWeight)
         messageAge += dt
         if (phase != GamePhase.GAME_OVER) {
             timeOfDay = DayCycle.advance(timeOfDay, dt)
@@ -386,7 +421,11 @@ class GameEngine(
     /** Svetlá a batéria bežia vo všetkých fázach. Vracia true, ak jazda skončila. */
     private fun tickElectrics(dt: Float): Boolean {
         val cause = car.tickElectrics(
-            dt, headlightsOn, charging = !hasEvent(RoadEvent.BELT_SNAPPED), cold = cold
+            dt,
+            headlightsOn,
+            headlightDrainMultiplier = if (highBeamsOn) GameConfig.HIGH_BEAM_DRAIN_MULTIPLIER else 1f,
+            charging = !hasEvent(RoadEvent.BELT_SNAPPED),
+            cold = cold
         )
         if (cause != null) return stallOrEnd(cause)
         if (isNight && !headlightsOn && !nightWarned && phase != GamePhase.PREP) {
@@ -405,7 +444,7 @@ class GameEngine(
         return false
     }
 
-    /** Zapne/vypne svetlomety. */
+    /** Cyklicky: vypnuté → stretávacie → diaľkové → vypnuté. */
     fun toggleHeadlights(): Boolean {
         // Bez svetlometu nie je čo rozsvietiť. Plná batéria ani bežiaci
         // alternátor na tom nič nezmenia – žiarovka je v tom kuse plastu.
@@ -413,14 +452,25 @@ class GameEngine(
             message = "No headlight fitted — find one first"
             return false
         }
-        headlightsOn = !headlightsOn
+        when {
+            !headlightsOn -> {
+                headlightsOn = true
+                highBeamsOn = false
+            }
+            !highBeamsOn -> highBeamsOn = true
+            else -> {
+                headlightsOn = false
+                highBeamsOn = false
+            }
+        }
         message = if (headlightsOn) {
             when {
                 !car.hasPart(ComponentSlot.ALTERNATOR) ->
-                    "Headlights on — no alternator, battery will drain"
+                    "${if (highBeamsOn) "High beams" else "Low beams"} — no alternator, battery will drain"
                 car.batteryCharge < 0.25f && !car.engineRunning ->
-                    "Headlights on — careful, the battery is weak"
-                else -> "Headlights on"
+                    "${if (highBeamsOn) "High beams" else "Low beams"} — careful, the battery is weak"
+                highBeamsOn -> "High beams on"
+                else -> "Low beams on"
             }
         } else {
             "Headlights off"
@@ -463,12 +513,23 @@ class GameEngine(
 
     private fun updateDriving(dt: Float) {
         elapsed += dt
+        // Ďalší región vznikne ešte pred začiatkom viditeľného prelínania.
+        // Práca s budovami a lootom sa tak nikdy nestretne s technickou hranicou.
+        if (preparedContinuation == null &&
+            car.x >= segment.transitionStartWorldX - CONTINUATION_PRELOAD_LEAD
+        ) {
+            prepareContinuation()
+        }
         val fuelBefore = car.fuel
         val slopeNow = segment.slopeAtLocal(localX.coerceIn(0f, segment.length - 0.5f))
         tickEvents(dt)
-        val cause = car.tickDriving(
-            dt, throttleInput, segment.style.fuelDrainMul * eventDrainMul, slopeNow, cold
+        val nextStyle = segment.nextStyle
+        val regionDrain = if (nextStyle == null) segment.style.fuelDrainMul else MathX.lerp(
+            segment.style.fuelDrainMul,
+            nextStyle.fuelDrainMul,
+            biomeBlend.amount
         )
+        val cause = car.tickDriving(dt, throttleInput, regionDrain * eventDrainMul, slopeNow, cold)
         fuelBurnedL += (fuelBefore - car.fuel).coerceAtLeast(0f)
         if (cause != null) {
             stallOrEnd(cause)
@@ -489,8 +550,27 @@ class GameEngine(
         val minX = maxOf(segment.worldOrigin - 2f, maxReachedX - GameConfig.REVERSE_LIMIT)
         val cx = car.x.coerceIn(minX, maxX)
         val wb = SedanSpec.wheelOffsetX
-        val rearGy = segment.heightAtWorld((cx - wb).coerceIn(minX - 8f, maxX + 8f))
-        val frontGy = segment.heightAtWorld((cx + wb).coerceIn(minX - 8f, maxX + 8f))
+        // Swept kontakt: pri 140 km/h prejde koleso za snímku vyše pol metra.
+        // Vzorkujeme začiatok, polovicu aj koniec kroku a vezmeme najvyšší
+        // povrch, aby úzky hrbol neprepadol medzi dve fyzikálne snímky.
+        fun sweptAxle(axleX: Float): Pair<Float, Float> {
+            val travel = car.speed * dt
+            // Hustota vzoriek sa prispôsobí rýchlosti. Tri pevné body vedeli
+            // pri veľkom posune stále preskočiť kratšiu prekážku.
+            val sampleCount = (kotlin.math.abs(travel) / 0.16f).toInt().coerceIn(2, 10)
+            val samples = (0..sampleCount).map { index ->
+                (axleX + travel * index / sampleCount).coerceIn(minX - 8f, maxX + 8f)
+            }
+            val contactX = samples.maxBy { segment.heightAtWorld(it) }
+            val ground = segment.heightAtWorld(contactX)
+            val local = (contactX - segment.worldOrigin)
+                .coerceIn(0.55f, segment.length - 0.55f)
+            return ground to segment.slopeAtLocal(local)
+        }
+        val (rearGy, rearSlope) = sweptAxle(cx - wb)
+        val (frontGy, frontSlope) = sweptAxle(cx + wb)
+        // Každá náprava môže byť na inej strane hrebeňa. Jeden spoločný sklon
+        // pridával zadnému kolesu falošnú vertikálnu rýchlosť a vystreľoval ho.
         val bumpiness = segment.bumpinessAtLocal(localX.coerceIn(0f, segment.length - 0.5f))
         currentSurface = segment.surfaceAtLocal(localX.coerceIn(0f, segment.length - 0.5f))
         car.applyDrive(
@@ -501,31 +581,39 @@ class GameEngine(
             frontGy,
             bumpiness + eventBumpBonus,
             currentSurface,
-            segment.paving.gripMul,
-            isWinter
+            nextPaving?.let { MathX.lerp(segment.paving.gripMul, it.gripMul, biomeBlend.amount) }
+                ?: segment.paving.gripMul,
+            isWinter,
+            rearGroundSlope = rearSlope,
+            frontGroundSlope = frontSlope
         )
-        car.tickWear(dt, bumpiness + eventBumpBonus, brakeInput)
+        // applyDrive posunie X až po výpočte pruženia. Preto kontakt ešte raz
+        // vyriešime presne pod finálnou polohou auta; pri vysokej rýchlosti
+        // nesmie zostať ani jediná snímka medzi predikciou a skutočnou cestou.
+        val finalRearX = car.x - wb
+        val finalFrontX = car.x + wb
+        fun exactSlope(worldX: Float): Float {
+            val local = (worldX - segment.worldOrigin)
+                .coerceIn(0.55f, segment.length - 0.55f)
+            return segment.slopeAtLocal(local)
+        }
+        car.resolveRoadPenetration(
+            segment.heightAtWorld(finalRearX),
+            segment.heightAtWorld(finalFrontX),
+            exactSlope(finalRearX),
+            exactSlope(finalFrontX),
+            bodyGroundAtOffset = { offset -> segment.heightAtWorld(car.x + offset) }
+        )
+        car.tickWear(dt, bumpiness + eventBumpBonus, brakeInput, winterRoad = isWinter)
         applyFeatureEffects(dt)
         if (car.x > maxX) {
             car.x = maxX
             if (car.speed > 0f) car.speed = 0f
         }
-        // Rázcestie. Kto si vybral za jazdy, prejde ním bez zastavenia; kto nie,
-        // zastaví a vyberie si tu. Vetvu nikdy nevyberáme za hráča – rozhodnutie,
-        // kam sa ide, je celá hra a potichu zvolená „najbezpečnejšia“ znamenala,
-        // že hráč križovatkou prešiel a ani sa jej nevšimol.
+        // Región sa na hranici len technicky vymení. Vizuál a terén sa menili
+        // už kilometre pred ňou, preto tu nesmie byť zastavenie ani teleport.
         if (car.x >= segment.endWorldX && segment.choices.isNotEmpty()) {
-            val picked = pendingChoiceId?.let { id -> segment.choices.find { it.id == id } }
-            if (picked == null) {
-                car.x = segment.endWorldX
-                car.speed = 0f
-                throttleInput = 0f
-                brakeInput = 0f
-                phase = GamePhase.JUNCTION
-                message = "Junction — pick a road"
-                return
-            }
-            enterBranch(picked)
+            enterBranch(segment.choices.first())
             return
         }
         if (car.x < minX) {
@@ -534,35 +622,15 @@ class GameEngine(
         }
         if (car.x > maxReachedX) maxReachedX = car.x
 
-        // Udalosť môže zastropovať rýchlosť rovnako ako úsek trate.
-        val evCap = eventSpeedCap
-        if (evCap > 0f && car.speed > evCap) {
-            car.speed = MathX.damp(car.speed, evCap, 2.5f, dt)
-        }
-
-        // Bez svetiel v noci sa dá len plaziť.
-        if (isNight && !headlightsOn && car.speed > GameConfig.NIGHT_BLIND_SPEED) {
-            car.speed = GameConfig.NIGHT_BLIND_SPEED
-        }
-
         distanceM = maxReachedX.coerceAtLeast(0f)
         warnAboutEngineWear(dt)
 
-        if (approachingJunction) {
-            // Kto nechce voliť za jazdy, môže zastaviť a otvoriť si panel.
-            if (car.speed <= GameConfig.STOP_SPEED * 1.5f && needsJunctionCall) {
-                phase = GamePhase.JUNCTION
-                car.speed = 0f
-                message = "Junction — pick a road"
-                return
-            }
-            message = if (pendingChoiceId != null) {
-                val picked = segment.choices.firstOrNull { it.id == pendingChoiceId }
-                "Heading for ${picked?.label ?: "the fork"}"
-            } else {
-                "Fork ahead — pick a road"
-            }
-        } else {
+        val blend = biomeBlend
+        if (!transitionAnnounced && blend.amount >= 0.08f && blend.from != blend.to) {
+            transitionAnnounced = true
+            message = "${blend.to.displayName} ahead — the landscape is changing"
+        }
+        run {
             // Teplotu a palivo rieši pás výstrah v HUD – tu by z toho boli
             // len donekonečna sa opakujúce hlášky.
             val near = buildingNear()
@@ -669,6 +737,8 @@ class GameEngine(
             car.fuel < 0.5f -> "No fuel in the tank"
             car.oil < 0.3f -> "No oil in the engine"
             car.coolant < 0.3f -> "No coolant"
+            car.wrongFuelFraction >= 0.70f ->
+                "Wrong fuel — drain the tank and fill with ${car.requiredFuelKind.displayName.lowercase()}"
             car.batteryCharge < 0.2f -> "Battery is flat"
             engineHealth <= 0.15f -> "Engine is beyond saving"
             else -> null
@@ -688,11 +758,9 @@ class GameEngine(
         }
         updateBlockedReason(dt)
 
+        // Hodnota úseku je bezpečná rýchlosť pre opotrebenie, nie limiter.
+        // Hráč môže ísť rýchlejšie; rozbitá cesta to zaplatí na gumách a pružení.
         val cap = feature.speedCap
-        if (cap > 0f && car.speed > cap) {
-            // Nedá sa cez to prehnať – auto samo spomalí a otrasie sa.
-            car.speed = MathX.damp(car.speed, cap, 2.2f, dt)
-        }
         if (feature.roughness > 0.5f && car.speed > cap * 0.6f) {
             val over = ((car.speed - cap * 0.6f) / GameConfig.MAX_SPEED).coerceIn(0f, 1f)
             listOf(ComponentSlot.TIRE_FRONT, ComponentSlot.TIRE_REAR).forEach { slot ->
@@ -752,15 +820,6 @@ class GameEngine(
         get() = (if (hasEvent(RoadEvent.RAIN)) 0.45f else 0f) +
             (if (hasEvent(RoadEvent.MUD)) 0.8f else 0f) +
             (if (hasEvent(RoadEvent.DEBRIS)) 0.35f else 0f)
-
-    /** Strop rýchlosti z udalosti (0 = bez obmedzenia). */
-    private val eventSpeedCap: Float
-        get() = when {
-            hasEvent(RoadEvent.MUD) -> 7f
-            hasEvent(RoadEvent.DEBRIS) -> 10f
-            hasEvent(RoadEvent.RAIN) -> 17f
-            else -> 0f
-        }
 
     /**
      * Vylosuje udalosť. Čím ďalej hráč je, tým väčšia šanca na smolu –
@@ -865,14 +924,17 @@ class GameEngine(
             val pool = listOf(
                 ItemCatalog.TIRE_POOR, ItemCatalog.TIRE, ItemCatalog.BATTERY, ItemCatalog.RADIATOR,
                 ItemCatalog.BRAKES, ItemCatalog.ALTERNATOR, ItemCatalog.STARTER,
-                ItemCatalog.HOOD, ItemCatalog.DOORS
+                ItemCatalog.HOOD, ItemCatalog.DOOR_FRONT, ItemCatalog.DOOR_REAR
             )
             repeat(1 + rng.nextInt(2)) {
                 val def = rng.pick(pool)
                 find.loot.add(ItemStack(def.id, ComponentCondition.DAMAGED, rng.nextFloat(0.3f, 0.7f)))
             }
         } else {
-            val def = if (rng.chance(0.6f)) ItemCatalog.FUEL_CAN
+            val def = if (rng.chance(0.6f)) {
+                if (car.requiredFuelKind == FuelKind.DIESEL) ItemCatalog.DIESEL_CAN
+                else ItemCatalog.FUEL_CAN
+            }
             else rng.pick(listOf(ItemCatalog.OIL_BOTTLE, ItemCatalog.COOLANT_BOTTLE, ItemCatalog.WATER))
             find.loot.add(
                 ItemStack(
@@ -909,24 +971,44 @@ class GameEngine(
     /** Napojí ďalší segment tak, aby jazda pokračovala bez švíku. */
     private fun enterBranch(choice: BranchChoice) {
         val origin = segment.endWorldX
-        segmentTripDistance = distanceM
-        segment = WorldGenerator.createSegment(
+        segmentTripDistance = origin
+        val ready = preparedContinuation?.takeIf {
+            it.seed == choice.plan.seed && kotlin.math.abs(it.worldOrigin - origin) < 0.01f
+        }
+        segment = ready ?: WorldGenerator.createSegment(
             plan = choice.plan,
             worldOrigin = origin,
-            tripDistance = distanceM,
+            tripDistance = origin,
             terrain = terrain,
             isTutorial = false
         )
+        preparedContinuation = null
         pendingChoiceId = null
         rescueStashId = null
         currentFeature = segment.featureAtWorld(car.x)
-        // Rýchlosť ani pozícia sa nemenia – žiadny teleport, žiadna strata švihu.
-        car.snapToGround(segment.heightAtWorld(car.x))
+        // Rýchlosť, poloha ani pruženie sa nemenia – žiadny teleport či snap.
         activeBuilding = null
         phase = GamePhase.DRIVING
-        if (!message.startsWith("No call made")) {
-            message = "${choice.label} — ${choice.hint.lowercase()}"
-        }
+        transitionAnnounced = false
+        // Bez novej hlášky a premerania HUD: hráč už zmenu regiónu videl
+        // počas prelínania a technická hranica má byť úplne neviditeľná.
+    }
+
+    /** Vytvorí jediné pokračovanie vopred; opakované volanie je lacné. */
+    private fun prepareContinuation() {
+        val choice = segment.choices.singleOrNull() ?: return
+        val origin = segment.endWorldX
+        if (preparedContinuation?.let {
+                it.seed == choice.plan.seed && kotlin.math.abs(it.worldOrigin - origin) < 0.01f
+            } == true
+        ) return
+        preparedContinuation = WorldGenerator.createSegment(
+            plan = choice.plan,
+            worldOrigin = origin,
+            tripDistance = origin,
+            terrain = terrain,
+            isTutorial = false
+        )
     }
 
     fun requestStop(): Boolean {
@@ -936,13 +1018,8 @@ class GameEngine(
             return false
         }
         car.speed = 0f
-        if (needsJunctionCall) {
-            phase = GamePhase.JUNCTION
-            message = "Junction — pick a road"
-        } else {
-            phase = GamePhase.STOPPED
-            message = "Stopped"
-        }
+        phase = GamePhase.STOPPED
+        message = "Stopped"
         return true
     }
 
@@ -952,11 +1029,6 @@ class GameEngine(
         }
         if (!car.engineRunning) {
             message = "Start the engine"
-            return false
-        }
-        if (needsJunctionCall) {
-            phase = GamePhase.JUNCTION
-            message = "Pick a road first"
             return false
         }
         activeBuilding = null
@@ -985,10 +1057,6 @@ class GameEngine(
     }
 
     fun enterNearestBuilding(): Boolean {
-        if (phase == GamePhase.JUNCTION) {
-            message = "Pick a road first"
-            return false
-        }
         // PREP je tiež „stojíme pri aute“ – bez toho by sa hráč nedostal
         // ani do kôlne hneď vedľa, z ktorej má vrak sprevádzkovať.
         if (phase != GamePhase.STOPPED && phase != GamePhase.DRIVING && phase != GamePhase.PREP) {
@@ -1010,12 +1078,20 @@ class GameEngine(
         return true
     }
 
-    /** Natankuje priamo z pumpy na benzínke (má obmedzenú zásobu). */
-    fun refuelFromPump(): Boolean {
-        val b = activeBuilding ?: return false
-        if (b.pumpFuelL <= 0.05f) {
+    /** Natankuje vybranú hadicu priamo z pumpy (obe majú vlastnú zásobu). */
+    fun refuelFromPump(kind: FuelKind = FuelKind.PETROL): Boolean {
+        val b = activeBuilding ?: run {
+            message = "Enter a fuel station first"
+            return false
+        }
+        if (b.type != BuildingType.GAS_STATION) {
+            message = "There is no pump here"
+            return false
+        }
+        val available = if (kind == FuelKind.DIESEL) b.pumpDieselL else b.pumpFuelL
+        if (available <= 0.05f) {
             message = if (b.type == BuildingType.GAS_STATION) {
-                "The pump is empty"
+                "The ${kind.displayName.lowercase()} pump is empty"
             } else {
                 "There is no pump here"
             }
@@ -1026,10 +1102,20 @@ class GameEngine(
             message = "The tank is full"
             return false
         }
-        val moved = car.refill(FluidType.FUEL, kotlin.math.min(room, b.pumpFuelL), b.pumpPurity)
-        b.pumpFuelL = (b.pumpFuelL - moved).coerceAtLeast(0f)
-        message = "Filled up +${String.format("%.1f", moved)} L · " +
-            "${FluidGrade.of(b.pumpPurity).displayName.lowercase()} (pump has ${String.format("%.0f", b.pumpFuelL)} L)"
+        val moved = car.refill(
+            FluidType.FUEL,
+            kotlin.math.min(room, available),
+            b.pumpPurity,
+            kind
+        )
+        if (kind == FuelKind.DIESEL) {
+            b.pumpDieselL = (b.pumpDieselL - moved).coerceAtLeast(0f)
+        } else {
+            b.pumpFuelL = (b.pumpFuelL - moved).coerceAtLeast(0f)
+        }
+        val remaining = if (kind == FuelKind.DIESEL) b.pumpDieselL else b.pumpFuelL
+        message = "Filled up +${String.format("%.1f", moved)} L ${kind.displayName.lowercase()} · " +
+            "${FluidGrade.of(b.pumpPurity).displayName.lowercase()} (pump has ${String.format("%.0f", remaining)} L)"
         return true
     }
 
@@ -1050,7 +1136,7 @@ class GameEngine(
     fun leaveBuilding() {
         if (phase != GamePhase.EXPLORING) return
         activeBuilding = null
-        phase = if (needsJunctionCall) GamePhase.JUNCTION else GamePhase.STOPPED
+        phase = GamePhase.STOPPED
         message = "Back at the car"
     }
 
@@ -1086,7 +1172,7 @@ class GameEngine(
             message = "Switch the engine off first"
             return false
         }
-        val stack = ItemStack(part.defId, part.condition, part.health)
+        val stack = ItemStack(part.defId, part.condition, part.health, paintIndex = part.paintIndex)
         // Zložiť úložisko sa dá, len keď sa obsah zmestí aj bez neho –
         // inak by sa veci ticho stratili. Batoh drží batoh, ostatné kufor.
         if (part.def.extraSlots > 0) {
@@ -1114,11 +1200,17 @@ class GameEngine(
             if (held > 0.01f) {
                 stack.heldFluidL = held
                 stack.heldPurity = car.fluidPurity(fluid)
+                if (fluid == FluidType.FUEL) {
+                    stack.heldDieselFraction = car.fuelDieselFraction
+                }
                 car.drain(fluid)
             }
         }
         // So svetlometom odchádza aj svetlo – svietiť by nemalo z čoho.
-        if (slot == ComponentSlot.HEADLIGHT) headlightsOn = false
+        if (slot == ComponentSlot.HEADLIGHT) {
+            headlightsOn = false
+            highBeamsOn = false
+        }
         car.parts.remove(slot)
         landing.add(stack)
         syncCargoCapacity()
@@ -1139,6 +1231,28 @@ class GameEngine(
         }
         val stack = boot.removeAt(index) ?: return false
         message = "Dropped: ${stack.def.name}"
+        return true
+    }
+
+    fun scrapInventoryItem(index: Int): Boolean = scrapFrom(inventory, index)
+
+    fun scrapBootItem(index: Int): Boolean {
+        if (!bootReachable) {
+            message = "Stop at the car first"
+            return false
+        }
+        return scrapFrom(boot, index)
+    }
+
+    private fun scrapFrom(source: Inventory, index: Int): Boolean {
+        if (phase == GamePhase.DRIVING || kotlin.math.abs(car.speed) > 0.2f) {
+            message = "Stop before dismantling parts"
+            return false
+        }
+        val stack = source.removeAt(index) ?: return false
+        val gained = stack.scrapValue
+        scrap += gained
+        message = "Scrapped ${stack.def.name}: +$gained scrap"
         return true
     }
 
@@ -1221,15 +1335,21 @@ class GameEngine(
                 inventory.removeAt(index)
                 return false
             }
-            val used = car.refill(def.fluid, kotlin.math.min(room, available), stack.purity)
+            val used = car.refill(
+                def.fluid,
+                kotlin.math.min(room, available),
+                stack.purity,
+                def.fuelKind ?: FuelKind.PETROL
+            )
             if (used <= 0f) {
                 message = "Already full (${def.fluid.displayName})"
                 return false
             }
             stack.setFluidLitres(available - used)
             if (stack.fluidLitres <= 0.01f) inventory.removeAt(index)
+            val fluidLabel = if (def.fluid == FluidType.FUEL) def.name else def.fluid.displayName
             message = if (stack.grade == FluidGrade.PURE) {
-                "Topped up +${String.format("%.1f", used)} L ${def.fluid.displayName}"
+                "Topped up +${String.format("%.1f", used)} L $fluidLabel"
             } else {
                 "Topped up +${String.format("%.1f", used)} L — ${stack.grade.displayName.lowercase()}!"
             }
@@ -1250,23 +1370,30 @@ class GameEngine(
             val fluidOf = fluidHeldBy(slot)
             val heldL = fluidOf?.let { car.fluidLevel(it) } ?: 0f
             val heldPurity = fluidOf?.let { car.fluidPurity(it) } ?: 1f
+            val heldDieselFraction = if (fluidOf == FluidType.FUEL) car.fuelDieselFraction else 0f
 
             val prev = car.mount(slot, stack)
             inventory.removeAt(index)
             if (fluidOf != null) {
                 car.drain(fluidOf)
                 if (stack.heldFluidL > 0.01f) {
-                    car.refill(fluidOf, stack.heldFluidL, stack.heldPurity)
+                    val heldKind = if (stack.heldDieselFraction >= 0.5f) FuelKind.DIESEL else FuelKind.PETROL
+                    car.refill(fluidOf, stack.heldFluidL, stack.heldPurity, heldKind)
+                    // Nádrž môže obsahovať ľubovoľnú zmes, nielen väčšinový typ.
+                    if (fluidOf == FluidType.FUEL) {
+                        car.fuelDieselFraction = stack.heldDieselFraction.coerceIn(0f, 1f)
+                    }
                 }
             }
             // Vymontovaný diel skús odložiť tam, odkiaľ prišiel nový; ťažký kus
             // sa do batoha nezmestí, tak nech skončí v kufri.
             if (prev != null) {
-                val old = ItemStack(prev.defId, prev.condition, prev.health)
+                val old = ItemStack(prev.defId, prev.condition, prev.health, paintIndex = prev.paintIndex)
                 // Kvapalina odchádza spolu s dielom – po vrátení ju bude mať.
                 if (fluidOf != null && heldL > 0.01f) {
                     old.heldFluidL = heldL
                     old.heldPurity = heldPurity
+                    old.heldDieselFraction = heldDieselFraction
                 }
                 if (!inventory.add(old) && !boot.add(old) && !this.inventory.add(old)) {
                     message = "Removed ${old.def.name} left by the road — no room"
@@ -1299,9 +1426,13 @@ class GameEngine(
      * dolievaním sa čistota len mieša, takže raz zanesený motor by sa už len
      * zodieral. Cena je, že auto ostane suché, kým hráč nemá čo naliať.
      */
-    fun drainFluid(fluid: FluidType): Boolean {
+    fun drainFluid(fluid: FluidType, litres: Float? = null): Boolean {
         if (phase == GamePhase.DRIVING) {
             message = "Stop first"
+            return false
+        }
+        if (car.engineRunning) {
+            message = "Turn the engine off before draining fluids"
             return false
         }
         val had = when (fluid) {
@@ -1314,13 +1445,23 @@ class GameEngine(
             message = "Nothing to drain"
             return false
         }
-        car.drain(fluid)
-        message = "Drained ${String.format("%.1f", had)} L ${fluid.displayName.lowercase()}"
+        val requested = litres?.coerceAtLeast(0f) ?: had
+        val drained = car.drainAmount(fluid, requested)
+        message = "Drained ${String.format("%.1f", drained)} L ${fluid.displayName.lowercase()}" +
+            if (car.fluidLevel(fluid) > 0.05f) {
+                " — ${String.format("%.1f", car.fluidLevel(fluid))} L remains"
+            } else {
+                " — empty"
+            }
         return true
     }
 
     fun repairSlot(slot: ComponentSlot): Boolean {
         val part = car.parts[slot] ?: return false
+        if (!part.def.hasDurability) {
+            message = "${part.def.name} is a permanent upgrade"
+            return false
+        }
         if (part.health >= 0.98f) {
             message = "That one is fine"
             return false
@@ -1339,6 +1480,97 @@ class GameEngine(
         return true
     }
 
+    /** Cena jedného opravného kroku (najviac +20 % zdravia). */
+    fun scrapRepairCost(slot: ComponentSlot): Int? {
+        val part = car.parts[slot] ?: return null
+        if (!part.def.hasDurability) return null
+        val missing = (1f - part.health).coerceAtLeast(0f)
+        if (missing < 0.01f) return null
+        val step = minOf(0.20f, missing)
+        val fullStepCost = (part.def.baseValue * 0.045f).coerceAtLeast(2f)
+        return kotlin.math.ceil(fullStepCost * (step / 0.20f)).toInt().coerceAtLeast(1)
+    }
+
+    /** Najbližší jednoznačne lepší mechanický diel. Varianty gúm a pruženia nepreskakujeme. */
+    fun scrapUpgradeTarget(slot: ComponentSlot): ItemDef? {
+        val part = car.parts[slot] ?: return null
+        val candidates = when (slot) {
+            ComponentSlot.ENGINE -> ItemCatalog.candidatesFor(slot)
+                .filter { it.fuelKind == part.def.fuelKind }
+            ComponentSlot.BATTERY,
+            ComponentSlot.RADIATOR,
+            ComponentSlot.BRAKES,
+            ComponentSlot.FUEL_TANK -> ItemCatalog.candidatesFor(slot)
+            ComponentSlot.DRIVETRAIN -> listOf(ItemCatalog.DRIVE_AWD)
+            else -> emptyList()
+        }
+        return candidates
+            .filter { it.baseValue > part.def.baseValue }
+            .minByOrNull { it.baseValue }
+    }
+
+    fun scrapUpgradeCost(slot: ComponentSlot): Int? {
+        val current = car.parts[slot]?.def ?: return null
+        val target = scrapUpgradeTarget(slot) ?: return null
+        val difference = (target.baseValue - current.baseValue).coerceAtLeast(1)
+        return kotlin.math.ceil(difference * 0.24f + target.baseValue * 0.04f)
+            .toInt()
+            .coerceAtLeast(4)
+    }
+
+    /** Dôvod, prečo scrap oprava/upgrade práve nejde; null znamená pripravené. */
+    fun scrapWorkshopBlockReason(): String? = when {
+        phase == GamePhase.DRIVING || kotlin.math.abs(car.speed) > 0.2f ->
+            "Park the car first"
+        car.engineRunning -> "Switch the engine off first"
+        else -> null
+    }
+
+    private fun workshopReady(): Boolean {
+        val blocked = scrapWorkshopBlockReason() ?: return true
+        message = blocked
+        return false
+    }
+
+    fun repairWithScrap(slot: ComponentSlot): Boolean {
+        if (!workshopReady()) return false
+        val cost = scrapRepairCost(slot) ?: run {
+            message = "${slot.displayName} does not need repair"
+            return false
+        }
+        if (scrap < cost) {
+            message = "Need $cost scrap — you have $scrap"
+            return false
+        }
+        scrap -= cost
+        car.repair(slot, 0.20f)
+        message = "Repaired ${slot.displayName}: -$cost scrap"
+        return true
+    }
+
+    fun upgradeWithScrap(slot: ComponentSlot): Boolean {
+        if (!workshopReady()) return false
+        val current = car.parts[slot] ?: return false
+        val target = scrapUpgradeTarget(slot) ?: run {
+            message = "No direct upgrade for ${slot.displayName.lowercase()}"
+            return false
+        }
+        val cost = scrapUpgradeCost(slot) ?: return false
+        if (scrap < cost) {
+            message = "Need $cost scrap — you have $scrap"
+            return false
+        }
+        scrap -= cost
+        car.parts[slot] = MountedPart(
+            defId = target.id,
+            condition = current.condition,
+            health = (current.health + 0.08f).coerceAtMost(1f),
+            paintIndex = current.paintIndex
+        )
+        message = "Upgraded ${slot.displayName}: ${target.name} (-$cost scrap)"
+        return true
+    }
+
     fun tryStartEngine(): Boolean {
         if (car.engineRunning) {
             message = "Engine is already running"
@@ -1352,6 +1584,7 @@ class GameEngine(
             // V noci si svetlá zapneme sami – bez nich sa nedá jazdiť.
             if (isNight && !headlightsOn && car.hasPart(ComponentSlot.HEADLIGHT)) {
                 headlightsOn = true
+                highBeamsOn = false
             }
             message = "Engine running — hold the throttle"
             true
@@ -1366,6 +1599,8 @@ class GameEngine(
                 car.fuel < 0.5f -> "Fuel is low"
                 car.oil < 0.3f -> "Oil is low"
                 car.coolant < 0.3f -> "Coolant is low"
+                car.wrongFuelFraction >= 0.70f ->
+                    "Wrong fuel — drain the tank and use ${car.requiredFuelKind.displayName.lowercase()}"
                 car.batteryCharge < 0.2f -> "Battery is weak"
                 else -> "The engine would not start"
             }
@@ -1378,10 +1613,11 @@ class GameEngine(
         message = "Engine switched off"
     }
 
-    /** Dá sa prespať do rána? Len po zotmení a keď auto stojí. */
+    /** Dá sa prespať do rána? Len po zotmení, pri budove a so stojacim autom. */
     val canRest: Boolean
         get() = isNight && phase != GamePhase.DRIVING && phase != GamePhase.GAME_OVER &&
-            kotlin.math.abs(car.speed) < 0.2f
+            kotlin.math.abs(car.speed) < 0.2f &&
+            (activeBuilding != null || buildingNear() != null)
 
     /**
      * Prespanie noci. Jazdiť po tme je len horšie videnie bez inej hodnoty,
@@ -1390,7 +1626,12 @@ class GameEngine(
      */
     fun restUntilDawn(): Boolean {
         if (!canRest) {
-            message = if (!isNight) "It is still light out" else "Stop the car first"
+            message = when {
+                !isNight -> "It is still light out"
+                phase == GamePhase.DRIVING || kotlin.math.abs(car.speed) >= 0.2f -> "Stop the car first"
+                activeBuilding == null && buildingNear() == null -> "You can only sleep beside a building"
+                else -> "You cannot sleep here"
+            }
             return false
         }
         car.stopEngine()
@@ -1399,6 +1640,7 @@ class GameEngine(
         car.temperature = 30f
         car.batteryCharge = (car.batteryCharge - 0.05f).coerceAtLeast(0f)
         headlightsOn = false
+        highBeamsOn = false
         nightWarned = false
         message = "You wait out the night. Dawn — back on the road."
         return true
@@ -1428,7 +1670,10 @@ class GameEngine(
             car.coolant < 0.3f -> FluidType.COOLANT
             else -> null
         }?.takeIf { fluid ->
-            inventory.slots.none { it?.def?.fluid == fluid } && fluidRescues < MAX_FLUID_RESCUES
+            inventory.slots.none {
+                it?.def?.fluid == fluid &&
+                    (fluid != FluidType.FUEL || it.def.fuelKind == car.requiredFuelKind)
+            } && fluidRescues < MAX_FLUID_RESCUES
         }
         if (needParts.isEmpty() && needFluid == null) return null
 
@@ -1442,6 +1687,7 @@ class GameEngine(
 
         val rng = SeededRandom(seed xor stash.id xor distanceM.toRawBits().toLong())
         val added = mutableListOf<String>()
+        var rescueInsert = 0
         needParts.forEach { slot ->
             if (stash.loot.any { it.def.canMountTo(slot) }) return@forEach
             val def = when (slot) {
@@ -1452,16 +1698,26 @@ class GameEngine(
                 ComponentSlot.STARTER -> ItemCatalog.STARTER
                 else -> null
             } ?: return@forEach
-            stash.loot.add(ItemStack(def.id, ComponentCondition.DAMAGED, rng.nextFloat(0.35f, 0.65f)))
+            // Nutné veci idú navrch zoznamu, aby ich sedačka či ťažký motor
+            // nezablokovali plným batohom skôr, než sa hráč dostane k záchrane.
+            stash.loot.add(
+                rescueInsert++,
+                ItemStack(def.id, ComponentCondition.DAMAGED, rng.nextFloat(0.35f, 0.65f))
+            )
             added += def.name.lowercase()
         }
-        if (needFluid != null && stash.loot.none { it.def.fluid == needFluid }) {
+        if (needFluid != null && stash.loot.none {
+                it.def.fluid == needFluid &&
+                    (needFluid != FluidType.FUEL || it.def.fuelKind == car.requiredFuelKind)
+            }
+        ) {
             val def = when (needFluid) {
-                FluidType.FUEL -> ItemCatalog.FUEL_CAN
+                FluidType.FUEL -> compatibleFuelCan()
                 FluidType.OIL -> ItemCatalog.OIL_BOTTLE
                 else -> ItemCatalog.COOLANT_BOTTLE
             }
             stash.loot.add(
+                rescueInsert,
                 ItemStack(
                     defId = def.id,
                     condition = ComponentCondition.NEW,
@@ -1512,7 +1768,7 @@ class GameEngine(
         }
         if (needFluid != null) {
             val def = when (needFluid) {
-                FluidType.FUEL -> ItemCatalog.FUEL_CAN
+                FluidType.FUEL -> compatibleFuelCan()
                 FluidType.OIL -> ItemCatalog.OIL_BOTTLE
                 else -> ItemCatalog.COOLANT_BOTTLE
             }
@@ -1571,9 +1827,11 @@ class GameEngine(
             near?.loot?.any(predicate) == true
         return when (cause) {
             EndCause.OUT_OF_FUEL ->
-                packHas { it.def.fluid == FluidType.FUEL } ||
-                    buildingHas { it.def.fluid == FluidType.FUEL } ||
-                    (near?.pumpFuelL ?: 0f) > 0.5f ||
+                packHas { it.def.fluid == FluidType.FUEL && it.def.fuelKind == car.requiredFuelKind } ||
+                    buildingHas { it.def.fluid == FluidType.FUEL && it.def.fuelKind == car.requiredFuelKind } ||
+                    (near?.let {
+                        if (car.requiredFuelKind == FuelKind.DIESEL) it.pumpDieselL else it.pumpFuelL
+                    } ?: 0f) > 0.5f ||
                     fluidRescues < MAX_FLUID_RESCUES
             EndCause.BATTERY_DEAD ->
                 packHas { it.def.canMountTo(ComponentSlot.BATTERY) } ||
@@ -1587,6 +1845,9 @@ class GameEngine(
                     buildingHas { it.def.canMountTo(ComponentSlot.ENGINE) }
         }
     }
+
+    private fun compatibleFuelCan(): ItemDef =
+        if (car.requiredFuelKind == FuelKind.DIESEL) ItemCatalog.DIESEL_CAN else ItemCatalog.FUEL_CAN
 
     fun endRun(reason: EndReason = EndReason.MANUAL) {
         phase = GamePhase.GAME_OVER
@@ -1620,12 +1881,16 @@ class GameEngine(
         fluidRescues = fluidRescues,
         batteryRescues = batteryRescues,
         car = CarState(
-            parts = car.parts.map { (slot, p) -> PartState(slot, p.defId, p.condition, p.health) },
+            parts = car.parts.map { (slot, p) ->
+                PartState(slot, p.defId, p.condition, p.health, p.paintIndex)
+            },
             fuel = car.fuel, oil = car.oil, coolant = car.coolant,
             fuelPurity = car.fuelPurity, oilPurity = car.oilPurity, coolantPurity = car.coolantPurity,
             temperature = car.temperature, batteryCharge = car.batteryCharge,
             engineRunning = car.engineRunning,
-            x = car.x, y = car.y, speed = car.speed, pitch = car.pitch
+            x = car.x, y = car.y, speed = car.speed, pitch = car.pitch,
+            fuelDieselFraction = car.fuelDieselFraction,
+            bodyPaintIndex = car.bodyPaintIndex
         ),
         inventory = inventory.slots.map { it?.toState() },
         boot = boot.slots.map { it?.toState() },
@@ -1640,13 +1905,18 @@ class GameEngine(
             buildings = segment.buildings.map { b ->
                 BuildingState(
                     id = b.id, type = b.type, localX = b.localX,
-                    pumpFuelL = b.pumpFuelL, pumpPurity = b.pumpPurity,
+                    pumpFuelL = b.pumpFuelL, pumpDieselL = b.pumpDieselL,
+                    pumpPurity = b.pumpPurity,
                     landmark = b.landmark,
-                    loot = b.loot.map { it.toState() }
+                    loot = b.loot.map { it.toState() },
+                    pumpFuelKind = b.pumpFuelKind
                 )
-            }
+            },
+            paving = segment.paving
         ),
-        events = events.map { EventState(it.event, it.remaining) }
+        events = events.map { EventState(it.event, it.remaining) },
+        scrap = scrap,
+        highBeamsOn = highBeamsOn
     )
 
     private fun applySnapshot(snap: RunSnapshot) {
@@ -1656,7 +1926,8 @@ class GameEngine(
             style = snap.segment.style,
             length = snap.segment.length,
             features = snap.segment.features,
-            buildingCount = snap.segment.buildingCount
+            buildingCount = snap.segment.buildingCount,
+            paving = snap.segment.paving
         )
         segmentTripDistance = snap.segment.tripDistance
         segment = WorldGenerator.createSegment(
@@ -1674,7 +1945,9 @@ class GameEngine(
                 localX = b.localX,
                 loot = b.loot.map { it.toStack() }.toMutableList(),
                 pumpFuelL = b.pumpFuelL,
+                pumpDieselL = b.pumpDieselL,
                 pumpPurity = b.pumpPurity,
+                pumpFuelKind = b.pumpFuelKind,
                 landmark = b.landmark
             )
         }
@@ -1682,12 +1955,24 @@ class GameEngine(
         // Auto.
         car.parts.clear()
         snap.car.parts.forEach { p ->
-            car.parts[p.slot] = sk.kubis.endlessdrive.game.car.MountedPart(p.defId, p.condition, p.health)
+            car.parts[p.slot] = sk.kubis.endlessdrive.game.car.MountedPart(
+                p.defId, p.condition, p.health, p.paintIndex
+            )
         }
+        // Staršie save mohli mať kapacitné upgrady v poškodenom stave.
+        car.parts.values.filterNot { it.def.hasDurability }.forEach {
+            it.condition = ComponentCondition.NEW
+            it.health = 1f
+        }
+        // Roof rack nie je lakovaný diel karosérie. Staršie save si na ňom
+        // mohli niesť náhodný odtieň, preto ho pri obnove znormalizujeme.
+        car.parts[ComponentSlot.ROOF_RACK]?.paintIndex = -1
         car.fuel = snap.car.fuel
         car.oil = snap.car.oil
         car.coolant = snap.car.coolant
         car.fuelPurity = snap.car.fuelPurity
+        car.fuelDieselFraction = snap.car.fuelDieselFraction
+        car.bodyPaintIndex = snap.car.bodyPaintIndex
         car.oilPurity = snap.car.oilPurity
         car.coolantPurity = snap.car.coolantPurity
         car.temperature = snap.car.temperature
@@ -1720,27 +2005,45 @@ class GameEngine(
         elapsed = snap.elapsed
         timeOfDay = snap.timeOfDay
         headlightsOn = snap.headlightsOn
+        highBeamsOn = snap.highBeamsOn && snap.headlightsOn
         fuelBurnedL = snap.fuelBurnedL
         itemsLooted = snap.itemsLooted
         buildingsVisited = snap.buildingsVisited
+        scrap = snap.scrap
         fluidRescues = snap.fluidRescues
         batteryRescues = snap.batteryRescues
         // Po obnove nikdy nejdeme rovno v jazde – hráč sa najprv rozhliadne.
         phase = when (snap.phase) {
-            GamePhase.DRIVING, GamePhase.EXPLORING -> GamePhase.STOPPED
+            GamePhase.DRIVING, GamePhase.EXPLORING, GamePhase.JUNCTION -> GamePhase.STOPPED
             else -> snap.phase
         }
         currentFeature = segment.featureAtWorld(car.x)
         activeBuilding = null
         camera.snapTo(car.x, car.y)
+        // Obnova môže skončiť tesne pred hranicou; zaplatíme prípravu teraz,
+        // keď je jazda aj tak zastavená, nie v prvom rýchlom prejazde.
+        preparedContinuation = null
+        prepareContinuation()
         message = "Run restored — you were at ${String.format("%.2f", distanceKm)} km."
     }
 
     private fun ItemStack.toState() =
-        StackState(defId, condition, health, count, purity, heldFluidL, heldPurity)
+        StackState(
+            defId, condition, health, count, purity,
+            heldFluidL, heldPurity, heldDieselFraction, paintIndex
+        )
 
-    private fun StackState.toStack() =
-        ItemStack(defId, condition, health, count, purity, heldFluidL, heldPurity)
+    private fun StackState.toStack(): ItemStack {
+        val restoredPaint = if (ItemCatalog.byId(defId)?.mountsTo?.group == "Body") {
+            paintIndex
+        } else {
+            -1
+        }
+        return ItemStack(
+            defId, condition, health, count, purity,
+            heldFluidL, heldPurity, heldDieselFraction, restoredPaint
+        )
+    }
 
     companion object {
         /**
@@ -1755,6 +2058,9 @@ class GameEngine(
 
         /** Ako dlho ostane hláška na obrazovke (s). */
         private const val MESSAGE_TTL = 4.5f
+
+        /** Rezerva pred vizuálnym prechodom, v ktorej sa pripraví ďalší región. */
+        private const val CONTINUATION_PRELOAD_LEAD = 450f
 
         /** Koľkokrát za jazdu môže vrak pri ceste doplniť chýbajúcu kvapalinu. */
         private const val MAX_FLUID_RESCUES = 2

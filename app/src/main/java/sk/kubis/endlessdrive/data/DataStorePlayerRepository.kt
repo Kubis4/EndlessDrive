@@ -30,6 +30,7 @@ class DataStorePlayerRepository(context: Context) : PlayerRepository {
         val DBG_BODY = booleanPreferencesKey("debug_full_body")
         val DBG_FLUIDS = booleanPreferencesKey("debug_full_fluids")
         val DBG_TRACK = booleanPreferencesKey("debug_test_track")
+        val DBG_REPAIR = booleanPreferencesKey("debug_repair_controls")
     }
 
     override val debugOptions: Flow<DebugOptions> = store.data.map { prefs ->
@@ -38,7 +39,8 @@ class DataStorePlayerRepository(context: Context) : PlayerRepository {
             fullUpgrades = prefs[Keys.DBG_UPGRADE] ?: false,
             fullBody = prefs[Keys.DBG_BODY] ?: false,
             fullFluids = prefs[Keys.DBG_FLUIDS] ?: false,
-            testTrack = prefs[Keys.DBG_TRACK] ?: false
+            testTrack = prefs[Keys.DBG_TRACK] ?: false,
+            repairControls = prefs[Keys.DBG_REPAIR] ?: false
         )
     }.distinctUntilChanged()
 
@@ -49,6 +51,7 @@ class DataStorePlayerRepository(context: Context) : PlayerRepository {
             prefs[Keys.DBG_BODY] = options.fullBody
             prefs[Keys.DBG_FLUIDS] = options.fullFluids
             prefs[Keys.DBG_TRACK] = options.testTrack
+            prefs[Keys.DBG_REPAIR] = options.repairControls
         }
     }
 

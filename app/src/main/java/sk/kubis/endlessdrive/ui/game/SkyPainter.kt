@@ -85,8 +85,16 @@ class SkyPainter {
      * Kreslené pozadia si atmosféru nesú samy, tam stačí [strength] okolo 0.4;
      * na plnú silu by z nich spravila sivý filter.
      */
-    fun DrawScope.drawHaze(horizonY: Float, day: Float, biome: BiomeType, strength: Float = 1f) {
-        val haze = lerp(Color(0xFF1B2338), biomeHorizon(biome), day.coerceIn(0f, 1f))
+    fun DrawScope.drawHaze(
+        horizonY: Float,
+        day: Float,
+        biome: BiomeType,
+        strength: Float = 1f,
+        nextBiome: BiomeType = biome,
+        transition: Float = 0f
+    ) {
+        val horizon = lerp(biomeHorizon(biome), biomeHorizon(nextBiome), transition.coerceIn(0f, 1f))
+        val haze = lerp(Color(0xFF1B2338), horizon, day.coerceIn(0f, 1f))
         drawRect(
             brush = Brush.verticalGradient(
                 colors = listOf(Color.Transparent, haze.copy(alpha = 0.55f * strength), Color.Transparent),
@@ -109,6 +117,7 @@ class SkyPainter {
         BiomeType.FOREST_ALIVE -> Color(0xFFCADCC9)
         BiomeType.SANDSTORM -> Color(0xFFD9B078)
         BiomeType.DUST_STORM -> Color(0xFFD5B37F)
+        BiomeType.ALPINE -> Color(0xFFD7E4EA)
     }
 
     private companion object {

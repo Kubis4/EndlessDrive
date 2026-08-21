@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -11,9 +12,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,17 +42,17 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import sk.kubis.endlessdrive.ui.theme.GameButton
 import sk.kubis.endlessdrive.ui.theme.GameColors
 
 /**
- * HillRush-štýl: brzda/cúvanie vľavo, plyn vpravo, ZASTAVIŤ v strede.
+ * HillRush-štýl: brzda/cúvanie vľavo, plyn vpravo, parkovacia brzda pri pedáli.
  */
 @Composable
 fun GameControls(
     onGasChanged: (Boolean) -> Unit,
     onBrakeChanged: (Boolean) -> Unit,
     onStop: () -> Unit,
+    buildingNearby: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 14.dp)) {
@@ -69,7 +74,90 @@ fun GameControls(
                 onPressChanged = onGasChanged
             )
         }
-        // STOP sedí v palubnej doske – tu by sa s ňou prekrýval.
+        // Ručná brzda patrí k pedálom. Sedí tesne vľavo od plynu a jej stred
+        // je vo výške stredu pedála, takže neprekrýva auto ani dashboard.
+        ParkingButton(
+            buildingNearby = buildingNearby,
+            onClick = onStop,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .offset(x = (-132).dp, y = (-24).dp)
+        )
+    }
+}
+
+/** Kompaktná kontrolka/tlačidlo ručnej brzdy podľa reálneho symbolu (P). */
+@Composable
+private fun ParkingButton(
+    buildingNearby: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Rovnaká tlmená červená ako brzda; zvýraznenie pri budove je v obryse,
+    // nie v agresívnej svietiacej výplni.
+    val tint = if (buildingNearby) GameColors.accent else Color(0xFFD9584A)
+    Column(
+        modifier
+            .width(72.dp)
+            .height(70.dp)
+            .background(
+                Brush.verticalGradient(
+                    listOf(tint.copy(alpha = 0.14f), Color(0xD91B1816))
+                ),
+                RoundedCornerShape(18.dp)
+            )
+            .border(1.5.dp, tint.copy(alpha = if (buildingNearby) 0.82f else 0.52f), RoundedCornerShape(18.dp))
+            .clickable(onClickLabel = if (buildingNearby) "Park and search" else "Park") {
+                onClick()
+            }
+            .semantics {
+                contentDescription = if (buildingNearby) "Park to search building" else "Parking brake"
+            }
+            .padding(top = 5.dp, bottom = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Canvas(Modifier.size(44.dp)) {
+            val c = center
+            val stroke = size.minDimension * 0.075f
+            val ringRadius = size.minDimension * 0.27f
+            // Stredný kruh.
+            val iconTint = tint.copy(alpha = if (buildingNearby) 0.95f else 0.78f)
+            drawCircle(iconTint, ringRadius, c, style = Stroke(stroke, cap = StrokeCap.Round))
+            // Zátvorky symbolu parkovacej brzdy.
+            drawArc(
+                iconTint, 112f, 136f, false,
+                topLeft = Offset(size.width * 0.04f, size.height * 0.08f),
+                size = Size(size.width * 0.52f, size.height * 0.84f),
+                style = Stroke(stroke, cap = StrokeCap.Round)
+            )
+            drawArc(
+                iconTint, -68f, 136f, false,
+                topLeft = Offset(size.width * 0.44f, size.height * 0.08f),
+                size = Size(size.width * 0.52f, size.height * 0.84f),
+                style = Stroke(stroke, cap = StrokeCap.Round)
+            )
+            // P bez závislosti od fontu.
+            val stemX = size.width * 0.44f
+            drawLine(
+                iconTint,
+                Offset(stemX, size.height * 0.35f),
+                Offset(stemX, size.height * 0.66f),
+                stroke,
+                StrokeCap.Round
+            )
+            drawArc(
+                iconTint, -90f, 180f, false,
+                topLeft = Offset(stemX - stroke * 0.2f, size.height * 0.34f),
+                size = Size(size.width * 0.19f, size.height * 0.18f),
+                style = Stroke(stroke, cap = StrokeCap.Round)
+            )
+        }
+        Text(
+            if (buildingNearby) "SEARCH" else "PARK",
+            color = tint.copy(alpha = if (buildingNearby) 0.95f else 0.72f),
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 

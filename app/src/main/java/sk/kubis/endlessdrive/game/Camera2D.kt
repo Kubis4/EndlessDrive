@@ -18,12 +18,13 @@ class Camera2D {
     var shakeY = 0f; private set
     private var shakeTime = 0f
     private var shakeAmount = 0f
+    private var targetShakeAmount = 0f
 
     private var initialized = false
 
     /** [intensity] 0..1 – koľko trasie práve teraz. */
     fun setShake(intensity: Float) {
-        shakeAmount = intensity.coerceIn(0f, 1f)
+        targetShakeAmount = intensity.coerceIn(0f, 1f)
     }
 
     fun snapTo(wx: Float, wy: Float) {
@@ -72,6 +73,9 @@ class Camera2D {
 
         // Otras: dve nesúmerné sínusovky, aby to nevyzeralo ako pravidelné kmitanie.
         shakeTime += dt
+        // Povrch aj región sa môžu technicky zmeniť medzi dvoma snímkami,
+        // amplitúda kamery však musí narásť alebo zaniknúť plynulo.
+        shakeAmount = MathX.damp(shakeAmount, targetShakeAmount, 7f, dt)
         val amp = shakeAmount * GameConfig.CAMERA_SHAKE
         shakeX = MathX.approxSin(shakeTime * 37f) * amp * 0.4f
         shakeY = MathX.approxSin(shakeTime * 53f + 1.7f) * amp

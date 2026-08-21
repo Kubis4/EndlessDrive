@@ -19,6 +19,7 @@ import sk.kubis.endlessdrive.core.GameConfig
 import sk.kubis.endlessdrive.core.MathX
 import sk.kubis.endlessdrive.domain.model.BiomeType
 import sk.kubis.endlessdrive.game.DepthProjection
+import sk.kubis.endlessdrive.game.world.BiomeBlend
 
 /**
  * Kulisy pozdĺž cesty – stromy, kríky, kamene, stĺpy elektriky, ploty a míľniky.
@@ -46,7 +47,7 @@ class SceneryPainter(
     fun DrawScope.drawBackProps(
         fromX: Float,
         toX: Float,
-        biome: BiomeType,
+        biomeAt: (Float) -> BiomeBlend,
         day: Float,
         depth: DepthProjection,
         heightAt: (Float) -> Float,
@@ -56,8 +57,11 @@ class SceneryPainter(
         val last = MathX.floorDiv(toX, CELL)
         for (cell in first..last) {
             val r = MathX.hash01(cell, BACK_SALT)
-            if (r > densityFor(biome)) continue
             val wx = cell * CELL + MathX.hash01(cell, 991) * CELL * 0.8f
+            val blend = biomeAt(wx)
+            val density = MathX.lerp(densityFor(blend.from), densityFor(blend.to), blend.amount)
+            if (r > density) continue
+            val biome = if (MathX.hash01(cell, BIOME_SALT) < blend.amount) blend.to else blend.from
             if (occupiedAt(wx)) continue
             // Hĺbka musí ostať v páse lúky (GameRenderer.SCENERY_BACK_DEPTH),
             // inak by kulisa vyletela nad terén k úbežníku.
@@ -119,7 +123,7 @@ class SceneryPainter(
     fun DrawScope.drawFrontProps(
         fromX: Float,
         toX: Float,
-        biome: BiomeType,
+        biomeAt: (Float) -> BiomeBlend,
         day: Float,
         depth: DepthProjection,
         heightAt: (Float) -> Float
@@ -129,6 +133,8 @@ class SceneryPainter(
         for (cell in first..last) {
             if (MathX.hash01(cell, FRONT_SALT) > 0.55f) continue
             val wx = cell * FRONT_CELL + MathX.hash01(cell, 401) * FRONT_CELL
+            val blend = biomeAt(wx)
+            val biome = if (MathX.hash01(cell, BIOME_FRONT_SALT) < blend.amount) blend.to else blend.from
             val d = 0.02f + MathX.hash01(cell, 733) * 0.22f
             val fx = depth.atX(depth.frontX(wx), d)
             val fy = depth.atY(depth.frontY(heightAt(wx)), d)
@@ -227,6 +233,12 @@ class SceneryPainter(
                 kind < 0.82f -> stone(px, py, s * 0.5f, day)
                 kind < 0.89f -> wreck(px, py, s, day, cell, slopeAt(wx, heightAt))
                 else -> cactus(px, py, s * 0.8f, day)
+            }
+            BiomeType.ALPINE -> when {
+                kind < 0.50f -> pineTree(px, py, s * 1.05f, day)
+                kind < 0.78f -> stone(px, py, s * 0.62f, day)
+                kind < 0.90f -> deadTree(px, py, s * 0.85f, day)
+                else -> logPile(px, py, s, day)
             }
         }
     }
@@ -353,6 +365,7 @@ class SceneryPainter(
                 BiomeType.DESERT_DUSK -> Color(0xFF8E6E6C)
                 BiomeType.SANDSTORM -> Color(0xFFA98F5E)
                 BiomeType.DUST_STORM -> Color(0xFFA1855A)
+                BiomeType.ALPINE -> Color(0xFFB8C8C9)
             },
             day
         )
@@ -438,7 +451,7 @@ class SceneryPainter(
                     .coerceIn(0, wreckSprites.lastIndex)
             ]
         } else null
-        val sprite = wreckArt?.image ?: carLayers?.stripped
+        val sprite = wreckArt?.image ?: carLayers?.stripped?.fixed
         if (sprite != null && sprite.width > 8) {
             val w = s * 3.6f
             val h = w * sprite.height / sprite.width
@@ -785,6 +798,7 @@ class SceneryPainter(
         BiomeType.SANDSTORM -> 0.24f
         // V prachu presvitá mesto – pri ceste je toho viac než v čistej púšti.
         BiomeType.DUST_STORM -> 0.34f
+        BiomeType.ALPINE -> 0.46f
     }
 
     private companion object {
@@ -810,6 +824,8 @@ class SceneryPainter(
         const val MILESTONE = 100f
         const val BACK_SALT = 4523
         const val FRONT_SALT = 8171
+        const val BIOME_SALT = 28939
+        const val BIOME_FRONT_SALT = 28949
     }
 }
 

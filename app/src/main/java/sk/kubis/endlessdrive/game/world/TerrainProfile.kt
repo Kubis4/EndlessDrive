@@ -5,6 +5,8 @@ import sk.kubis.endlessdrive.core.MathX
 import sk.kubis.endlessdrive.core.SimplexNoise
 import sk.kubis.endlessdrive.domain.model.BranchStyle
 import kotlin.math.pow
+import kotlin.math.PI
+import kotlin.math.sin
 
 /**
  * HillRush-štýl kopce: od začiatku jemné vlnky, neskôr ostré hrebene.
@@ -43,6 +45,15 @@ class TerrainProfile(seed: Long) : Terrain {
         h += octave(x, 0.027f / stretch, 33.4f, 0.15f * steep * (0.45f + 0.35f * difficulty))
         h += octave(x, 0.040f, 41.3f, 0.06f * steep)
         h += style.bumpiness * noise.noise2(x * 0.048f, 9.2f) * 0.20f * intro
+
+        // Jemné prekážky aj v normálnej hre: krátke hladké hrboly a občasný
+        // zvlnený pás. Sú malé, no pri rýchlosti rozhýbu obe nápravy podobne
+        // ako prvá časť testovacej trate.
+        val detailIntro = MathX.smoothstep(28f, 85f, x)
+        val patch = MathX.smoothstep(0.12f, 0.72f, noise.noise2(x * 0.0065f, 118.7f))
+        h += sin(x / 7.5f * 2f * PI.toFloat()) * 0.075f * patch * detailIntro
+        val smallBump = noise.noise2(x * 0.115f, 207.4f).coerceAtLeast(0f).pow(5)
+        h += smallBump * (0.13f + style.bumpiness * 0.12f) * detailIntro
 
         return 3.2f + h
     }

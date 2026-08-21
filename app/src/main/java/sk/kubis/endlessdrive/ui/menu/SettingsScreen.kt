@@ -115,6 +115,12 @@ fun SettingsScreen(
                 checked = options.testTrack,
                 onToggle = { onChange(options.copy(testTrack = it)) }
             )
+            Toggle(
+                title = "Repair controls",
+                detail = "Shows the instant REPAIR action in CAR. Debug only; normal runs hide it.",
+                checked = options.repairControls,
+                onToggle = { onChange(options.copy(repairControls = it)) }
+            )
 
             Spacer(Modifier.height(20.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

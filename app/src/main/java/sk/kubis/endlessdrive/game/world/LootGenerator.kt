@@ -11,6 +11,7 @@ import sk.kubis.endlessdrive.domain.model.ItemCatalog
 import sk.kubis.endlessdrive.domain.model.ItemDef
 import sk.kubis.endlessdrive.domain.model.ItemRarity
 import sk.kubis.endlessdrive.domain.model.ItemStack
+import sk.kubis.endlessdrive.domain.model.VehiclePaint
 
 object LootGenerator {
     private data class Entry(val def: ItemDef, val weight: Float)
@@ -68,24 +69,58 @@ object LootGenerator {
 
         val result = ArrayList<ItemStack>(count + 1)
         val seen = HashSet<String>()
+        val families = HashSet<String>()
         repeat(count) {
-            // Pri duplicite skús ešte raz iný los – zahodiť ťah znamenalo, že
-            // budova mala menej vecí práve vtedy, keď padla tá istá dvakrát.
-            var def = weightedPick(rng, table, distBonus, distance) ?: return@repeat
-            if (def.fluid == null && def.id in seen) {
-                def = weightedPick(rng, table, distBonus, distance) ?: def
-            }
-            // Dva rovnaké diely v jednej budove nedávajú zmysel; kanistre áno.
-            if (def.fluid == null && !seen.add(def.id)) return@repeat
+            // Už vylosované veci sa vyradia a rovnaká rodina sa výrazne tlmí:
+            // namiesto troch kvapalín či troch plechov má budova zmiešaný obsah.
+            val def = weightedPick(rng, table, distBonus, distance, seen, families)
+                ?: return@repeat
+            seen += def.id
+            families += familyOf(def)
             result += makeStack(rng, type, def, distance)
+        }
+
+        // Dlhá jazda má rotujúci „zaujímavý kus“. Nie je v každej budove,
+        // ale nemení sa na nekonečné opakovanie oleja a základnej pneumatiky.
+        if (distance >= 1200f && result.isNotEmpty()) {
+            val bucket = kotlin.math.floor(distance / 650f).toInt()
+            val spotlightPool = when (type) {
+                BuildingType.HOUSE -> listOf(
+                    ItemCatalog.SEAT_REAR, ItemCatalog.DOOR_REAR, ItemCatalog.TRUNK_LID,
+                    ItemCatalog.BACKPACK, ItemCatalog.SEAT_FRONT, ItemCatalog.HEADLIGHT,
+                    ItemCatalog.REAR_BUMPER, ItemCatalog.ROOF_RACK
+                )
+                BuildingType.GARAGE -> listOf(
+                    ItemCatalog.SEAT_REAR, ItemCatalog.SNOW_CHAINS, ItemCatalog.TIRE_WINTER,
+                    ItemCatalog.SUSPENSION_LOW, ItemCatalog.TIRE_OFFROAD, ItemCatalog.BOOT_CRATE,
+                    ItemCatalog.ALTERNATOR, ItemCatalog.ROOF_RACK
+                )
+                BuildingType.AUTO_SHOP -> listOf(
+                    ItemCatalog.SNOW_CHAINS, ItemCatalog.TIRE_WINTER, ItemCatalog.SEAT_REAR,
+                    ItemCatalog.DRIVE_AWD, ItemCatalog.SUSPENSION_LIFT, ItemCatalog.BRAKES_GOOD,
+                    ItemCatalog.BATTERY_GOOD, ItemCatalog.TIRE_SPORT
+                )
+                BuildingType.GAS_STATION -> emptyList()
+            }
+            var spotlight = spotlightPool.getOrNull((bucket + type.ordinal) % spotlightPool.size.coerceAtLeast(1))
+            if (spotlight?.let { it.id == ItemCatalog.SNOW_CHAINS.id || it.id == ItemCatalog.TIRE_WINTER.id } == true &&
+                distance < GameConfig.WINTER_GEAR_FROM_M
+            ) {
+                spotlight = ItemCatalog.SEAT_REAR
+            }
+            val useSpotlight = spotlight != null && spotlight.id !in seen &&
+                (result.size >= 3 || MathX.hash01(bucket, type.ordinal + 4401) < 0.34f)
+            if (useSpotlight) {
+                result[result.lastIndex] = makeStack(rng, type, spotlight!!, distance)
+            }
         }
 
         // Každá budova na začiatku aspoň jedna „užitočná“ vec (kvapalina / diel).
         if (result.isEmpty() && earlyFloor > 0) {
             val fallback = when (type) {
                 BuildingType.HOUSE, BuildingType.GARAGE ->
-                    listOf(ItemCatalog.OIL_BOTTLE, ItemCatalog.FUEL_CAN, ItemCatalog.COOLANT_BOTTLE)
-                BuildingType.GAS_STATION -> listOf(ItemCatalog.FUEL_CAN)
+                    listOf(ItemCatalog.OIL_BOTTLE, ItemCatalog.FUEL_CAN, ItemCatalog.DIESEL_CAN, ItemCatalog.COOLANT_BOTTLE)
+                BuildingType.GAS_STATION -> listOf(ItemCatalog.FUEL_CAN, ItemCatalog.DIESEL_CAN)
                 BuildingType.AUTO_SHOP ->
                     listOf(ItemCatalog.TIRE, ItemCatalog.BATTERY, ItemCatalog.OIL_BOTTLE)
             }
@@ -98,13 +133,14 @@ object LootGenerator {
         if (type == BuildingType.GAS_STATION &&
             result.none { it.def.fluid == FluidType.FUEL }
         ) {
+            val fuel = if (rng.chance(0.42f)) ItemCatalog.DIESEL_CAN else ItemCatalog.FUEL_CAN
             result.add(
                 ItemStack(
-                    defId = ItemCatalog.FUEL_CAN.id,
+                    defId = fuel.id,
                     condition = ComponentCondition.NEW,
                     health = 1f,
                     count = 1,
-                    purity = fluidPurity(rng, type, ItemCatalog.FUEL_CAN)
+                    purity = fluidPurity(rng, type, fuel)
                 )
             )
         }
@@ -137,7 +173,10 @@ object LootGenerator {
             else -> ComponentCondition.CRITICAL
         }
         val health = condition.maxHealth * rng.nextFloat(0.72f, 1f)
-        return ItemStack(def.id, condition, health)
+        val paintIndex = if (def.mountsTo?.group == "Body") {
+            rng.nextInt(VehiclePaint.entries.size)
+        } else -1
+        return ItemStack(def.id, condition, health, paintIndex = paintIndex)
     }
 
     /** Kanister z domu je zvyčajne riedený, zo servisu takmer čistý. Voda je vždy voda. */
@@ -158,12 +197,13 @@ object LootGenerator {
         // z domu skôr zmes haraburdia než ďalší kanister.
         BuildingType.HOUSE -> listOf(
             Entry(ItemCatalog.FUEL_CAN, 11f),
+            Entry(ItemCatalog.DIESEL_CAN, 7f),
             Entry(ItemCatalog.OIL_BOTTLE, 12f),
             Entry(ItemCatalog.COOLANT_BOTTLE, 10f),
-            Entry(ItemCatalog.WATER, 7f),
+            Entry(ItemCatalog.WATER, 3f),
             Entry(ItemCatalog.HOOD, 9f),
-            Entry(ItemCatalog.DOORS, 7f),
-            Entry(ItemCatalog.WINDOWS, 7f),
+            Entry(ItemCatalog.DOOR_FRONT, 4f),
+            Entry(ItemCatalog.DOOR_REAR, 5f),
             Entry(ItemCatalog.BACKPACK, 8f),
             Entry(ItemCatalog.BOOT_CRATE, 5f),
             Entry(ItemCatalog.ROOF_RACK, 4f),
@@ -172,7 +212,7 @@ object LootGenerator {
             Entry(ItemCatalog.HEADLIGHT, 6f),
             Entry(ItemCatalog.TAILLIGHT, 7f),
             Entry(ItemCatalog.SEAT_FRONT, 6f),
-            Entry(ItemCatalog.SEAT_REAR, 6f),
+            Entry(ItemCatalog.SEAT_REAR, 10f),
             Entry(ItemCatalog.REAR_BUMPER, 7f),
             Entry(ItemCatalog.TIRE_POOR, 8f),
             Entry(ItemCatalog.TIRE, 5f),
@@ -182,15 +222,16 @@ object LootGenerator {
             Entry(ItemCatalog.BRAKES, 4f)
         )
         BuildingType.GARAGE -> listOf(
-            Entry(ItemCatalog.FUEL_CAN, 25f),
-            Entry(ItemCatalog.OIL_BOTTLE, 20f),
-            Entry(ItemCatalog.COOLANT_BOTTLE, 18f),
+            Entry(ItemCatalog.FUEL_CAN, 14f),
+            Entry(ItemCatalog.DIESEL_CAN, 10f),
+            Entry(ItemCatalog.OIL_BOTTLE, 12f),
+            Entry(ItemCatalog.COOLANT_BOTTLE, 10f),
             Entry(ItemCatalog.TIRE_POOR, 5f),
             Entry(ItemCatalog.TIRE, 8f),
             Entry(ItemCatalog.TIRE_SPORT, 2f),
             Entry(ItemCatalog.TIRE_OFFROAD, 2f),
             Entry(ItemCatalog.TIRE_WINTER, 4f),
-            Entry(ItemCatalog.SNOW_CHAINS, 4f),
+            Entry(ItemCatalog.SNOW_CHAINS, 7f),
             Entry(ItemCatalog.BOOT_CRATE, 6f),
             Entry(ItemCatalog.ROOF_RACK, 4f),
             Entry(ItemCatalog.SUSPENSION, 4f),
@@ -201,18 +242,19 @@ object LootGenerator {
             Entry(ItemCatalog.BRAKES, 5f),
             Entry(ItemCatalog.RADIATOR, 5f),
             Entry(ItemCatalog.ALTERNATOR, 5f),
-            Entry(ItemCatalog.DOORS, 8f),
+            Entry(ItemCatalog.DOOR_FRONT, 5f),
+            Entry(ItemCatalog.DOOR_REAR, 6f),
             Entry(ItemCatalog.HOOD, 10f),
-            Entry(ItemCatalog.WINDOWS, 6f),
             Entry(ItemCatalog.TRUNK_LID, 8f),
             Entry(ItemCatalog.HEADLIGHT, 7f),
             Entry(ItemCatalog.TAILLIGHT, 8f),
             Entry(ItemCatalog.SEAT_FRONT, 7f),
-            Entry(ItemCatalog.SEAT_REAR, 6f),
+            Entry(ItemCatalog.SEAT_REAR, 10f),
             Entry(ItemCatalog.ENGINE_A, 2f)
         )
         BuildingType.GAS_STATION -> listOf(
-            Entry(ItemCatalog.FUEL_CAN, 45f),
+            Entry(ItemCatalog.FUEL_CAN, 28f),
+            Entry(ItemCatalog.DIESEL_CAN, 22f),
             Entry(ItemCatalog.OIL_BOTTLE, 20f),
             Entry(ItemCatalog.COOLANT_BOTTLE, 20f),
             Entry(ItemCatalog.TIRE_POOR, 5f),
@@ -221,6 +263,8 @@ object LootGenerator {
             Entry(ItemCatalog.FUEL_TANK, 3f)
         )
         BuildingType.AUTO_SHOP -> listOf(
+            Entry(ItemCatalog.FUEL_CAN, 6f),
+            Entry(ItemCatalog.DIESEL_CAN, 7f),
             Entry(ItemCatalog.ENGINE_A, 8f),
             Entry(ItemCatalog.ENGINE_D, 6f),
             Entry(ItemCatalog.ENGINE_B, 4f),
@@ -237,7 +281,7 @@ object LootGenerator {
             Entry(ItemCatalog.TIRE_SPORT, 5f),
             Entry(ItemCatalog.TIRE_OFFROAD, 5f),
             Entry(ItemCatalog.TIRE_WINTER, 6f),
-            Entry(ItemCatalog.SNOW_CHAINS, 5f),
+            Entry(ItemCatalog.SNOW_CHAINS, 8f),
             Entry(ItemCatalog.BOOT_CRATE, 5f),
             Entry(ItemCatalog.ROOF_RACK, 5f),
             Entry(ItemCatalog.SUSPENSION_GOOD, 4f),
@@ -246,15 +290,15 @@ object LootGenerator {
             Entry(ItemCatalog.DRIVE_AWD, 3f),
             Entry(ItemCatalog.DRIVE_FWD, 3f),
             Entry(ItemCatalog.FUEL_TANK_BIG, 3f),
-            Entry(ItemCatalog.DOORS, 10f),
+            Entry(ItemCatalog.DOOR_FRONT, 6f),
+            Entry(ItemCatalog.DOOR_REAR, 7f),
             Entry(ItemCatalog.HOOD, 8f),
-            Entry(ItemCatalog.WINDOWS, 10f),
             Entry(ItemCatalog.FRONT_BUMPER, 7f),
             Entry(ItemCatalog.TRUNK_LID, 7f),
             Entry(ItemCatalog.HEADLIGHT, 6f),
             Entry(ItemCatalog.TAILLIGHT, 7f),
             Entry(ItemCatalog.SEAT_FRONT, 6f),
-            Entry(ItemCatalog.SEAT_REAR, 6f),
+            Entry(ItemCatalog.SEAT_REAR, 9f),
             Entry(ItemCatalog.REAR_BUMPER, 7f),
             Entry(ItemCatalog.OIL_BOTTLE, 8f)
         )
@@ -264,13 +308,16 @@ object LootGenerator {
         rng: SeededRandom,
         table: List<Entry>,
         distBonus: Float,
-        distance: Float
+        distance: Float,
+        excludedIds: Set<String> = emptySet(),
+        usedFamilies: Set<String> = emptySet()
     ): ItemDef? {
         if (table.isEmpty()) return null
         // Na začiatku cesty drž rare/legendary nízko – žiadny „jackpot dom“ hneď.
         val earlySuppress = (1f - (distance / 1800f).coerceIn(0f, 1f))
         var total = 0f
         val adjusted = table.map { e ->
+            if (e.def.id in excludedIds) return@map e to 0f
             var rarityBoost = when (e.def.rarity) {
                 ItemRarity.COMMON -> 1f + earlySuppress * 0.15f
                 ItemRarity.UNCOMMON -> 1f + distBonus * 0.15f - earlySuppress * 0.25f
@@ -294,15 +341,34 @@ object LootGenerator {
             }
             // Žiadna položka nesmie prerásť ostatné natoľko, že budova dá
             // stále to isté – vzdialenosť má loot vylepšovať, nie zúžiť.
-            val w = e.weight * rarityBoost.coerceAtMost(3.2f)
+            val familyMul = if (familyOf(e.def) in usedFamilies) 0.28f else 1f
+            val w = e.weight * rarityBoost.coerceAtMost(3.2f) * familyMul
             total += w
             e to w
         }
+        if (total <= 0f) return null
         var roll = rng.nextFloat() * total
         for ((e, w) in adjusted) {
             roll -= w
             if (roll <= 0f) return e.def
         }
         return table.last().def
+    }
+
+    private fun familyOf(def: ItemDef): String = when {
+        def.fluid != null -> "fluid"
+        def.axleTire -> "tyre"
+        def.mountsTo in setOf(
+            sk.kubis.endlessdrive.domain.model.ComponentSlot.DOOR_FRONT,
+            sk.kubis.endlessdrive.domain.model.ComponentSlot.DOOR_REAR,
+            sk.kubis.endlessdrive.domain.model.ComponentSlot.HOOD,
+            sk.kubis.endlessdrive.domain.model.ComponentSlot.FRONT_BUMPER,
+            sk.kubis.endlessdrive.domain.model.ComponentSlot.REAR_BUMPER,
+            sk.kubis.endlessdrive.domain.model.ComponentSlot.TRUNK_LID
+        ) -> "body"
+        def.mountsTo == sk.kubis.endlessdrive.domain.model.ComponentSlot.SEAT_FRONT ||
+            def.mountsTo == sk.kubis.endlessdrive.domain.model.ComponentSlot.SEAT_REAR -> "interior"
+        def.extraSlots > 0 -> "storage"
+        else -> "mechanical"
     }
 }

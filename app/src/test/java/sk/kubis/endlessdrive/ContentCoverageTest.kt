@@ -8,7 +8,9 @@ import sk.kubis.endlessdrive.domain.model.BiomeType
 import sk.kubis.endlessdrive.domain.model.BranchStyle
 import sk.kubis.endlessdrive.game.world.TerrainProfile
 import sk.kubis.endlessdrive.game.world.WorldGenerator
+import sk.kubis.endlessdrive.game.world.LootGenerator
 import sk.kubis.endlessdrive.core.SeededRandom
+import sk.kubis.endlessdrive.core.GameConfig
 import sk.kubis.endlessdrive.domain.model.ComponentSlot
 import sk.kubis.endlessdrive.domain.model.DebugOptions
 import sk.kubis.endlessdrive.domain.model.ItemCatalog
@@ -55,26 +57,23 @@ class ContentCoverageTest {
      * nikdy nevedel a nič by to nenahlásilo.
      */
     @Test
-    fun everyBranchStyleBecomesOfferable() {
-        val seen = mutableSetOf<BranchStyle>()
+    fun everyRegionHasExactlyOneValidContinuation() {
         val terrain = TerrainProfile(5L)
-        var distance = 0f
-        while (distance <= 14000f) {
-            for (seed in 1L..25L) {
-                val segment = WorldGenerator.createSegment(
-                    segmentSeed = seed,
-                    style = BranchStyle.SAFE_RURAL,
-                    worldOrigin = 0f,
-                    tripDistance = distance,
-                    terrain = terrain,
-                    isTutorial = false
-                )
-                segment.choices.forEach { seen += it.plan.style }
-            }
-            distance += 500f
+        BranchStyle.entries.forEachIndexed { index, style ->
+            val segment = WorldGenerator.createSegment(
+                segmentSeed = index + 1L,
+                style = style,
+                worldOrigin = 0f,
+                tripDistance = 15000f,
+                terrain = terrain,
+                isTutorial = false
+            )
+            assertEquals("$style nemá jedno pokračovanie", 1, segment.choices.size)
+            val continuation = segment.choices.single().plan
+            assertTrue(continuation.length >= GameConfig.SEGMENT_LENGTH_MIN)
+            assertTrue(continuation.features.isNotEmpty())
+            assertTrue("región sa nemá opakovať bez zmeny", continuation.style != style)
         }
-        val never = BranchStyle.entries.filterNot { it in seen }
-        assertTrue("vetvy, ktoré sa nikdy neponúknu: $never", never.isEmpty())
     }
 }
 
@@ -149,6 +148,16 @@ class BodyPartTest {
             assertTrue(car.hasPart(ComponentSlot.TIRE_REAR))
         }
     }
+
+    @Test
+    fun frontAndRearDoorsMountIndependentlyAndWindowsAreNotLoot() {
+        val car = Car().apply { installStarterKit(SeededRandom(4L)) }
+        car.mount(ComponentSlot.DOOR_FRONT, ItemStack(ItemCatalog.DOOR_FRONT.id))
+        assertTrue(car.hasPart(ComponentSlot.DOOR_FRONT))
+        assertFalse(car.hasPart(ComponentSlot.DOOR_REAR))
+        assertEquals(listOf(BodyPart.DOOR_FRONT), BodyPartCatalog.partsOf(ComponentSlot.DOOR_FRONT))
+        assertTrue("okná už nesmú byť samostatný predmet", ItemCatalog.ALL.none { it.id == "windows" })
+    }
 }
 
 /** Ladiace prepínače z nastavení – menia výbavu, nie jazdu. */
@@ -177,16 +186,47 @@ class DebugOptionsTest {
 class StarterShedTest {
 
     @Test
-    fun theShedAlwaysHasSeats() {
+    fun theShedHasOnlyOneShowcaseAccessory() {
+        val showcaseIds = setOf(
+            ItemCatalog.SEAT_FRONT.id, ItemCatalog.SEAT_REAR.id,
+            ItemCatalog.DOOR_FRONT.id, ItemCatalog.DOOR_REAR.id, ItemCatalog.HOOD.id
+        )
         for (seed in 1L..40L) {
             val engine = GameEngine(seed, 0f)
             val shed = engine.segment.buildings.first()
             assertTrue("seed $seed: kôlňa je až za autom", shed.localX < 10f)
-            assertTrue(
-                "seed $seed: v kôlni chýba predná sedačka",
-                shed.loot.any { it.defId == ItemCatalog.SEAT_FRONT.id }
+            assertEquals(
+                "seed $seed: kôlňa má mať iba jeden ukážkový doplnok",
+                1,
+                shed.loot.count { it.defId in showcaseIds }
             )
+            val firstRoadGarage = engine.segment.buildings.first {
+                it.type == sk.kubis.endlessdrive.domain.model.BuildingType.GARAGE && it.localX > 100f
+            }
+            assertEquals("prvá cestná garáž má byť stručná", 2, firstRoadGarage.loot.size)
         }
+    }
+}
+
+class VehiclePaintTest {
+    @Test
+    fun shellAndFoundPanelsUseTheWholePalette() {
+        val shellPaints = (1L..80L).map {
+            Car().apply { installStarterKit(SeededRandom(it)) }.bodyPaintIndex
+        }.toSet()
+        assertTrue("karoséria používa príliš málo farieb: $shellPaints", shellPaints.size >= 8)
+
+        val panelPaints = mutableSetOf<Int>()
+        for (seed in 1L..240L) {
+            LootGenerator.generate(
+                SeededRandom(seed),
+                sk.kubis.endlessdrive.domain.model.BuildingType.GARAGE,
+                5000f,
+                BranchStyle.INDUSTRIAL
+            ).filter { it.def.mountsTo?.group == "Body" }
+                .forEach { panelPaints += it.paintIndex }
+        }
+        assertTrue("nájdené plechy používajú príliš málo farieb: $panelPaints", panelPaints.size >= 8)
     }
 }
 

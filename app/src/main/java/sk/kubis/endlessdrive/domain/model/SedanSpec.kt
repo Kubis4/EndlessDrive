@@ -72,9 +72,9 @@ object SedanSpec {
 
 /** Vizuálne / karosériové diely, ktoré sa dajú namontovať. */
 enum class BodyPart(val displayName: String) {
-    DOORS("Doors"),
+    DOOR_FRONT("Front door"),
+    DOOR_REAR("Rear door"),
     HOOD("Hood"),
-    WINDOWS("Windows"),
     FRONT_BUMPER("Front bumper"),
     REAR_BUMPER("Rear bumper")
 }

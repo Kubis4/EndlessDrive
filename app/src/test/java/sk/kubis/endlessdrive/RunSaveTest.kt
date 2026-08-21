@@ -10,7 +10,9 @@ import sk.kubis.endlessdrive.domain.model.ComponentSlot
 import sk.kubis.endlessdrive.domain.model.GamePhase
 import sk.kubis.endlessdrive.domain.model.ItemCatalog
 import sk.kubis.endlessdrive.domain.model.ItemStack
+import sk.kubis.endlessdrive.domain.model.FuelKind
 import sk.kubis.endlessdrive.game.GameEngine
+import sk.kubis.endlessdrive.game.car.MountedPart
 import sk.kubis.endlessdrive.game.save.RunCodec
 
 class RunSaveTest {
@@ -41,6 +43,24 @@ class RunSaveTest {
     @Test
     fun snapshotSurvivesRoundTrip() {
         val engine = playedRun(1234L)
+        engine.car.fuelDieselFraction = 0.35f
+        engine.car.bodyPaintIndex = 6
+        engine.car.mount(
+            ComponentSlot.DOOR_FRONT,
+            ItemStack(ItemCatalog.DOOR_FRONT.id, paintIndex = 3)
+        )
+        engine.segment.buildings.first().apply {
+            pumpFuelL = 4.5f
+            pumpDieselL = 7.25f
+            pumpFuelKind = FuelKind.DIESEL
+        }
+        // Simuluje starší save, v ktorom nosič dostal náhodný lak.
+        engine.car.parts[ComponentSlot.ROOF_RACK] = MountedPart(
+            ItemCatalog.ROOF_RACK.id,
+            ComponentCondition.NEW,
+            1f,
+            paintIndex = 3
+        )
         val text = RunCodec.encode(engine.snapshot())
         val decoded = RunCodec.decode(text)
         assertNotNull("kodek musí prečítať vlastný zápis", decoded)
@@ -51,12 +71,22 @@ class RunSaveTest {
         assertEquals(engine.timeOfDay, restored.timeOfDay, 0.0001f)
         assertEquals(engine.car.fuel, restored.car.fuel, 0.01f)
         assertEquals(engine.car.fuelPurity, restored.car.fuelPurity, 0.001f)
+        assertEquals(engine.car.fuelDieselFraction, restored.car.fuelDieselFraction, 0.001f)
+        assertEquals(engine.car.bodyPaintIndex, restored.car.bodyPaintIndex)
+        assertEquals(3, restored.car.parts[ComponentSlot.DOOR_FRONT]?.paintIndex)
         assertEquals(engine.car.x, restored.car.x, 0.01f)
         assertEquals(engine.car.parts.size, restored.car.parts.size)
+        assertEquals(-1, restored.car.parts[ComponentSlot.ROOF_RACK]?.paintIndex)
         assertEquals(engine.fuelBurnedL, restored.fuelBurnedL, 0.01f)
         // Terén aj úseky sa dopočítajú zo seedu – musia vyjsť rovnako.
         assertEquals(engine.segment.length, restored.segment.length, 0.01f)
         assertEquals(engine.segment.sections.size, restored.segment.sections.size)
+        assertEquals(
+            engine.segment.buildings.first().pumpFuelKind,
+            restored.segment.buildings.first().pumpFuelKind
+        )
+        assertEquals(4.5f, restored.segment.buildings.first().pumpFuelL, 0.01f)
+        assertEquals(7.25f, restored.segment.buildings.first().pumpDieselL, 0.01f)
         assertEquals(
             engine.segment.heightAtWorld(engine.car.x),
             restored.segment.heightAtWorld(restored.car.x),
@@ -80,6 +110,7 @@ class RunSaveTest {
         val restoredShed = restored.segment.buildings.first { it.id == shed.id }
         assertEquals(before - 1, restoredShed.loot.size)
         assertEquals(shed.pumpFuelL, restoredShed.pumpFuelL, 0.01f)
+        assertEquals(shed.pumpDieselL, restoredShed.pumpDieselL, 0.01f)
     }
 
     @Test
@@ -117,5 +148,24 @@ class RunSaveTest {
         assertNull(RunCodec.decode(""))
         assertNull(RunCodec.decode("v99\nnonsense"))
         assertNull(RunCodec.decode("v1|garbage"))
+    }
+
+    @Test
+    fun highBeamModeSurvivesSaveAndRestore() {
+        val engine = GameEngine(55L, 0f)
+        engine.car.mount(
+            ComponentSlot.HEADLIGHT,
+            ItemStack(ItemCatalog.HEADLIGHT.id, ComponentCondition.NEW, 1f)
+        )
+        engine.toggleHeadlights()
+        engine.toggleHeadlights()
+        assertTrue(engine.highBeamsOn)
+
+        val restored = GameEngine.restore(
+            RunCodec.decode(RunCodec.encode(engine.snapshot()))!!,
+            0f
+        )
+        assertTrue(restored.headlightsOn)
+        assertTrue(restored.highBeamsOn)
     }
 }

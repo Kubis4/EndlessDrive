@@ -14,6 +14,7 @@ import sk.kubis.endlessdrive.domain.model.ComponentSlot
 import sk.kubis.endlessdrive.domain.model.DriveLayout
 import sk.kubis.endlessdrive.domain.model.EndReason
 import sk.kubis.endlessdrive.domain.model.FluidType
+import sk.kubis.endlessdrive.domain.model.FuelKind
 import sk.kubis.endlessdrive.domain.model.GamePhase
 import sk.kubis.endlessdrive.domain.model.ItemCatalog
 import sk.kubis.endlessdrive.domain.model.ItemStack
@@ -29,6 +30,7 @@ import sk.kubis.endlessdrive.game.world.TerrainProfile
 import sk.kubis.endlessdrive.domain.model.BuildingType
 import sk.kubis.endlessdrive.game.save.RunCodec
 import sk.kubis.endlessdrive.game.world.LootGenerator
+import sk.kubis.endlessdrive.game.world.WorldBuilding
 import sk.kubis.endlessdrive.game.world.WorldGenerator
 
 class GameCoreTest {
@@ -142,21 +144,54 @@ class GameCoreTest {
     }
 
     @Test
-    fun pumpRefuelsUntilEmpty() {
+    fun wornAlternatorCannotChargeBatteryToFull() {
+        val car = drivingCar("FWD")
+        car.mount(
+            ComponentSlot.ALTERNATOR,
+            ItemStack(ItemCatalog.ALTERNATOR.id, ComponentCondition.CRITICAL, 0.04f)
+        )
+        car.batteryCharge = 1f
+        repeat(600) { car.tickElectrics(1f / 60f, headlightsOn = false) }
+        assertTrue("4 % alternátor musí strácať energiu", car.batteryCharge < 0.99f)
+        assertTrue(car.batteryChargeCeiling < 0.5f)
+    }
+
+    @Test
+    fun starterPackDoesNotContainUnusedWater() {
+        val engine = GameEngine(77L, 0f)
+        assertTrue(engine.inventory.slots.none { it?.defId == ItemCatalog.WATER.id })
+    }
+
+    @Test
+    fun stationOffersSeparatePetrolAndDieselPumps() {
         val engine = GameEngine(5L, 0f)
         engine.prepareForDriving()
         assertTrue(engine.tryStartEngine())
 
-        val station = engine.segment.buildings.first()
-        station.pumpFuelL = 6f
+        val station = WorldBuilding(
+            id = 9_001L,
+            type = BuildingType.GAS_STATION,
+            localX = engine.segment.length * 0.5f,
+            pumpFuelL = 6f,
+            pumpDieselL = 5f
+        )
+        engine.segment.buildings.clear()
+        engine.segment.buildings += station
         engine.car.x = engine.segment.worldOrigin + station.localX
         engine.car.speed = 0f
         engine.car.fuel = 1f
         assertTrue(engine.enterNearestBuilding())
-        assertTrue(engine.refuelFromPump())
+        assertTrue(engine.refuelFromPump(FuelKind.PETROL))
         assertEquals(7f, engine.car.fuel, 0.01f)
         assertEquals(0f, station.pumpFuelL, 0.01f)
-        assertFalse(engine.refuelFromPump())
+        assertFalse(engine.refuelFromPump(FuelKind.PETROL))
+
+        engine.car.fuel = 0f
+        assertTrue(engine.refuelFromPump(FuelKind.DIESEL))
+        assertEquals(5f, engine.car.fuel, 0.01f)
+        assertEquals(1f, engine.car.fuelDieselFraction, 0.001f)
+        assertEquals(0f, station.pumpDieselL, 0.01f)
+        assertFalse(engine.refuelFromPump(FuelKind.DIESEL))
     }
 
     @Test
@@ -347,6 +382,15 @@ class GameCoreTest {
         assertTrue("auto sa musí rozbehnúť aj do kopca, dostalo ${car.speed}", car.speed > 1f)
     }
 
+    @Test
+    fun downhillSpeedIsNotHardLimited() {
+        val car = drivingCar("RWD")
+        car.speed = 35f
+        car.snapToGround(0f, -0.25f)
+        car.applyDriveSlope(1f / 60f, 0f, 0f, 0f, -0.25f, 0f)
+        assertTrue("rýchlosť nesmie snapnúť na starý limiter: ${car.speed}", car.speed > 30f)
+    }
+
     private fun drivingCar(layout: String, tireHealth: Float = 0.9f): Car {
         val car = Car()
         car.installStarterKit()
@@ -446,6 +490,7 @@ class GameCoreTest {
     fun spinWearsOnlyTheDrivenTyre() {
         val car = drivingCar("RWD", 0.5f)
         car.mount(ComponentSlot.ENGINE, ItemStack(ItemCatalog.ENGINE_C.id, ComponentCondition.NEW, 1f))
+        car.fuelDieselFraction = 1f
         val front0 = car.parts[ComponentSlot.TIRE_FRONT]!!.health
         val rear0 = car.parts[ComponentSlot.TIRE_REAR]!!.health
         repeat(300) {
@@ -514,6 +559,7 @@ class GameCoreTest {
         fun withEngine(id: String): Car {
             val car = drivingCar("RWD", 0.9f)
             car.mount(ComponentSlot.ENGINE, ItemStack(id, ComponentCondition.NEW, 1f))
+            car.fuelDieselFraction = if (ItemCatalog.byId(id)?.fuelKind == FuelKind.DIESEL) 1f else 0f
             return car
         }
         val a = cruiseKmh(withEngine(ItemCatalog.ENGINE_A.id), 0f)
@@ -565,6 +611,7 @@ class GameCoreTest {
         // Preklz smie ubrať ťah, ale nikdy nie tak, aby auto zastalo.
         val car = drivingCar("RWD", 0.35f)
         car.mount(ComponentSlot.ENGINE, ItemStack(ItemCatalog.ENGINE_C.id, ComponentCondition.NEW, 1f))
+        car.fuelDieselFraction = 1f
         val wb = SedanSpec.wheelOffsetX * 2f
         car.snapToGround(0f, 0.22f)
         repeat(300) {
@@ -579,7 +626,7 @@ class GameCoreTest {
             var winter = 0
             var total = 0
             for (seed in 1L..60L) {
-                BranchStyle.entries.forEach { style ->
+                BranchStyle.entries.filterNot { it == BranchStyle.ALPINE }.forEach { style ->
                     total++
                     if (WorldGenerator.planSegment(seed, style, distance).paving.winter) winter++
                 }
@@ -589,6 +636,43 @@ class GameCoreTest {
         assertEquals("skoro v jazde nesmie snežiť", 0f, winterShare(3000f), 0.001f)
         assertEquals(0f, winterShare(GameConfig.SNOW_START_M - 500f), 0.001f)
         assertTrue("neskôr už sneh musí prísť", winterShare(25000f) > 0.15f)
+        assertTrue(WorldGenerator.planSegment(1L, BranchStyle.ALPINE, 15000f).paving.winter)
+    }
+
+    @Test
+    fun sleepingAtNightRequiresABuilding() {
+        val original = GameEngine(912L, 0f)
+        val engine = GameEngine.restore(original.snapshot().copy(timeOfDay = 0f), 0f)
+        val building = engine.segment.buildings.first()
+
+        engine.car.x = engine.segment.worldOrigin + building.localX
+        engine.car.speed = 0f
+        assertTrue("pri budove sa v noci musí dať spať", engine.canRest)
+
+        engine.car.x = engine.segment.worldOrigin - 500f
+        assertFalse("voľne pri ceste sa spať nesmie", engine.canRest)
+        assertFalse(engine.restUntilDawn())
+        assertTrue(engine.message.contains("building", ignoreCase = true))
+    }
+
+    @Test
+    fun storageUpgradesArePermanentAndDoNotAffectCarCondition() {
+        listOf(ItemCatalog.BACKPACK, ItemCatalog.BOOT_CRATE, ItemCatalog.ROOF_RACK).forEach {
+            assertFalse("${it.name} nemá mať durability", it.hasDurability)
+        }
+        val car = Car()
+        car.mount(
+            ComponentSlot.ENGINE,
+            ItemStack(ItemCatalog.ENGINE_A.id, ComponentCondition.DAMAGED, 0.42f)
+        )
+        car.mount(
+            ComponentSlot.CARGO,
+            ItemStack(ItemCatalog.BACKPACK.id, ComponentCondition.CRITICAL, 0.05f)
+        )
+        val storage = car.parts[ComponentSlot.CARGO]!!
+        assertEquals(ComponentCondition.NEW, storage.condition)
+        assertEquals(1f, storage.health, 0.001f)
+        assertEquals(0.42f, car.overallHealth, 0.001f)
     }
 
     @Test
@@ -608,6 +692,16 @@ class GameCoreTest {
         assertEquals("na začiatku zimná výbava nemá čo padať", 0, winterFinds(2000f))
         // Pred snehom sa už nájsť musí, inak by hráč do zimy vošiel bez šance.
         assertTrue(winterFinds(GameConfig.SNOW_START_M - 1500f) > 0)
+    }
+
+    @Test
+    fun oneBuildingDoesNotRepeatTheSameLoot() {
+        for (seed in 1L..80L) {
+            val loot = LootGenerator.generate(
+                SeededRandom(seed), BuildingType.GARAGE, 25000f, BranchStyle.INDUSTRIAL
+            )
+            assertEquals("duplicitný loot pre seed $seed", loot.size, loot.map { it.defId }.distinct().size)
+        }
     }
 
     @Test
@@ -786,6 +880,7 @@ class GameCoreTest {
         // ktoré sa len valí po ceste.
         val rwd = drivingCar("RWD", 0.3f)
         rwd.mount(ComponentSlot.ENGINE, ItemStack(ItemCatalog.ENGINE_C.id, ComponentCondition.NEW, 1f))
+        rwd.fuelDieselFraction = 1f
         repeat(40) { rwd.applyDrive(1f / 60f, 1f, 0f, 0f, 0f, 0f) }
         assertTrue("RWD musí pretáčať zadok, slip ${rwd.wheelSlip}", rwd.wheelSlip > 0.15f)
         assertTrue(
@@ -795,6 +890,7 @@ class GameCoreTest {
 
         val fwd = drivingCar("FWD", 0.3f)
         fwd.mount(ComponentSlot.ENGINE, ItemStack(ItemCatalog.ENGINE_C.id, ComponentCondition.NEW, 1f))
+        fwd.fuelDieselFraction = 1f
         repeat(40) { fwd.applyDrive(1f / 60f, 1f, 0f, 0f, 0f, 0f) }
         assertEquals(ComponentSlot.TIRE_FRONT, fwd.drivenSlot)
         assertEquals(ComponentSlot.TIRE_REAR, rwd.drivenSlot)
@@ -906,29 +1002,57 @@ class GameCoreTest {
     }
 
     @Test
-    fun junctionChoicesCarryRealPlans() {
+    fun continuousRegionCarriesOneRealPlanAndALongTransition() {
         val engine = GameEngine(31L, 0f)
         val choices = engine.junctionChoices
-        assertTrue(choices.size >= 2)
-        choices.forEach {
-            assertTrue(it.plan.length > 300f)
-            assertTrue(it.plan.features.isNotEmpty())
-            assertTrue(it.plan.risk in 0f..1f)
+        assertEquals(1, choices.size)
+        assertNotEquals(
+            "prvý prechod musí viesť do vizuálne inej krajiny",
+            engine.segment.style,
+            choices.single().style
+        )
+        assertTrue(choices.single().plan.length >= GameConfig.SEGMENT_LENGTH_MIN)
+        assertTrue(choices.single().plan.features.isNotEmpty())
+        assertTrue(choices.single().plan.risk in 0f..1f)
+        assertTrue(engine.segment.transitionLength in
+            GameConfig.BIOME_TRANSITION_MIN..GameConfig.BIOME_TRANSITION_MAX)
+        assertEquals(0f, engine.segment.biomeBlendAtWorld(engine.segment.transitionStartWorldX).amount, 0.001f)
+        assertEquals(1f, engine.segment.biomeBlendAtWorld(engine.segment.endWorldX).amount, 0.001f)
+    }
+
+    @Test
+    fun laterRegionsRotateButSnowyMountainsStayLate() {
+        val terrain = TerrainProfile(720L)
+
+        val forestDestinations = (1L..80L).map { seed ->
+            WorldGenerator.createSegment(
+                seed, BranchStyle.FOREST, 0f, 4_000f, terrain, false
+            ).choices.single().style
+        }.toSet()
+        assertTrue(
+            "ďalšia oblasť sa nemá opakovať v pevnom poradí: $forestDestinations",
+            forestDestinations.size >= 3
+        )
+
+        val earlyIndustrial = (1L..120L).map { seed ->
+            WorldGenerator.createSegment(
+                seed, BranchStyle.INDUSTRIAL, 0f, 0f, terrain, false
+            ).choices.single().style
         }
-        // Vybraná vetva musí sedieť s tým, čo križovatka sľúbila.
-        engine.prepareForDriving()
-        engine.tryStartEngine()
-        engine.car.x = engine.segment.endWorldX - 2f
-        engine.car.speed = 0f
-        engine.requestStop()
-        val chosen = engine.junctionChoices.first()
-        assertTrue(engine.chooseBranch(chosen.id))
-        // Vetva sa napojí až prejazdom cez rázcestie, nie samotnou voľbou.
-        engine.tryStartEngine()
-        engine.throttleInput = 1f
-        repeat(600) { engine.advance(1f / 60f) }
-        assertEquals(chosen.plan.length, engine.segment.length, 0.01f)
-        assertEquals(chosen.plan.features.size, engine.segment.sections.size)
+        assertTrue(
+            "sneh nesmie prísť skôr, než má hráč čas nájsť zimnú výbavu",
+            earlyIndustrial.none { it == BranchStyle.ALPINE }
+        )
+
+        val lateIndustrial = (1L..180L).map { seed ->
+            WorldGenerator.createSegment(
+                seed * 7_919L, BranchStyle.INDUSTRIAL, 0f, 15_000f, terrain, false
+            ).choices.single().style
+        }
+        assertTrue(
+            "po neskoršej vzdialenosti sa už zasnežené hory musia objaviť",
+            lateIndustrial.any { it == BranchStyle.ALPINE }
+        )
     }
 
     /**
@@ -937,14 +1061,14 @@ class GameCoreTest {
      * voľby sa musí zastaviť a spýtať.
      */
     @Test
-    fun passingAForkWithoutChoosingStopsAndAsks() {
+    fun passingARegionBoundaryKeepsDrivingWithoutAChoice() {
         val engine = GameEngine(17L, 0f)
         engine.prepareForDriving()
         engine.tryStartEngine()
         engine.resumeDriving()
-        assertTrue(engine.junctionChoices.isNotEmpty())
         val forkAt = engine.segment.endWorldX
         val segmentBefore = engine.segment
+        val expected = segmentBefore.choices.single()
 
         // Rozbehnutý až za rázcestie, bez akejkoľvek voľby.
         engine.car.x = forkAt - 1f
@@ -952,9 +1076,17 @@ class GameCoreTest {
         engine.throttleInput = 1f
         repeat(30) { engine.advance(1f / 60f) }
 
-        assertEquals(GamePhase.JUNCTION, engine.phase)
-        assertTrue("segment sa nesmie prepnúť bez voľby", engine.segment === segmentBefore)
-        assertEquals(0f, engine.car.speed, 0.01f)
+        assertEquals(GamePhase.DRIVING, engine.phase)
+        assertTrue("región sa musí automaticky prepnúť", engine.segment !== segmentBefore)
+        assertEquals(expected.style, engine.segment.style)
+        assertTrue(
+            "technická hranica trhla rýchlosťou auta: ${engine.car.speed}",
+            engine.car.speed > 10f
+        )
+        assertFalse(
+            "technická hranica sa nemá znovu oznamovať v HUD",
+            engine.message.startsWith("Entering")
+        )
     }
 
     /**
@@ -1023,29 +1155,29 @@ class GameCoreTest {
     }
 
     @Test
-    fun junctionChoiceCreatesNewSegment() {
+    fun adjacentRegionsMeetWithoutATerrainStep() {
         val engine = GameEngine(11L, 0f)
-        engine.prepareForDriving()
-        engine.tryStartEngine()
-        repeat(10) { engine.advance(1f / 60f) }
-
-        // Teleport near junction
-        engine.car.x = engine.segment.endWorldX - 2f
-        engine.car.speed = 0f
-        engine.requestStop()
-        assertEquals(GamePhase.JUNCTION, engine.phase)
-        assertTrue(engine.junctionChoices.isNotEmpty())
-        val choice = engine.junctionChoices.first()
-        val oldEnd = engine.segment.endWorldX
-        assertTrue(engine.chooseBranch(choice.id))
-        assertEquals(GamePhase.DRIVING, engine.phase)
-        // Voľba vetvu len rezervuje. Napojí sa až keď na ňu auto naozaj
-        // vojde – rázcestím sa prechádza, neteleportuje sa cezeň.
-        engine.tryStartEngine()
-        engine.throttleInput = 1f
-        repeat(600) { engine.advance(1f / 60f) }
-        assertEquals(oldEnd, engine.segment.worldOrigin, 0.01f)
-        assertEquals(choice.style, engine.segment.style)
+        val current = engine.segment
+        val continuation = current.choices.single()
+        val boundary = current.endWorldX
+        val next = WorldGenerator.createSegment(
+            plan = continuation.plan,
+            worldOrigin = boundary,
+            tripDistance = boundary,
+            terrain = engine.terrain
+        )
+        assertEquals(
+            "na hranici regiónov vznikol schod",
+            current.heightAtWorld(boundary),
+            next.heightAtWorld(boundary),
+            0.02f
+        )
+        assertEquals(
+            "na hranici regiónov sa zlomil sklon vozovky",
+            current.slopeAtLocal(current.length),
+            next.slopeAtLocal(0f),
+            0.02f
+        )
     }
 
     @Test

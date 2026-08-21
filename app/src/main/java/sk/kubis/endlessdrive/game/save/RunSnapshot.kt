@@ -5,7 +5,10 @@ import sk.kubis.endlessdrive.domain.model.BuildingType
 import sk.kubis.endlessdrive.domain.model.ComponentCondition
 import sk.kubis.endlessdrive.domain.model.ComponentSlot
 import sk.kubis.endlessdrive.domain.model.GamePhase
+import sk.kubis.endlessdrive.domain.model.FuelKind
+import sk.kubis.endlessdrive.domain.model.ItemCatalog
 import sk.kubis.endlessdrive.domain.model.RoadFeature
+import sk.kubis.endlessdrive.domain.model.RoadPaving
 import sk.kubis.endlessdrive.game.event.RoadEvent
 
 /**
@@ -35,7 +38,11 @@ data class RunSnapshot(
     val boot: List<StackState?>,
     val segment: SegmentState,
     /** Bežiace udalosti: názov + zvyšok času. */
-    val events: List<EventState> = emptyList()
+    val events: List<EventState> = emptyList(),
+    /** Materiál získaný zošrotovaním predmetov v tejto jazde. */
+    val scrap: Int = 0,
+    /** Režim svetiel; false pri starom save znamená stretávacie. */
+    val highBeamsOn: Boolean = false
 )
 
 data class EventState(val kind: RoadEvent, val remaining: Float)
@@ -54,14 +61,18 @@ data class CarState(
     val x: Float,
     val y: Float,
     val speed: Float,
-    val pitch: Float
+    val pitch: Float,
+    /** Zloženie paliva: 0 = benzín, 1 = diesel. */
+    val fuelDieselFraction: Float = 0f,
+    val bodyPaintIndex: Int = 0
 )
 
 data class PartState(
     val slot: ComponentSlot,
     val defId: String,
     val condition: ComponentCondition,
-    val health: Float
+    val health: Float,
+    val paintIndex: Int = -1
 )
 
 data class StackState(
@@ -72,7 +83,9 @@ data class StackState(
     val purity: Float,
     /** Kvapalina, ktorá ostala vo vymontovanom diele. */
     val heldFluidL: Float = 0f,
-    val heldPurity: Float = 1f
+    val heldPurity: Float = 1f,
+    val heldDieselFraction: Float = 0f,
+    val paintIndex: Int = -1
 )
 
 data class SegmentState(
@@ -83,7 +96,9 @@ data class SegmentState(
     val buildingCount: Int,
     val worldOrigin: Float,
     val tripDistance: Float,
-    val buildings: List<BuildingState>
+    val buildings: List<BuildingState>,
+    /** Povrch regiónu; dôležitý aj pre plynulý nástup snehu. */
+    val paving: RoadPaving = RoadPaving.ASPHALT
 )
 
 data class BuildingState(
@@ -93,7 +108,9 @@ data class BuildingState(
     val pumpFuelL: Float,
     val pumpPurity: Float,
     val landmark: Boolean,
-    val loot: List<StackState>
+    val loot: List<StackState>,
+    val pumpFuelKind: FuelKind = FuelKind.PETROL,
+    val pumpDieselL: Float = 0f
 )
 
 /**
@@ -103,7 +120,7 @@ data class BuildingState(
 object RunCodec {
     // 4: kufor auta sa ukladá zvlášť od batoha. Staršie záznamy sa zahodia
     // a hra začne novú jazdu – rozdeliť jeden inventár na dva spätne nemá zmysel.
-    private const val VERSION = 4
+    private const val VERSION = 6
 
     /**
      * Najstaršia verzia, ktorú ešte vieme prečítať.
@@ -122,17 +139,20 @@ object RunCodec {
             listOf(
                 s.seed, s.phase.name, s.distanceM, s.maxReachedX, s.elapsed,
                 s.timeOfDay, s.headlightsOn, s.fuelBurnedL, s.itemsLooted,
-                s.buildingsVisited, s.fluidRescues, s.batteryRescues
+                s.buildingsVisited, s.fluidRescues, s.batteryRescues, s.scrap, s.highBeamsOn
             ).joinToString("|")
         )
         val c = s.car
         appendLine(
             listOf(
                 c.fuel, c.oil, c.coolant, c.fuelPurity, c.oilPurity, c.coolantPurity,
-                c.temperature, c.batteryCharge, c.engineRunning, c.x, c.y, c.speed, c.pitch
+                c.temperature, c.batteryCharge, c.engineRunning, c.x, c.y, c.speed, c.pitch,
+                c.fuelDieselFraction, c.bodyPaintIndex
             ).joinToString("|")
         )
-        appendLine(c.parts.joinToString(";") { "${it.slot.name}:${it.defId}:${it.condition.name}:${it.health}" })
+        appendLine(c.parts.joinToString(";") {
+            "${it.slot.name}:${it.defId}:${it.condition.name}:${it.health}:${it.paintIndex}"
+        })
         appendLine(s.inventory.joinToString(";") { it?.let(::encodeStack) ?: "-" })
         appendLine(s.boot.joinToString(";") { it?.let(::encodeStack) ?: "-" })
         val seg = s.segment
@@ -140,7 +160,7 @@ object RunCodec {
             listOf(
                 seg.planSeed, seg.style.name, seg.length, seg.buildingCount,
                 seg.worldOrigin, seg.tripDistance,
-                seg.features.joinToString(",") { it.name }
+                seg.features.joinToString(",") { it.name }, seg.paving.name
             ).joinToString("|")
         )
         appendLine(s.events.joinToString(";") { "${it.kind.name}:${it.remaining}" })
@@ -148,7 +168,8 @@ object RunCodec {
             appendLine(
                 listOf(
                     b.id, b.type.name, b.localX, b.pumpFuelL, b.pumpPurity, b.landmark,
-                    b.loot.joinToString(";", transform = ::encodeStack)
+                    b.loot.joinToString(";", transform = ::encodeStack), b.pumpFuelKind.name,
+                    b.pumpDieselL
                 ).joinToString("|")
             )
         }
@@ -173,17 +194,26 @@ object RunCodec {
             }
             val condition = ComponentCondition.valueOf(f[2])
             val health = f[3].toFloat()
+            val paintIndex = f.getOrNull(4)?.toIntOrNull() ?: -1
             when (f[0]) {
                 "TIRES" -> {
                     // Starý save: jedna sada → predok aj zadok.
-                    parts += PartState(ComponentSlot.TIRE_FRONT, defId, condition, health)
-                    parts += PartState(ComponentSlot.TIRE_REAR, defId, condition, health)
+                    parts += PartState(ComponentSlot.TIRE_FRONT, defId, condition, health, paintIndex)
+                    parts += PartState(ComponentSlot.TIRE_REAR, defId, condition, health, paintIndex)
                 }
+                // Starý pár dverí sa po migrácii rozdelí na oba nové sloty.
+                "DOORS" -> {
+                    parts += PartState(ComponentSlot.DOOR_FRONT, "door_front", condition, health, paintIndex)
+                    parts += PartState(ComponentSlot.DOOR_REAR, "door_rear", condition, health, paintIndex)
+                }
+                // Samostatné okná už nie sú predmet; sklo je súčasťou dverí.
+                "WINDOWS" -> Unit
                 else -> parts += PartState(
                     slot = ComponentSlot.valueOf(f[0]),
                     defId = defId,
                     condition = condition,
-                    health = health
+                    health = health,
+                    paintIndex = paintIndex
                 )
             }
         }
@@ -196,14 +226,22 @@ object RunCodec {
         }
         val buildings = lines.drop(8).filter { it.isNotBlank() }.map { line ->
             val f = line.split("|")
+            val legacyKind = f.getOrNull(7)?.let { FuelKind.valueOf(it) } ?: FuelKind.PETROL
+            val savedDiesel = f.getOrNull(8)?.toFloatOrNull()
             BuildingState(
                 id = f[0].toLong(),
                 type = BuildingType.valueOf(f[1]),
                 localX = f[2].toFloat(),
-                pumpFuelL = f[3].toFloat(),
+                // Starý save mal iba jeden stojan. Pri migrácii jeho zásobu
+                // ponecháme v správnom palive; nový formát ukladá obe zvlášť.
+                pumpFuelL = if (savedDiesel == null && legacyKind == FuelKind.DIESEL) 0f
+                    else f[3].toFloat(),
                 pumpPurity = f[4].toFloat(),
                 landmark = f[5].toBoolean(),
-                loot = f.getOrNull(6).orEmpty().split(";").filter { it.isNotBlank() }.map(::decodeStack)
+                loot = f.getOrNull(6).orEmpty().split(";").filter { it.isNotBlank() }.map(::decodeStack),
+                pumpFuelKind = legacyKind,
+                pumpDieselL = savedDiesel
+                    ?: if (legacyKind == FuelKind.DIESEL) f[3].toFloat() else 0f
             )
         }
 
@@ -226,7 +264,14 @@ object RunCodec {
                 fuelPurity = c[3].toFloat(), oilPurity = c[4].toFloat(), coolantPurity = c[5].toFloat(),
                 temperature = c[6].toFloat(), batteryCharge = c[7].toFloat(),
                 engineRunning = c[8].toBoolean(),
-                x = c[9].toFloat(), y = c[10].toFloat(), speed = c[11].toFloat(), pitch = c[12].toFloat()
+                x = c[9].toFloat(), y = c[10].toFloat(), speed = c[11].toFloat(), pitch = c[12].toFloat(),
+                fuelDieselFraction = c.getOrNull(13)?.toFloatOrNull() ?: run {
+                    // V4 záznamy pred rozdelením palív mali univerzálne palivo.
+                    // Po obnove ho preto priradíme k vtedy namontovanému motoru.
+                    val engineId = parts.firstOrNull { it.slot == ComponentSlot.ENGINE }?.defId
+                    if (ItemCatalog.byId(engineId.orEmpty())?.fuelKind == FuelKind.DIESEL) 1f else 0f
+                },
+                bodyPaintIndex = c.getOrNull(14)?.toIntOrNull() ?: 0
             ),
             inventory = inventory,
             boot = boot,
@@ -238,27 +283,36 @@ object RunCodec {
                 worldOrigin = seg[4].toFloat(),
                 tripDistance = seg[5].toFloat(),
                 features = seg[6].split(",").filter { it.isNotBlank() }.map { RoadFeature.valueOf(it) },
-                buildings = buildings
+                buildings = buildings,
+                paving = seg.getOrNull(7)?.let { RoadPaving.valueOf(it) } ?: RoadPaving.ASPHALT
             ),
-            events = events
+            events = events,
+            scrap = h.getOrNull(12)?.toIntOrNull() ?: 0,
+            highBeamsOn = h.getOrNull(13)?.toBooleanStrictOrNull() ?: false
         )
     }.getOrNull()
 
     private fun encodeStack(s: StackState) =
         "${s.defId}:${s.condition.name}:${s.health}:${s.count}:${s.purity}" +
-            ":${s.heldFluidL}:${s.heldPurity}"
+            ":${s.heldFluidL}:${s.heldPurity}:${s.heldDieselFraction}:${s.paintIndex}"
 
     private fun decodeStack(text: String): StackState {
         val f = text.split(":")
         return StackState(
-            defId = f[0],
+            defId = when (f[0]) {
+                "doors" -> "door_front"
+                "windows" -> "door_rear"
+                else -> f[0]
+            },
             condition = ComponentCondition.valueOf(f[1]),
             health = f[2].toFloat(),
             count = f[3].toInt(),
             purity = f[4].toFloat(),
             // Staršie záznamy tieto polia nemajú – diel je proste suchý.
             heldFluidL = f.getOrNull(5)?.toFloatOrNull() ?: 0f,
-            heldPurity = f.getOrNull(6)?.toFloatOrNull() ?: 1f
+            heldPurity = f.getOrNull(6)?.toFloatOrNull() ?: 1f,
+            heldDieselFraction = f.getOrNull(7)?.toFloatOrNull() ?: 0f,
+            paintIndex = f.getOrNull(8)?.toIntOrNull() ?: -1
         )
     }
 }

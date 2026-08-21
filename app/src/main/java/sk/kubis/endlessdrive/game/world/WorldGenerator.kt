@@ -6,14 +6,32 @@ import sk.kubis.endlessdrive.core.SeededRandom
 import sk.kubis.endlessdrive.domain.model.BranchStyle
 import sk.kubis.endlessdrive.domain.model.BuildingType
 import sk.kubis.endlessdrive.domain.model.ComponentCondition
+import sk.kubis.endlessdrive.domain.model.FuelKind
 import sk.kubis.endlessdrive.domain.model.ItemCatalog
 import sk.kubis.endlessdrive.domain.model.ItemStack
 import sk.kubis.endlessdrive.domain.model.RoadPaving
 import sk.kubis.endlessdrive.domain.model.RoadFeature
 import sk.kubis.endlessdrive.domain.model.RoadSurface
+import sk.kubis.endlessdrive.domain.model.VehiclePaint
 
 object WorldGenerator {
     private const val MIX = -0x61C8864680B583EBL
+    private const val START_STYLE_SALT = 0x4D595DF4D0F33173L
+
+    /**
+     * Bezpečný, ale nie zakaždým rovnaký začiatok. Zima, púšť a búrky ostávajú
+     * na neskôr; tutoriál môže začať na vidieku, v živom alebo mŕtvom lese.
+     */
+    fun startingStyle(worldSeed: Long): BranchStyle = SeededRandom(
+        worldSeed xor START_STYLE_SALT
+    ).pick(
+        listOf(
+            BranchStyle.SAFE_RURAL,
+            BranchStyle.SAFE_RURAL,
+            BranchStyle.FOREST_ALIVE,
+            BranchStyle.FOREST
+        )
+    )
 
     /**
      * Plán segmentu zo seedu – dĺžka, poradie úsekov a počet budov.
@@ -28,9 +46,9 @@ object WorldGenerator {
     ): SegmentPlan {
         val rng = SeededRandom(segmentSeed xor PLAN_SALT)
         // Bez stropu – úseky sa predlžujú aj hlboko v jazde.
-        val progress = MathX.growth(tripDistance, 4000f).coerceAtMost(3f)
-        // Čím ďalej, tým dlhšie úseky pred ďalšou križovatkou.
-        val lengthGrowth = 1f + progress * 0.45f
+        val progress = MathX.growth(tripDistance, 9000f).coerceAtMost(1.2f)
+        // Regióny ostávajú čitateľné aj hlboko v jazde; nerastú na desiatky km.
+        val lengthGrowth = 1f + progress * 0.25f
         val baseLen = if (isTutorial) {
             GameConfig.TUTORIAL_SEGMENT_LENGTH
         } else {
@@ -71,6 +89,9 @@ object WorldGenerator {
         style: BranchStyle,
         tripDistance: Float
     ): RoadPaving {
+        if (style == BranchStyle.ALPINE) {
+            return if (rng.chance(0.58f)) RoadPaving.SNOW else RoadPaving.PACKED_SNOW
+        }
         // Zima je odmena za dlhú jazdu – čím ďalej, tým väčšia šanca na sneh.
         // Na púšti a v piesočnej búrke nesneží, tam vládne piesok.
         if (!style.arid && tripDistance >= GameConfig.SNOW_START_M) {
@@ -120,6 +141,7 @@ object WorldGenerator {
                 roll < 0.84f -> RoadPaving.DIRT
                 else -> RoadPaving.GRAVEL_ROAD
             }
+            BranchStyle.ALPINE -> error("alpine paving is selected above")
         }
     }
 
@@ -133,7 +155,10 @@ object WorldGenerator {
     ): RoadSegment {
         val rng = SeededRandom(plan.seed)
         val sections = layoutSections(plan)
-        val choices = buildChoices(rng, plan.seed, tripDistance + plan.length, isTutorial)
+        // Už žiadne rázcestie: región pozná jediné plynulé pokračovanie.
+        val choices = buildContinuation(
+            rng, plan.seed, plan.style, tripDistance + plan.length, isTutorial
+        )
 
         val segment = RoadSegment(
             seed = plan.seed,
@@ -227,6 +252,14 @@ object WorldGenerator {
                     roll < 0.80f -> if (earlySoft > 0.5f) RoadFeature.HILLS else RoadFeature.CREST
                     else -> RoadFeature.BROKEN
                 }
+                BranchStyle.ALPINE -> when {
+                    roll < 0.16f -> RoadFeature.STRAIGHT
+                    roll < 0.45f -> RoadFeature.HILLS
+                    roll < 0.66f -> RoadFeature.CREST
+                    roll < 0.81f -> RoadFeature.SWITCHBACK
+                    roll < 0.91f -> RoadFeature.RAVINE
+                    else -> RoadFeature.BROKEN
+                }
                 BranchStyle.INDUSTRIAL -> when {
                     roll < 0.14f + earlySoft * 0.05f -> RoadFeature.STRAIGHT
                     roll < 0.42f + earlySoft * 0.06f -> RoadFeature.HILLS
@@ -305,9 +338,19 @@ object WorldGenerator {
         if (houseX.isNaN() || garageX.isNaN()) return
         segment.buildings += makeBuilding(rng, BuildingType.HOUSE, houseX, tripDistance, segment.style)
         val garage = makeBuilding(rng, BuildingType.GARAGE, garageX, tripDistance, segment.style)
-        garage.loot.add(0, ItemStack(ItemCatalog.DOORS.id, ComponentCondition.USED, 0.7f))
-        garage.loot.add(1, ItemStack(ItemCatalog.HOOD.id, ComponentCondition.USED, 0.75f))
-        garage.loot.add(2, ItemStack(ItemCatalog.WINDOWS.id, ComponentCondition.USED, 0.7f))
+        // Prvá garáž je ochutnávka, nie katalóg. Jeden náhodný pár plechu a
+        // jedna užitočná vec stačia; ďalšie diely si hráč hľadá na ceste.
+        val useful = garage.loot.firstOrNull { it.def.mountsTo?.group != "Body" }
+            ?: ItemStack(ItemCatalog.TIRE.id, ComponentCondition.USED, 0.65f)
+        val firstDoor = if (rng.chance(0.5f)) ItemCatalog.DOOR_FRONT else ItemCatalog.DOOR_REAR
+        garage.loot.clear()
+        garage.loot += ItemStack(
+            firstDoor.id,
+            ComponentCondition.USED,
+            0.7f,
+            paintIndex = rng.nextInt(VehiclePaint.entries.size)
+        )
+        garage.loot += useful
         segment.buildings += garage
     }
 
@@ -411,6 +454,7 @@ object WorldGenerator {
             // Búrka zaváta cestu závejmi piesku – iná prekážka tu ani nie je.
             BranchStyle.SANDSTORM, BranchStyle.DUST_STORM ->
                 if (roll < 0.82f) RoadSurface.SAND else RoadSurface.GRAVEL
+            BranchStyle.ALPINE -> if (roll < 0.55f) RoadSurface.ICE else RoadSurface.GRAVEL
         }
         // Voda stojí len tam, kam steká – v rokline alebo na rovine. Na kopci
         // ani v serpentíne by mláka nevydržala, tam ostane rozmoknuté bahno.
@@ -476,7 +520,9 @@ object WorldGenerator {
             landmark = true
         )
         // Depo nikdy nesklame: plný stojan a niekoľko poriadnych dielov.
-        depot.pumpFuelL = rng.nextFloat(GameConfig.PUMP_FUEL_MAX * 0.8f, GameConfig.PUMP_FUEL_MAX * 1.4f)
+        val depotFuel = rng.nextFloat(GameConfig.PUMP_FUEL_MAX * 0.8f, GameConfig.PUMP_FUEL_MAX * 1.4f)
+        depot.pumpFuelL = depotFuel * 0.55f
+        depot.pumpDieselL = depotFuel * 0.45f
         depot.pumpPurity = rng.nextFloat(0.88f, 1f)
         val tier3 = listOf(ItemCatalog.ENGINE_C, ItemCatalog.RADIATOR_HD, ItemCatalog.FUEL_TANK_LONG)
         val solid = listOf(
@@ -484,8 +530,11 @@ object WorldGenerator {
             ItemCatalog.BRAKES_GOOD, ItemCatalog.RADIATOR_GOOD, ItemCatalog.SUSPENSION_GOOD,
             ItemCatalog.ENGINE_B, ItemCatalog.FUEL_TANK_BIG, ItemCatalog.DRIVE_AWD
         )
+        val depotIds = depot.loot.mapTo(HashSet()) { it.defId }
         repeat(2 + rng.nextInt(2)) {
-            val def = rng.pick(solid)
+            val available = solid.filter { it.id !in depotIds }
+            val def = rng.pick(if (available.isEmpty()) solid else available)
+            depotIds += def.id
             depot.loot.add(ItemStack(def.id, ComponentCondition.USED, rng.nextFloat(0.6f, 0.92f)))
         }
         // Čím ďalej depo je, tým vyššia šanca na kus z tretieho stupňa.
@@ -493,6 +542,23 @@ object WorldGenerator {
         if (rng.chance(eliteChance.coerceAtMost(0.75f))) {
             val def = rng.pick(tier3)
             depot.loot.add(ItemStack(def.id, ComponentCondition.USED, rng.nextFloat(0.65f, 0.95f)))
+        }
+        // Isté depá dávajú dlhým jazdám rytmus aj v obsahu: karoséria/interiér
+        // sa rotujú a po odomknutí zimy je v každom depe jedna príprava na sneh.
+        val depotIndex = (at / spacing).toInt()
+        val travelRotation = listOf(
+            ItemCatalog.SEAT_REAR, ItemCatalog.ROOF_RACK, ItemCatalog.BOOT_CRATE,
+            ItemCatalog.DOOR_FRONT, ItemCatalog.DOOR_REAR, ItemCatalog.TRUNK_LID, ItemCatalog.SUSPENSION_LIFT
+        )
+        val travel = travelRotation[depotIndex % travelRotation.size]
+        if (depot.loot.none { it.defId == travel.id }) {
+            depot.loot.add(ItemStack(travel.id, ComponentCondition.USED, rng.nextFloat(0.55f, 0.9f)))
+        }
+        if (at >= GameConfig.WINTER_GEAR_FROM_M) {
+            val winter = if (depotIndex % 2 == 0) ItemCatalog.SNOW_CHAINS else ItemCatalog.TIRE_WINTER
+            if (depot.loot.none { it.defId == winter.id }) {
+                depot.loot.add(ItemStack(winter.id, ComponentCondition.USED, rng.nextFloat(0.58f, 0.92f)))
+            }
         }
         depot.loot.add(
             ItemStack(
@@ -546,35 +612,84 @@ object WorldGenerator {
         return bestX
     }
 
-    // --- Križovatky --------------------------------------------------------
+    // --- Plynulé pokračovanie regiónov -------------------------------------
 
-    private fun buildChoices(
+    private fun buildContinuation(
         rng: SeededRandom,
         parentSeed: Long,
+        current: BranchStyle,
         atDistance: Float,
         tutorial: Boolean
     ): List<BranchChoice> {
-        val picked = mutableListOf<BranchStyle>()
-        if (tutorial) {
-            // Prvá križovatka ukazuje tri základné svety, nie celý katalóg.
-            picked += listOf(BranchStyle.SAFE_RURAL, BranchStyle.INDUSTRIAL, BranchStyle.SHORTCUT_RISK)
-        } else {
-            // Ponuka rastie so vzdialenosťou – púšť a búrka prídu až neskôr.
-            val pool = BranchStyle.entries.filter { atDistance >= it.unlockDistance }.toMutableList()
-            // Vždy aspoň dve vetvy, tretia pribúda so vzdialenosťou.
-            val wanted = if (rng.chance(0.45f + (atDistance / 4000f).coerceAtMost(0.35f))) 3 else 2
-            repeat(wanted.coerceAtMost(pool.size)) {
-                val style = pickWeighted(rng, pool)
-                pool.remove(style)
-                picked += style
+        // Štart už používa zelenú kresbu živého lesa. Nasledujúci región preto
+        // musí byť naozaj iný; RURAL -> FOREST_ALIVE vyzeralo aj po siedmich
+        // kilometroch ako jedno nezmenené pozadie.
+        val alpineReady = atDistance >= maxOf(
+            BranchStyle.ALPINE.unlockDistance,
+            GameConfig.SNOW_START_M
+        )
+        // Prvý prechod ostáva zámerne čitateľný. Potom už nejde o pevný
+        // scenár les → pustatina → púšť: susedné oblasti sa miešajú zo
+        // zmysluplného poolu a rovnaký typ sa neopakuje hneď po sebe.
+        val next = if (tutorial) {
+            // Aj prvý prechod musí vizuálne niekam viesť; pri náhodnom štarte
+            // nesmie živý les pokračovať tým istým živým lesom.
+            when (current) {
+                BranchStyle.SAFE_RURAL -> BranchStyle.FOREST
+                BranchStyle.FOREST_ALIVE -> BranchStyle.SAFE_RURAL
+                BranchStyle.FOREST -> BranchStyle.INDUSTRIAL
+                else -> BranchStyle.SAFE_RURAL
             }
-            picked.sortBy { it.ordinal }
+        } else when (current) {
+            BranchStyle.SAFE_RURAL -> rng.pick(
+                listOf(BranchStyle.FOREST, BranchStyle.FOREST, BranchStyle.FOREST_ALIVE)
+            )
+            BranchStyle.FOREST_ALIVE -> rng.pick(
+                listOf(BranchStyle.FOREST, BranchStyle.SHORTCUT_RISK, BranchStyle.INDUSTRIAL)
+            )
+            BranchStyle.FOREST -> rng.pick(
+                listOf(
+                    BranchStyle.SHORTCUT_RISK, BranchStyle.SHORTCUT_RISK,
+                    BranchStyle.INDUSTRIAL, BranchStyle.DESERT, BranchStyle.FOREST_ALIVE
+                )
+            )
+            BranchStyle.SHORTCUT_RISK -> rng.pick(
+                listOf(
+                    BranchStyle.DESERT, BranchStyle.DESERT,
+                    BranchStyle.INDUSTRIAL, BranchStyle.FOREST_ALIVE, BranchStyle.DUST_STORM
+                )
+            )
+            BranchStyle.DESERT -> rng.pick(
+                listOf(
+                    BranchStyle.DESERT_DUSK, BranchStyle.DESERT_DUSK,
+                    BranchStyle.SANDSTORM, BranchStyle.SHORTCUT_RISK
+                )
+            )
+            BranchStyle.SANDSTORM -> rng.pick(
+                listOf(BranchStyle.DESERT_DUSK, BranchStyle.DESERT_DUSK, BranchStyle.SHORTCUT_RISK)
+            )
+            BranchStyle.DESERT_DUSK -> if (alpineReady && rng.chance(0.42f)) {
+                BranchStyle.ALPINE
+            } else rng.pick(
+                listOf(BranchStyle.SHORTCUT_RISK, BranchStyle.INDUSTRIAL, BranchStyle.FOREST_ALIVE)
+            )
+            BranchStyle.ALPINE -> rng.pick(
+                listOf(BranchStyle.INDUSTRIAL, BranchStyle.FOREST, BranchStyle.SAFE_RURAL)
+            )
+            BranchStyle.INDUSTRIAL -> if (alpineReady && rng.chance(0.18f)) {
+                BranchStyle.ALPINE
+            } else rng.pick(
+                listOf(
+                    BranchStyle.DUST_STORM, BranchStyle.SHORTCUT_RISK,
+                    BranchStyle.FOREST_ALIVE, BranchStyle.DESERT
+                )
+            )
+            BranchStyle.DUST_STORM -> rng.pick(
+                listOf(BranchStyle.INDUSTRIAL, BranchStyle.DESERT_DUSK, BranchStyle.SHORTCUT_RISK)
+            )
         }
-        if (picked.isEmpty()) picked += BranchStyle.SAFE_RURAL
-        return picked.mapIndexed { i, style ->
-            val seed = parentSeed xor (style.ordinal + 1L) * MIX xor atDistance.toRawBits().toLong()
-            BranchChoice(id = i, plan = planSegment(seed, style, atDistance))
-        }
+        val nextSeed = parentSeed xor (next.ordinal + 1L) * MIX xor atDistance.toRawBits().toLong()
+        return listOf(BranchChoice(id = 0, plan = planSegment(nextSeed, next, atDistance)))
     }
 
     /** Ruleta podľa [BranchStyle.pickWeight] – bežné cesty padajú častejšie než búrka. */
@@ -631,6 +746,12 @@ object WorldGenerator {
                 roll < 0.55f -> BuildingType.GAS_STATION
                 else -> BuildingType.AUTO_SHOP
             }
+            BranchStyle.ALPINE -> when {
+                roll < 0.18f -> BuildingType.HOUSE
+                roll < 0.54f -> BuildingType.GARAGE
+                roll < 0.76f -> BuildingType.GAS_STATION
+                else -> BuildingType.AUTO_SHOP
+            }
         }
     }
 
@@ -643,6 +764,11 @@ object WorldGenerator {
         landmark: Boolean = false
     ): WorldBuilding {
         val id = (type.ordinal.toLong() shl 32) xor localX.toRawBits().toLong() xor rng.nextLong()
+        // Stojany nie sú univerzálne. Diesel je o niečo vzácnejší, ale dosť
+        // častý na to, aby dieselový motor nebol pasca bez zásobovania.
+        val pumpFuelKind = if (type == BuildingType.GAS_STATION && rng.chance(0.40f)) {
+            FuelKind.DIESEL
+        } else FuelKind.PETROL
         // Čím ďalej, tým väčšia šanca, že stojan je vyčerpaný.
         val pump = if (type == BuildingType.GAS_STATION) {
             // Ďaleko od štartu je palivo čoraz vzácnejšie – dojazd sa stáva témou.
@@ -650,28 +776,39 @@ object WorldGenerator {
             if (rng.chance(0.18f + drought)) 0f
             else rng.nextFloat(GameConfig.PUMP_FUEL_MIN, GameConfig.PUMP_FUEL_MAX)
         } else 0f
-        val loot = LootGenerator.generate(rng, type, distance, style).toMutableList()
+        // Skutočná poloha budovy posúva rotáciu lootov aj progres rarity;
+        // všetky stavby v jednom segmente už nedostanú ten istý „kilometer“.
+        val lootDistance = distance + localX
+        val loot = LootGenerator.generate(rng, type, lootDistance, style).toMutableList()
         // Vyschnutý stojan neznamená prázdnu stanicu – v sklade ostal kanister.
         // Zájsť na benzínku a odísť bez paliva je najhorší možný záver zastávky.
         if (type == BuildingType.GAS_STATION && pump <= 0.05f) {
-            loot.add(
-                ItemStack(
-                    defId = ItemCatalog.FUEL_CAN.id,
-                    condition = ComponentCondition.NEW,
-                    health = 1f,
-                    count = 1,
-                    purity = rng.nextFloat(0.62f, 0.92f)
+            // Aj vyschnutá pumpa má núdzovo oba druhy paliva. Dieselový motor
+            // tak nie je potrestaný len preto, že RNG doteraz hádzalo benzín.
+            listOf(ItemCatalog.FUEL_CAN, ItemCatalog.DIESEL_CAN).forEach { fallbackFuel ->
+                if (loot.none { it.defId == fallbackFuel.id }) loot.add(
+                    ItemStack(
+                        defId = fallbackFuel.id,
+                        condition = ComponentCondition.NEW,
+                        health = 1f,
+                        count = 1,
+                        purity = rng.nextFloat(0.62f, 0.92f)
+                    )
                 )
-            )
+            }
         }
         return WorldBuilding(
             id = id,
             type = type,
             localX = localX,
             loot = loot,
-            pumpFuelL = pump,
+            // Zásoba ostáva rovnaká ako predtým, iba sa rozdelí medzi dve
+            // samostatné hadice. Plná stanica vždy ponúka benzín aj diesel.
+            pumpFuelL = pump * 0.55f,
+            pumpDieselL = pump * 0.45f,
             // Stojan býva slušný, ale po rokoch je v ňom aj kondenz.
             pumpPurity = rng.nextFloat(0.78f, 0.99f),
+            pumpFuelKind = pumpFuelKind,
             landmark = landmark
         )
     }
