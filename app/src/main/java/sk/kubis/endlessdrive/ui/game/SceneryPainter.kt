@@ -70,9 +70,9 @@ class SceneryPainter(
             val scale = MathX.hash01(cell, 577)
             drawProp(wx, d, kind, scale, biome, day, depth, heightAt, cell)
         }
-        drawPowerLine(fromX, toX, day, depth, heightAt)
-        drawGuidePosts(fromX, toX, day, depth, heightAt)
-        drawMilestones(fromX, toX, day, depth, heightAt)
+        drawPowerLine(fromX, toX, day, depth, heightAt, occupiedAt)
+        drawGuidePosts(fromX, toX, day, depth, heightAt, occupiedAt)
+        drawMilestones(fromX, toX, day, depth, heightAt, occupiedAt)
     }
 
     /**
@@ -85,7 +85,8 @@ class SceneryPainter(
         toX: Float,
         day: Float,
         depth: DepthProjection,
-        heightAt: (Float) -> Float
+        heightAt: (Float) -> Float,
+        occupiedAt: (Float) -> Boolean
     ) {
         val d = GameConfig.ROAD_DEPTH + 0.06f
         val first = MathX.floorDiv(fromX, POST_SPACING)
@@ -98,6 +99,7 @@ class SceneryPainter(
 
         for (i in first..last) {
             val wx = i * POST_SPACING
+            if (occupiedAt(wx)) continue
             val px = depth.atX(depth.frontX(wx), d)
             if (px < -40f || px > size.width + 40f) continue
             val py = depth.atY(depth.frontY(heightAt(wx)), d)
@@ -126,13 +128,15 @@ class SceneryPainter(
         biomeAt: (Float) -> BiomeBlend,
         day: Float,
         depth: DepthProjection,
-        heightAt: (Float) -> Float
+        heightAt: (Float) -> Float,
+        occupiedAt: (Float) -> Boolean = { false }
     ) {
         val first = MathX.floorDiv(fromX, FRONT_CELL)
         val last = MathX.floorDiv(toX, FRONT_CELL)
         for (cell in first..last) {
             if (MathX.hash01(cell, FRONT_SALT) > 0.55f) continue
             val wx = cell * FRONT_CELL + MathX.hash01(cell, 401) * FRONT_CELL
+            if (occupiedAt(wx)) continue
             val blend = biomeAt(wx)
             val biome = if (MathX.hash01(cell, BIOME_FRONT_SALT) < blend.amount) blend.to else blend.from
             val d = 0.02f + MathX.hash01(cell, 733) * 0.22f
@@ -698,7 +702,8 @@ class SceneryPainter(
         toX: Float,
         day: Float,
         depth: DepthProjection,
-        heightAt: (Float) -> Float
+        heightAt: (Float) -> Float,
+        occupiedAt: (Float) -> Boolean
     ) {
         val d = GameConfig.ROAD_DEPTH + 0.55f
         val first = MathX.floorDiv(fromX, POLE_SPACING) - 1
@@ -708,27 +713,39 @@ class SceneryPainter(
 
         for (i in first..last) {
             val wx = i * POLE_SPACING
+            if (occupiedAt(wx)) continue
             val px = depth.atX(depth.frontX(wx), d)
             val py = depth.atY(depth.frontY(heightAt(wx)), d)
             val s = depth.ppm * (1f - depth.perspectiveT(d))
             val topY = py - s * 3.4f
 
-            // Drôt k ďalšiemu stĺpu (dva vodiče s previsom).
+            // Káble kreslíme ako dve hladké reťazovky. Spoj nevznikne cez
+            // vynechaný stĺp (napr. v rokline), takže sa vedenie nekríži s mostom.
             val nx = (i + 1) * POLE_SPACING
-            val npx = depth.atX(depth.frontX(nx), d)
-            val npy = depth.atY(depth.frontY(heightAt(nx)), d) - s * 3.4f
-            for (wire in 0 until 2) {
-                val off = s * (0.22f + wire * 0.34f)
-                var prevX = px
-                var prevY = topY + off
-                for (k in 1..6) {
-                    val t = k / 6f
-                    val sag = s * 0.55f * (t * (1f - t) * 4f)
-                    val cx = px + (npx - px) * t
-                    val cy = (topY + off) + (npy + off - (topY + off)) * t + sag
-                    drawLine(wireCol, Offset(prevX, prevY), Offset(cx, cy), strokeWidth = (s * 0.035f).coerceAtLeast(1f))
-                    prevX = cx
-                    prevY = cy
+            if (!occupiedAt(nx)) {
+                val npx = depth.atX(depth.frontX(nx), d)
+                val nextGroundY = depth.atY(depth.frontY(heightAt(nx)), d)
+                val nextTopY = nextGroundY - s * 3.4f
+                for (wire in 0 until 2) {
+                    val off = s * (0.23f + wire * 0.34f)
+                    val startY = topY + off
+                    val endY = nextTopY + off
+                    propPath.reset()
+                    propPath.moveTo(px, startY)
+                    propPath.quadraticBezierTo(
+                        (px + npx) * 0.5f,
+                        maxOf(startY, endY) + s * 0.44f,
+                        npx,
+                        endY
+                    )
+                    drawPath(
+                        propPath,
+                        wireCol,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(
+                            width = (s * 0.026f).coerceAtLeast(0.8f),
+                            cap = StrokeCap.Round
+                        )
+                    )
                 }
             }
             drawLine(poleCol, Offset(px, py), Offset(px, topY), strokeWidth = (s * 0.12f).coerceAtLeast(1.5f))
@@ -738,6 +755,10 @@ class SceneryPainter(
                 Offset(px + s * 0.42f, topY + s * 0.30f),
                 strokeWidth = (s * 0.08f).coerceAtLeast(1f)
             )
+            // Malé izolátory ukážu, kam sa vodiče pripájajú.
+            val insulator = shade(Color(0xFFB7A98D), day)
+            drawCircle(insulator, (s * 0.075f).coerceAtLeast(1f), Offset(px, topY + s * 0.23f))
+            drawCircle(insulator, (s * 0.075f).coerceAtLeast(1f), Offset(px, topY + s * 0.57f))
         }
     }
 
@@ -747,7 +768,8 @@ class SceneryPainter(
         toX: Float,
         day: Float,
         depth: DepthProjection,
-        heightAt: (Float) -> Float
+        heightAt: (Float) -> Float,
+        occupiedAt: (Float) -> Boolean
     ) {
         val d = GameConfig.ROAD_DEPTH + 0.12f
         val first = MathX.floorDiv(fromX, MILESTONE)
@@ -755,6 +777,7 @@ class SceneryPainter(
         for (i in first..last) {
             if (i <= 0) continue
             val wx = i * MILESTONE
+            if (occupiedAt(wx)) continue
             val px = depth.atX(depth.frontX(wx), d)
             val py = depth.atY(depth.frontY(heightAt(wx)), d)
             val s = depth.ppm * (1f - depth.perspectiveT(d))

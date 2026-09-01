@@ -189,23 +189,27 @@ fun TripBadge(ui: GameUiState, showFps: Boolean, modifier: Modifier = Modifier) 
                 modifier = Modifier.padding(bottom = 6.dp)
             )
         }
-        Text(
-            "${ui.scrap} SCRAP",
-            color = GameColors.accent,
-            fontSize = Type.label,
-            fontWeight = FontWeight.Bold
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+        // Druhý riadok je výlučne pre aktuálny stav jazdy. Scrap je mena,
+        // preto patrí vedľa času; rekord patrí na obrazovku výsledkov.
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(Space.s),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
                 (if (ui.isNight) "☾ " else "☀ ") + ui.clock,
                 color = GameColors.textDim,
                 fontSize = Type.label
             )
-            if (ui.bestDistanceKm > 0f) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AutomotiveIconView(AutomotiveIcon.SCRAP, GameColors.accent, Modifier.size(14.dp))
                 Text(
-                    String.format("best %.1f", ui.bestDistanceKm),
-                    color = GameColors.textDim,
-                    fontSize = Type.label
+                    "${ui.scrap} SCRAP",
+                    color = GameColors.accent,
+                    fontSize = Type.label,
+                    fontWeight = FontWeight.Bold
                 )
             }
             if (showFps) {
@@ -368,7 +372,7 @@ private fun TellTales(ui: GameUiState) {
     val oilRatio = (ui.oilL / ui.oilCapacityL.coerceAtLeast(1f)).coerceIn(0f, 1f)
     val coolRatio = (ui.coolantL / ui.coolantCapacityL.coerceAtLeast(1f)).coerceIn(0f, 1f)
 
-    Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+    Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
         Lamp(
             icon = AutomotiveIcon.OIL,
             // Málo oleja svieti načerveno, špinavý oranžovo – iná porucha, iná farba.
@@ -417,7 +421,7 @@ private fun TellTales(ui: GameUiState) {
         PartLamp(AutomotiveIcon.TYRE, ui, "TYRES")
         PartLamp(AutomotiveIcon.BRAKE, ui, "BRK")
         Lamp(
-            icon = if (ui.highBeamsOn) AutomotiveIcon.HIGH_BEAM else AutomotiveIcon.LOW_BEAM,
+            icon = AutomotiveIcon.LOW_BEAM,
             state = if (ui.headlightsOn) LampState.On else LampState.Off,
             // Reálne kontrolky: stretávacie zelené, diaľkové modré.
             onColor = if (ui.highBeamsOn) Color(0xFF4D8DFF) else Color(0xFF45C96B)
@@ -468,7 +472,7 @@ private fun Lamp(
     }
     Box(
         Modifier
-            .size(width = 30.dp, height = 19.dp)
+            .size(width = 36.dp, height = 24.dp)
             // Vlastný tmavý podklad namiesto bloku cez celú lištu – kontrolka
             // si nesie kontrast so sebou a kulisa medzi nimi ostáva vidieť.
             .background(
@@ -478,6 +482,6 @@ private fun Lamp(
             .border(1.dp, color.copy(alpha = if (state == LampState.Off) 0.55f else 1f), RoundedCornerShape(6.dp)),
         contentAlignment = Alignment.Center
     ) {
-        AutomotiveIconView(icon, color, Modifier.size(16.dp))
+        AutomotiveIconView(icon, color, Modifier.size(19.dp))
     }
 }

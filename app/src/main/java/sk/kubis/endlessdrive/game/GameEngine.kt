@@ -22,6 +22,7 @@ import sk.kubis.endlessdrive.domain.model.RoadSurface
 import sk.kubis.endlessdrive.domain.model.SedanSpec
 import sk.kubis.endlessdrive.domain.model.VehiclePaint
 import sk.kubis.endlessdrive.domain.model.candidatesFor
+import sk.kubis.endlessdrive.game.audio.GameSfx
 import sk.kubis.endlessdrive.game.car.Car
 import sk.kubis.endlessdrive.game.car.EndCause
 import sk.kubis.endlessdrive.game.car.MountedPart
@@ -175,6 +176,8 @@ class GameEngine(
         private set
 
     private val events = mutableListOf<ActiveEvent>()
+    /** Jednorazové SFX – UI ich vyberie cez [consumeSfx]. */
+    private val sfxQueue = ArrayDeque<GameSfx>()
 
     private var accumulator = 0f
     private var eventCooldown = 14f
@@ -781,6 +784,18 @@ class GameEngine(
 
     fun hasEvent(kind: RoadEvent): Boolean = events.any { it.event == kind }
 
+    /** Vráti a vyprázdni frontu jednorazových zvukov. */
+    fun consumeSfx(): List<GameSfx> {
+        if (sfxQueue.isEmpty()) return emptyList()
+        val out = sfxQueue.toList()
+        sfxQueue.clear()
+        return out
+    }
+
+    private fun emitSfx(sfx: GameSfx) {
+        if (sfxQueue.size < 12) sfxQueue.addLast(sfx)
+    }
+
     /** Vyvolá udalosť naschvál – pre testy a ladenie. */
     fun forceEvent(kind: RoadEvent) {
         trigger(kind, SeededRandom(seed xor kind.ordinal.toLong()))
@@ -903,9 +918,29 @@ class GameEngine(
             RoadEvent.ABANDONED_WRECK -> dropRoadsideFind(rng, parts = true)
             else -> Unit
         }
+        emitSfx(e.toSfx())
         if (e.timed) events += ActiveEvent(e, e.duration)
         message = flatTyreAxle?.let { "Blowout — the $it tyre is shredded." } ?: e.message
         flatTyreAxle = null
+    }
+
+    private fun RoadEvent.toSfx(): GameSfx = when (this) {
+        RoadEvent.FLAT_TYRE -> GameSfx.BLOWOUT
+        RoadEvent.ROCK_STRIKE -> GameSfx.ROCK
+        RoadEvent.FUEL_LEAK -> GameSfx.FUEL_LEAK
+        RoadEvent.COOLANT_LEAK -> GameSfx.COOLANT_LEAK
+        RoadEvent.MISFIRE -> GameSfx.MISFIRE
+        RoadEvent.BELT_SNAPPED -> GameSfx.BELT
+        RoadEvent.OIL_SPLASH -> GameSfx.OIL_SPLASH
+        RoadEvent.RAIN -> GameSfx.RAIN
+        RoadEvent.DEBRIS -> GameSfx.DEBRIS
+        RoadEvent.MUD -> GameSfx.MUD
+        RoadEvent.TAILWIND -> GameSfx.TAILWIND
+        RoadEvent.CLEAR_ROAD -> GameSfx.CLEAR_ROAD
+        RoadEvent.ROADSIDE_STASH, RoadEvent.ABANDONED_WRECK -> GameSfx.FIND
+        RoadEvent.RADIO -> GameSfx.RADIO
+        RoadEvent.TRACKS -> GameSfx.TRACKS
+        RoadEvent.ANIMAL -> GameSfx.ANIMAL
     }
 
     /** Ktorá náprava práve dostala defekt – len na presnejšiu hlášku. */
@@ -1587,11 +1622,13 @@ class GameEngine(
                 highBeamsOn = false
             }
             message = "Engine running — hold the throttle"
+            emitSfx(GameSfx.ENGINE_START)
             true
         } else {
             val missing = car.missingEssentials()
             // Zablokovaný štart nesmie byť slepá ulička – čo chýba, nájde sa nablízku.
             val rescued = offerRescue(missing)
+            emitSfx(GameSfx.ENGINE_FAIL_START)
             message = when {
                 rescued != null -> rescued
                 missing.isNotEmpty() ->
@@ -1610,6 +1647,7 @@ class GameEngine(
 
     fun stopEngine() {
         car.stopEngine()
+        emitSfx(GameSfx.ENGINE_STOP)
         message = "Engine switched off"
     }
 
@@ -1804,6 +1842,7 @@ class GameEngine(
         car.engineRunning = false
         throttleInput = 0f
         brakeInput = 0f
+        emitSfx(GameSfx.ENGINE_STALL)
         // Zhasnuté auto sa nezastaví na fleku – dojazdí zotrvačnosťou a z kopca
         // sa ešte kus zvezie. Do STOPPED prejde až keď naozaj stojí.
         if (phase == GamePhase.DRIVING && kotlin.math.abs(car.speed) < GameConfig.STOP_SPEED) {

@@ -30,7 +30,6 @@ import androidx.compose.ui.unit.sp
 import sk.kubis.endlessdrive.domain.model.RoadSurface
 import sk.kubis.endlessdrive.ui.theme.Chip
 import sk.kubis.endlessdrive.ui.theme.GameColors
-import sk.kubis.endlessdrive.ui.theme.IconToggleButton
 import sk.kubis.endlessdrive.ui.theme.StatBar
 import sk.kubis.endlessdrive.ui.theme.levelColor
 import sk.kubis.endlessdrive.ui.theme.purityColor
@@ -246,8 +245,18 @@ fun SideIcons(
                 else -> "Switch headlights off"
             }
         )
-        IconToggleButton(if (ui.paused) "▶" else "❚❚", ui.paused, onTogglePause, label = "Pause")
-        IconToggleButton("⏱", showFps, onToggleFps, label = "FPS")
+        HudActionToggleButton(
+            icon = if (ui.paused) HudActionIcon.PLAY else HudActionIcon.PAUSE,
+            active = ui.paused,
+            onClick = onTogglePause,
+            label = if (ui.paused) "Resume" else "Pause"
+        )
+        HudActionToggleButton(
+            icon = HudActionIcon.TIMER,
+            active = showFps,
+            onClick = onToggleFps,
+            label = "FPS"
+        )
     }
 }
 

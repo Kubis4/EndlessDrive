@@ -100,7 +100,12 @@ class GameRenderer(private val assets: GameAssets) {
         // krajinu – procedurálne vrstvy by sa cezeň len bili.
         updateBackdropScroll(cam, engine.car.x)
         val backdrop = assets.backdropFor(environment.from)
-        drawParallaxBackdrop(backdrop, cam, horizonY, day, engine.timeOfDay)
+        // Slnko/mesiac sa kreslia až po oboch kulisách – pri fade biome
+        // by inak mizli pod novým pozadím a na konci znova „naskočili“.
+        drawParallaxBackdrop(
+            backdrop, cam, horizonY, day, engine.timeOfDay,
+            drawCelestial = false
+        )
         if (environment.amount > 0.001f && environment.to != environment.from) {
             drawParallaxBackdrop(
                 assets.backdropFor(environment.to), cam, horizonY, day, engine.timeOfDay,
@@ -108,7 +113,10 @@ class GameRenderer(private val assets: GameAssets) {
                 drawCelestial = false
             )
         }
+        val celestialHorizon =
+            horizonY - cam.pitch * GameConfig.DEPTH_PITCH_VP_Y * (size.height * 0.5f)
         with(sky) {
+            drawCelestialOver(engine.timeOfDay, day, celestialHorizon)
             drawStarfield(day, cam.x, horizonY)
             drawHaze(
                 horizonY, day, environment.from, strength = 0.4f,
@@ -127,17 +135,22 @@ class GameRenderer(private val assets: GameAssets) {
 
         // Poradie je dôležité: najprv zem, potom kulisy (stoja na nej), až potom cesta.
         drawGround(engine.segment, environment, engine.winterAmount, day)
-        // Kde stojí budova, tam kulisa nerastie.
-        val builtOn: (Float) -> Boolean = { wx ->
-            engine.segment.buildingOccupies(wx, BUILDING_CLEAR_M)
+        // Kulisy nepatria do budovy ani do rokliny pod mostom. Rovnaký filter
+        // dostanú stromy, debny, stĺpy, patníky aj drobnosti v popredí.
+        val occupiedGround: (Float) -> Boolean = { wx ->
+            engine.segment.buildingOccupies(wx, BUILDING_CLEAR_M) ||
+                engine.segment.bridgeClearanceAtWorld(wx) > BRIDGE_PROP_CLEARANCE_M
         }
         with(scenery) {
             drawBackProps(
                 visibleFrom, visibleTo, engine.segment::biomeBlendAtWorld,
-                day, depth, heightAt, builtOn
+                day, depth, heightAt, occupiedGround
             )
         }
         drawBridges(engine, day)
+        // Voda má rovnakú geometriu ako vozovka: plochu o kúsok nižšie
+        // a bočné steny, ktoré siahajú až na dno jamy.
+        drawBridgeWaterDeck(engine, day)
         drawRoadSurface(engine.segment, day)
         drawRoadHistory(engine.segment, day)
         drawSurfacePatches(engine.segment, day)
@@ -151,7 +164,7 @@ class GameRenderer(private val assets: GameAssets) {
         with(scenery) {
             drawFrontProps(
                 visibleFrom, visibleTo, engine.segment::biomeBlendAtWorld,
-                day, depth, heightAt
+                day, depth, heightAt, occupiedGround
             )
         }
         drawNight(engine, day)
@@ -546,9 +559,11 @@ class GameRenderer(private val assets: GameAssets) {
             height = horizonY * 1.18f,
             tint = night, haze = haze, hazeAmount = 0f, opacity = opacity
         )
-        // Slnko a mesiac idú nad oblohu, ale pod siluety – inak by z hry zmizol
-        // denný cyklus. Kde ich má kresba namaľované, druhé nedávame.
-        if (drawCelestial && !backdrop.bakedSun) {
+        // Slnko a mesiac idú nad oblohu, ale pod siluety. Nesmú byť viazané
+        // na konkrétnu predlohu biome: niektoré staršie pozadia majú statické
+        // slnko, čo pri vstupe do lokality pôsobilo ako reset denného cyklu.
+        // Poloha je preto vždy odvodená iba z herného času.
+        if (drawCelestial) {
             with(sky) { drawCelestialOver(timeOfDay, day, horizonY + pitchPx) }
         }
         drawLayer(
@@ -835,6 +850,298 @@ class GameRenderer(private val assets: GameAssets) {
     }
 
 
+    /** Voda pod mostom – lacný 2.5D rez, len vo viditeľnom okne. */
+    private fun DrawScope.drawBridgeWaterDeck(engine: GameEngine, day: Float) {
+        val seg = engine.segment
+        if (terrainCount < 2) return
+        val frontDepth = GameConfig.VERGE_DEPTH
+        val backDepth = SCENERY_BACK_DEPTH + 0.5f
+        val dropBelowRoad = 1.50f
+        val surface = shade(Color(0xFF5A96A4), day)
+        val wall = shade(Color(0xFF3F7C88), day)
+        val wallDark = shade(Color(0xFF326673), day)
+        val visFrom = terrainW[0]
+        val visTo = terrainW[terrainCount - 1]
+
+        for (sec in seg.sections) {
+            if (sec.feature != RoadFeature.BRIDGE || sec.length < 4f) continue
+            val bridgeStart = seg.worldOrigin + sec.start
+            val bridgeEnd = seg.worldOrigin + sec.end
+            // Len úsek na obrazovke – celý dlhý most nesmie ťahať path-y.
+            val startW = maxOf(bridgeStart, visFrom)
+            val endW = minOf(bridgeEnd, visTo)
+            if (endW - startW < 1.5f) continue
+
+            val steps = (((endW - startW) * 0.4f).toInt() + 1).coerceIn(6, 14)
+            val wxArr = FloatArray(steps + 1)
+            val groundArr = FloatArray(steps + 1)
+            var lowestRoad = Float.POSITIVE_INFINITY
+            for (k in 0..steps) {
+                val wx = MathX.lerp(startW, endW, k / steps.toFloat())
+                wxArr[k] = wx
+                groundArr[k] = seg.groundAtWorld(wx)
+                lowestRoad = minOf(lowestRoad, seg.heightAtWorld(wx))
+            }
+            if (!lowestRoad.isFinite()) continue
+            val waterLevel = lowestRoad - dropBelowRoad
+
+            var firstWet = -1
+            var lastWet = -1
+            for (k in 0..steps) {
+                if (groundArr[k] < waterLevel) {
+                    if (firstWet < 0) firstWet = k
+                    lastWet = k
+                }
+            }
+            if (firstWet < 0 || lastWet <= firstWet) continue
+            val i0 = (firstWet - 1).coerceAtLeast(0)
+            val i1 = (lastWet + 1).coerceAtMost(steps)
+
+            fun x(wx: Float, d: Float) = depth.atX(depth.frontX(wx), d)
+            val middleDepth = (frontDepth + backDepth) * 0.5f
+            val surfaceScreenY = depth.atY(depth.frontY(waterLevel), middleDepth)
+            fun bottomY(ground: Float, d: Float): Float = maxOf(
+                surfaceScreenY,
+                depth.atY(depth.frontY(ground), d)
+            )
+
+            // Iba zadný a predný rez – žiadne desiatky depth slices.
+            for (pass in 0..1) {
+                val d = if (pass == 0) backDepth else frontDepth
+                val fill = if (pass == 0) wallDark else wall
+                band.reset()
+                for (k in i0..i1) {
+                    val px = x(wxArr[k], d)
+                    if (k == i0) band.moveTo(px, surfaceScreenY) else band.lineTo(px, surfaceScreenY)
+                }
+                for (k in i1 downTo i0) {
+                    band.lineTo(x(wxArr[k], d), bottomY(groundArr[k], d))
+                }
+                band.close()
+                drawPath(band, fill.copy(alpha = 0.96f))
+            }
+
+            val surfaceLeft = minOf(x(wxArr[i0], frontDepth), x(wxArr[i0], backDepth))
+            val surfaceRight = maxOf(x(wxArr[i1], frontDepth), x(wxArr[i1], backDepth))
+            val surfaceHeight = (depth.ppm * 0.12f).coerceIn(4f, 9f)
+            drawRect(
+                surface,
+                topLeft = Offset(surfaceLeft, surfaceScreenY),
+                size = Size((surfaceRight - surfaceLeft).coerceAtLeast(1f), surfaceHeight)
+            )
+            drawLine(
+                shade(Color(0xFFB8D9DD), day).copy(alpha = 0.55f),
+                Offset(surfaceLeft, surfaceScreenY),
+                Offset(surfaceRight, surfaceScreenY),
+                strokeWidth = (depth.ppm * 0.025f).coerceIn(1f, 2f),
+                cap = StrokeCap.Round
+            )
+        }
+    }
+
+    /** Starší objemová voda ponechaná ako pomocná implementácia pre regresiu. */
+    private fun DrawScope.drawBridgeWater(engine: GameEngine, day: Float) {
+        val seg = engine.segment
+        val waterFrontDepth = GameConfig.VERGE_DEPTH
+        val waterBackDepth = SCENERY_BACK_DEPTH + 0.5f
+        val waterSurfaceDepth = GameConfig.VERGE_DEPTH + 0.44f
+        val surface = shade(Color(0xFF66909A), day)
+        val deep = shade(Color(0xFF416A75), day)
+        val shore = shade(Color(0xFFB2C8C5), day)
+        val glint = shade(Color(0xFFD0E0DB), day).copy(alpha = 0.38f)
+
+        for (sec in seg.sections) {
+            if (sec.feature != RoadFeature.BRIDGE || sec.length < 4f) continue
+            val startW = seg.worldOrigin + sec.start
+            val endW = seg.worldOrigin + sec.end
+            if (endW < terrainW[0] || startW > terrainW[terrainCount - 1]) continue
+
+            // Voda je rez zaplavenej jamy: horná hrana je vodorovná a spodná
+            // presne kopíruje dno rokliny. Nevznikne tak samostatný lichobežnik.
+            val samples = 72
+            var bottom = Float.POSITIVE_INFINITY
+            var bottomIndex = 0
+            for (k in 0..samples) {
+                val wx = MathX.lerp(startW, endW, k / samples.toFloat())
+                val ground = seg.groundAtWorld(wx)
+                if (ground < bottom) {
+                    bottom = ground
+                    bottomIndex = k
+                }
+            }
+            if (!bottom.isFinite()) continue
+            // Jama má byť z väčšej časti pod vodou, nie iba s malou mlákou na
+            // dne. Hladinu vztiahneme na oba brehy, aby sa zachovala správna
+            // výška aj pri úsekoch s miernym pozdĺžnym sklonom.
+            val rimLevel = minOf(seg.groundAtWorld(startW), seg.groundAtWorld(endW))
+            // Hladina zostáva v skutočnej jame; rozlievanie riešime v hĺbke
+            // terénu, nie predlžovaním vody po svetovej osi jazdy.
+            val level = MathX.lerp(bottom, rimLevel, 0.82f)
+
+            // Nájdeme oba priesečníky vodnej hladiny so svahom jamy.
+            var from = startW
+            for (k in bottomIndex downTo 1) {
+                val dryW = MathX.lerp(startW, endW, (k - 1) / samples.toFloat())
+                val wetW = MathX.lerp(startW, endW, k / samples.toFloat())
+                val dryY = seg.groundAtWorld(dryW)
+                val wetY = seg.groundAtWorld(wetW)
+                if (dryY > level && wetY <= level) {
+                    val t = ((dryY - level) / (dryY - wetY)).coerceIn(0f, 1f)
+                    from = MathX.lerp(dryW, wetW, t)
+                    break
+                }
+            }
+            var to = endW
+            for (k in bottomIndex until samples) {
+                val wetW = MathX.lerp(startW, endW, k / samples.toFloat())
+                val dryW = MathX.lerp(startW, endW, (k + 1) / samples.toFloat())
+                val wetY = seg.groundAtWorld(wetW)
+                val dryY = seg.groundAtWorld(dryW)
+                if (wetY <= level && dryY > level) {
+                    val t = ((level - wetY) / (dryY - wetY)).coerceIn(0f, 1f)
+                    to = MathX.lerp(wetW, dryW, t)
+                    break
+                }
+            }
+
+            if (to - from < 2.5f) continue
+
+            val waterBottom = bottom
+
+            // Voda vyplní celý rez jamy od kulís po prednú hranu terénu.
+            // Jedna pevná hĺbka vytvárala modrú stenu pred jamou.
+            val x0 = depth.atX(depth.frontX(from), waterSurfaceDepth)
+            val x1 = depth.atX(depth.frontX(to), waterSurfaceDepth)
+            val waterY = depth.atY(depth.frontY(level), waterSurfaceDepth)
+            val bottomY = depth.atY(depth.frontY(waterBottom), waterSurfaceDepth)
+            val contourSteps = (((to - from) * 1.5f).toInt() + 1).coerceIn(12, 72)
+
+            band.reset()
+            // Zadná horná hrana hladiny.
+            for (k in 0..contourSteps) {
+                val wx = MathX.lerp(from, to, k / contourSteps.toFloat())
+                val x = depth.atX(depth.frontX(wx), waterBackDepth)
+                val y = depth.atY(depth.frontY(level), waterBackDepth)
+                if (k == 0) band.moveTo(x, y) else band.lineTo(x, y)
+            }
+            // Zadné dno, predné dno a predná horná hrana uzavrú celý objem vody.
+            for (k in contourSteps downTo 0) {
+                val wx = MathX.lerp(from, to, k / contourSteps.toFloat())
+                band.lineTo(
+                    depth.atX(depth.frontX(wx), waterBackDepth),
+                    depth.atY(depth.frontY(seg.groundAtWorld(wx)), waterBackDepth)
+                )
+            }
+            for (k in 0..contourSteps) {
+                val wx = MathX.lerp(from, to, k / contourSteps.toFloat())
+                band.lineTo(
+                    depth.atX(depth.frontX(wx), waterFrontDepth),
+                    depth.atY(depth.frontY(seg.groundAtWorld(wx)), waterFrontDepth)
+                )
+            }
+            for (k in contourSteps downTo 0) {
+                val wx = MathX.lerp(from, to, k / contourSteps.toFloat())
+                band.lineTo(
+                    depth.atX(depth.frontX(wx), waterFrontDepth),
+                    depth.atY(depth.frontY(level), waterFrontDepth)
+                )
+            }
+            band.close()
+            drawPath(
+                band,
+                Brush.verticalGradient(
+                    colors = listOf(surface.copy(alpha = 1f), deep.copy(alpha = 1f)),
+                    startY = waterY,
+                    endY = bottomY
+                )
+            )
+
+            // Ostrá vodorovná hladina uzavrie vodu medzi brehmi.
+            drawLine(
+                shore.copy(alpha = 0.55f),
+                Offset(x0, waterY),
+                Offset(x1, waterY),
+                strokeWidth = (depth.ppm * 0.035f).coerceIn(1f, 2.2f),
+                cap = StrokeCap.Round
+            )
+
+            val waterHeight = (bottomY - waterY).coerceAtLeast(1f)
+            for (k in 1..3) {
+                val centre = MathX.lerp(x0, x1, 0.28f + k * 0.15f)
+                val half = (x1 - x0) * (0.025f + k * 0.006f)
+                drawLine(
+                    glint,
+                    Offset(centre - half, waterY + waterHeight * (0.18f + k * 0.12f)),
+                    Offset(centre + half, waterY + waterHeight * (0.18f + k * 0.12f)),
+                    strokeWidth = (depth.ppm * 0.020f).coerceIn(0.8f, 1.5f),
+                    cap = StrokeCap.Round
+                )
+            }
+        }
+    }
+
+    /**
+     * Nepriehľadný vodný rez medzi spodkom mostovky a dnom rokliny.
+     * Kreslí sa po ceste, ale jeho horná hrana je pod mostovkou, preto cestu
+     * neprekryje a zároveň odstráni zelený pás medzi hĺbkovými vrstvami vody.
+     */
+    private fun DrawScope.drawBridgeWaterUnderDeck(engine: GameEngine, day: Float) {
+        val seg = engine.segment
+        val waterFrontDepth = GameConfig.VERGE_DEPTH
+        val waterBackDepth = SCENERY_BACK_DEPTH + 0.5f
+        val surface = shade(Color(0xFF5D8994), day)
+        val deep = shade(Color(0xFF3F6873), day)
+
+        for (sec in seg.sections) {
+            if (sec.feature != RoadFeature.BRIDGE || sec.length < 4f) continue
+            val startW = seg.worldOrigin + sec.start
+            val endW = seg.worldOrigin + sec.end
+            if (endW < terrainW[0] || startW > terrainW[terrainCount - 1]) continue
+
+            val steps = (((endW - startW) * 1.5f).toInt() + 1).coerceIn(12, 72)
+            val deckUnderside = 0.58f
+            fun topY(wx: Float, d: Float) = depth.atY(
+                depth.frontY(seg.heightAtWorld(wx) - deckUnderside), d
+            )
+            fun bottomY(wx: Float, d: Float) = depth.atY(
+                depth.frontY(seg.groundAtWorld(wx)), d
+            )
+            fun screenX(wx: Float, d: Float) = depth.atX(depth.frontX(wx), d)
+
+            band.reset()
+            // Zadná horná hrana.
+            for (k in 0..steps) {
+                val wx = MathX.lerp(startW, endW, k / steps.toFloat())
+                val x = screenX(wx, waterBackDepth)
+                val y = topY(wx, waterBackDepth)
+                if (k == 0) band.moveTo(x, y) else band.lineTo(x, y)
+            }
+            // Zadné dno, predné dno a predná horná hrana.
+            for (k in steps downTo 0) {
+                val wx = MathX.lerp(startW, endW, k / steps.toFloat())
+                band.lineTo(screenX(wx, waterBackDepth), bottomY(wx, waterBackDepth))
+            }
+            for (k in 0..steps) {
+                val wx = MathX.lerp(startW, endW, k / steps.toFloat())
+                band.lineTo(screenX(wx, waterFrontDepth), bottomY(wx, waterFrontDepth))
+            }
+            for (k in steps downTo 0) {
+                val wx = MathX.lerp(startW, endW, k / steps.toFloat())
+                band.lineTo(screenX(wx, waterFrontDepth), topY(wx, waterFrontDepth))
+            }
+            band.close()
+
+            drawPath(
+                band,
+                Brush.verticalGradient(
+                    colors = listOf(surface, deep),
+                    startY = topY((startW + endW) * 0.5f, waterFrontDepth),
+                    endY = bottomY((startW + endW) * 0.5f, waterFrontDepth)
+                )
+            )
+        }
+    }
+
     /**
      * Most sa kreslí zo svetových hraníc úseku, nie zo vzoriek terénu.
      *
@@ -861,6 +1168,10 @@ class GameRenderer(private val assets: GameAssets) {
             val startW = seg.worldOrigin + sec.start
             val endW = seg.worldOrigin + sec.end
             if (endW < fromX || startW > toX) continue
+            // Len viditeľný pás – celý dlhý most inak kreslí stovky pilierov/stĺpikov.
+            val drawFrom = maxOf(startW, fromX - PILLAR_SPACING_M)
+            val drawTo = minOf(endW, toX + PILLAR_SPACING_M)
+            if (drawTo - drawFrom < 0.5f) continue
 
             fun deckY(wx: Float) = depth.atY(depth.frontY(seg.heightAtWorld(wx)), d)
             fun groundYAt(wx: Float) = depth.atY(depth.frontY(seg.groundAtWorld(wx)), d)
@@ -868,10 +1179,14 @@ class GameRenderer(private val assets: GameAssets) {
 
             // Piliere v pevnom rozostupe, zarovnané na svetovú mriežku – tak
             // stoja stále na tom istom mieste, nech je kamera kdekoľvek.
-            val firstPillar = MathX.floorDiv(startW, PILLAR_SPACING_M) + 1
-            val lastPillar = MathX.floorDiv(endW, PILLAR_SPACING_M)
+            val firstPillar = MathX.floorDiv(drawFrom, PILLAR_SPACING_M) + 1
+            val lastPillar = MathX.floorDiv(drawTo, PILLAR_SPACING_M)
             val pillarXs = ArrayList<Float>(8)
-            for (p in firstPillar..lastPillar) pillarXs += p * PILLAR_SPACING_M
+            for (p in firstPillar..lastPillar) {
+                val wx = p * PILLAR_SPACING_M
+                if (wx <= startW || wx >= endW) continue
+                pillarXs += wx
+            }
 
             // Vzpery medzi susednými piliermi.
             for (k in 0 until pillarXs.size - 1) {
@@ -917,21 +1232,22 @@ class GameRenderer(private val assets: GameAssets) {
             }
 
             // Doska mostovky.
-            buildBandWorldDeck(seg, startW, endW, d, thickness)
+            buildBandWorldDeck(seg, drawFrom, drawTo, d, thickness)
             drawPath(band, deckColor)
-            buildEdgeWorldAt(seg, startW, endW, d, thickness)
+            buildEdgeWorldAt(seg, drawFrom, drawTo, d, thickness)
             drawPath(edge, deckShadow, style = Stroke(width = (0.12f * ppm).coerceAtLeast(1.5f)))
 
             // Zábradlie na bližšej strane.
             val railD = GameConfig.VERGE_DEPTH * 0.35f
             val railH = 0.95f * ppm
             val railCol = shade(Color(0xFF8A8578), day)
-            buildEdgeWorldAt(seg, startW, endW, railD, -railH)
+            buildEdgeWorldAt(seg, drawFrom, drawTo, railD, -railH)
             drawPath(edge, railCol, style = Stroke(width = (0.10f * ppm).coerceAtLeast(1.5f)))
-            val postFirst = MathX.floorDiv(startW, RAIL_POST_SPACING_M) + 1
-            val postLast = MathX.floorDiv(endW, RAIL_POST_SPACING_M)
+            val postFirst = MathX.floorDiv(drawFrom, RAIL_POST_SPACING_M) + 1
+            val postLast = MathX.floorDiv(drawTo, RAIL_POST_SPACING_M)
             for (p in postFirst..postLast) {
                 val wx = p * RAIL_POST_SPACING_M
+                if (wx < startW || wx > endW) continue
                 val x = depth.atX(depth.frontX(wx), railD)
                 val y = depth.atY(depth.frontY(seg.heightAtWorld(wx)), railD)
                 drawLine(
@@ -951,7 +1267,7 @@ class GameRenderer(private val assets: GameAssets) {
         d: Float,
         thickness: Float
     ) {
-        val steps = (((toX - fromX) / 1.2f).toInt() + 1).coerceIn(2, 128)
+        val steps = (((toX - fromX) / 1.2f).toInt() + 1).coerceIn(2, 48)
         val step = (toX - fromX) / steps
         band.reset()
         for (k in 0..steps) {
@@ -977,7 +1293,7 @@ class GameRenderer(private val assets: GameAssets) {
         d: Float,
         offsetY: Float
     ) {
-        val steps = (((toX - fromX) / 1.2f).toInt() + 1).coerceIn(2, 128)
+        val steps = (((toX - fromX) / 1.2f).toInt() + 1).coerceIn(2, 48)
         val step = (toX - fromX) / steps
         edge.reset()
         for (k in 0..steps) {
@@ -1214,7 +1530,9 @@ class GameRenderer(private val assets: GameAssets) {
      */
     private fun DrawScope.drawPotholes(n: Int, day: Float, segment: RoadSegment) {
         if (n < 2) return
-        val col = shade(Color(0xFF241D16), day).copy(alpha = 0.30f)
+        val rim = shade(Color(0xFF241D16), day).copy(alpha = 0.76f)
+        val water = shade(Color(0xFF2B7084), day).copy(alpha = 0.94f)
+        val waterHighlight = shade(Color(0xFF8DCCD5), day).copy(alpha = 0.62f)
         // Výtlk je diera v ceste, nie blikajúca škvrna – drží sa svojej bunky.
         val first = MathX.floorDiv(terrainW[0], POTHOLE_CELL)
         val last = MathX.floorDiv(terrainW[n - 1], POTHOLE_CELL)
@@ -1228,7 +1546,26 @@ class GameRenderer(private val assets: GameAssets) {
             if (x < -60f || x > size.width + 60f) continue
             val y = depth.atY(depth.frontY(segment.heightAtWorld(wx)), d)
             val r = depth.ppm * (0.20f + h * 0.55f)
-            drawOval(col, topLeft = Offset(x - r, y - r * 0.35f), size = Size(r * 2f, r * 0.7f))
+            val waterR = r * 0.83f
+
+            // Tmavý okraj nechá jamu čitateľnú aj za dňa, no jej vnútro je
+            // teraz takmer celé vyplnené vodou a hladina sedí vyššie v jame.
+            drawOval(
+                rim,
+                topLeft = Offset(x - r, y - r * 0.35f),
+                size = Size(r * 2f, r * 0.7f)
+            )
+            drawOval(
+                water,
+                topLeft = Offset(x - waterR, y - waterR * 0.40f),
+                size = Size(waterR * 2f, waterR * 0.74f)
+            )
+            // Krátky odlesk dá vode svetlú hornú hranu namiesto plochej škvrny.
+            drawOval(
+                waterHighlight,
+                topLeft = Offset(x - waterR * 0.62f, y - waterR * 0.27f),
+                size = Size(waterR * 1.24f, waterR * 0.12f)
+            )
         }
     }
 
@@ -2027,6 +2364,8 @@ class GameRenderer(private val assets: GameAssets) {
          * pri pravom okraji vidieť, ako trať „končí“ a dostavuje sa.
          */
         private const val EDGE_MARGIN = 24f
+        /** Minimálna výška mostovky, pri ktorej vyčistíme roklinu od kulís. */
+        private const val BRIDGE_PROP_CLEARANCE_M = 0.45f
 
         /**
          * Koľko zo zdvihu pruženia sa vo vzduchu roztiahne. Kolesá vtedy
@@ -2065,8 +2404,11 @@ class GameRenderer(private val assets: GameAssets) {
         /** Výška pásov nad horizontom ako podiel obrazovky – nie celá scéna. */
         private const val BACKDROP_MID_HEIGHT = 0.30f
         private const val BACKDROP_NEAR_HEIGHT = 0.34f
-        /** Vyrovnáva väčšinu look-aheadu, aby auto na tablete neodišlo mimo záber. */
-        private const val CAR_LOOK_AHEAD_COMPENSATION = 0.90f
+        /**
+         * Vyrovná iba časť look-aheadu. Pri 0.90 projekčný stred počas prudkého
+         * zrýchlenia predbehol vyhladenú kameru a auto na tablete ušlo doprava.
+         */
+        private const val CAR_LOOK_AHEAD_COMPENSATION = 0.66f
 
         /** Piesočná búrka: letiace zrná a široké vlny prachu. */
         private const val SAND_GRAINS = 110

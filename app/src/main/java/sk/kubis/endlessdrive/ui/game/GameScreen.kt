@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
@@ -98,6 +99,8 @@ fun GameScreen(
     var showFps by rememberSaveable { mutableStateOf(false) }
     val renderer = remember(assets) { GameRenderer(assets) }
     val density = LocalDensity.current
+    val context = LocalContext.current
+    val audio = remember(context) { GameAudio(context) }
     val configuration = LocalConfiguration.current
     val compactLoot = configuration.screenWidthDp < 760 || configuration.screenHeightDp < 500
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
@@ -105,19 +108,32 @@ fun GameScreen(
     val engine = viewModel.game
 
     val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
+    DisposableEffect(lifecycleOwner, audio) {
+        // Ak už sme RESUMED, ON_RESUME znova nepríde – sync mute hneď.
+        audio.setMuted(
+            !lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+        )
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_PAUSE -> viewModel.onLifecyclePause()
-                Lifecycle.Event.ON_RESUME -> viewModel.onLifecycleResume()
+                Lifecycle.Event.ON_PAUSE -> {
+                    viewModel.onLifecyclePause()
+                    audio.setMuted(true)
+                }
+                Lifecycle.Event.ON_RESUME -> {
+                    viewModel.onLifecycleResume()
+                    audio.setMuted(false)
+                }
                 else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            audio.release()
+        }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(audio) {
         val interval = GameConfig.TARGET_FRAME_NANOS
         var last = withFrameNanos { it }
         var nextDue = last + interval
@@ -129,7 +145,13 @@ fun GameScreen(
                 val dt = ((now - last) / 1_000_000_000.0).toFloat()
                 last = now
                 if (dt > 0f) {
-                    viewModel.onFrame(dt.coerceAtMost(GameConfig.MAX_FRAME_TIME), screenHeightPx)
+                    val step = dt.coerceAtMost(GameConfig.MAX_FRAME_TIME)
+                    viewModel.onFrame(step, screenHeightPx)
+                    audio.update(
+                        viewModel.game,
+                        step,
+                        paused = viewModel.ui.value.paused
+                    )
                 }
             }
         }

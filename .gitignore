@@ -13,3 +13,6 @@ local.properties
 
 # Zbalené APK – build výstup, nie zdroj.
 /apk
+
+# Dočasné sťahovanie / spracovanie SFX.
+/_sfx_dl
