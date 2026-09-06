@@ -18,31 +18,24 @@ enum class RoadEvent(
     val good: Boolean = false
 ) {
     // --- Poruchy a smola ---
-    FLAT_TYRE("Blowout — the tyre is shredded.", null, 0f, 9f),
-    ROCK_STRIKE("A rock punched into the radiator.", null, 0f, 7f),
-    FUEL_LEAK("Fuel line is weeping — you're losing petrol.", "FUEL LEAK", 45f, 8f),
-    COOLANT_LEAK("A coolant hose split — it's boiling away.", "COOLANT LEAK", 40f, 7f),
-    MISFIRE("The engine starts missing a beat.", "MISFIRE", 35f, 8f),
-    BELT_SNAPPED("Alternator belt snapped — nothing is charging.", "NO CHARGE", 70f, 5f),
-    OIL_SPLASH("You ploughed through a puddle of filth.", null, 0f, 6f),
+    FLAT_TYRE("Blowout — the tyre is shredded.", null, 0f, 5f),
+    ROCK_STRIKE("A rock hit the radiator.", null, 0f, 7f),
+    FUEL_LEAK("Fuel leak — tank is dropping.", "FUEL LEAK", 45f, 8f),
+    COOLANT_LEAK("Coolant leak — level is dropping.", "COOLANT LEAK", 40f, 7f),
+    MISFIRE("Engine misfire — less power.", "MISFIRE", 35f, 8f),
+    BELT_SNAPPED("Alternator belt snapped — battery not charging.", "NO CHARGE", 70f, 5f),
+    OIL_SPLASH("Dirty puddle — oil purity dropped.", null, 0f, 6f),
 
     // --- Cesta a počasie ---
-    RAIN("Rain sweeps in — the road turns greasy.", "SLIPPERY", 55f, 9f),
-    DEBRIS("Branches and junk all over the road.", "DEBRIS", 22f, 8f),
-    MUD("Deep mud — the wheels are digging in.", "MUD", 18f, 6f),
+    RAIN("Rain — road is slippery.", "SLIPPERY", 55f, 9f),
+    DEBRIS("Debris on the road — tyre risk.", "DEBRIS", 22f, 8f),
+    MUD("Mud — wheels digging in.", "MUD", 30f, 6f),
 
     // --- Šťastie ---
-    TAILWIND("Long descent — the engine barely sips.", "TAILWIND", 40f, 6f, good = true),
-    CLEAR_ROAD("Clean tarmac, nothing in the way.", "CLEAR", 35f, 6f, good = true),
-    ROADSIDE_STASH("Someone left a can by the road.", null, 0f, 8f, good = true),
-    ABANDONED_WRECK("A stripped wreck sits in the ditch.", null, 0f, 7f, good = true),
-
-    // --- Atmosféra ---
-    // Nič nerobia, len píšu do hlášok. Nech sa neberú miesto udalostiam,
-    // ktoré na hru naozaj vplývajú.
-    RADIO("Strange static on the radio…", null, 0f, 2f, good = true),
-    TRACKS("Tracks lead off into a field. Nothing else.", null, 0f, 2f, good = true),
-    ANIMAL("A deer watches you from the verge.", null, 0f, 2f, good = true);
+    TAILWIND("Tailwind — using less fuel.", "TAILWIND", 40f, 6f, good = true),
+    CLEAR_ROAD("Smooth road — using less fuel.", "SMOOTH", 35f, 6f, good = true),
+    ROADSIDE_STASH("Supplies ahead — stop to pick them up.", null, 0f, 8f, good = true),
+    ABANDONED_WRECK("Wreck ahead — scrap and parts.", null, 0f, 7f, good = true);
 
     val timed: Boolean get() = duration > 0f && chip != null
 }

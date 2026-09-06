@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import sk.kubis.endlessdrive.domain.model.DebugOptions
+import sk.kubis.endlessdrive.domain.model.ThrottleMode
 import sk.kubis.endlessdrive.domain.repository.PlayerProfile
 import sk.kubis.endlessdrive.domain.repository.PlayerRepository
 
@@ -31,6 +32,7 @@ class DataStorePlayerRepository(context: Context) : PlayerRepository {
         val DBG_FLUIDS = booleanPreferencesKey("debug_full_fluids")
         val DBG_TRACK = booleanPreferencesKey("debug_test_track")
         val DBG_REPAIR = booleanPreferencesKey("debug_repair_controls")
+        val THROTTLE_MODE = stringPreferencesKey("throttle_mode")
     }
 
     override val debugOptions: Flow<DebugOptions> = store.data.map { prefs ->
@@ -52,6 +54,16 @@ class DataStorePlayerRepository(context: Context) : PlayerRepository {
             prefs[Keys.DBG_FLUIDS] = options.fullFluids
             prefs[Keys.DBG_TRACK] = options.testTrack
             prefs[Keys.DBG_REPAIR] = options.repairControls
+        }
+    }
+
+    override val throttleMode: Flow<ThrottleMode> = store.data.map { prefs ->
+        ThrottleMode.fromStored(prefs[Keys.THROTTLE_MODE])
+    }.distinctUntilChanged()
+
+    override suspend fun setThrottleMode(mode: ThrottleMode) {
+        store.edit { prefs ->
+            prefs[Keys.THROTTLE_MODE] = mode.name
         }
     }
 

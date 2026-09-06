@@ -28,14 +28,24 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import sk.kubis.endlessdrive.ui.theme.GamePanel
+import sk.kubis.endlessdrive.ui.theme.Scrim
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import sk.kubis.endlessdrive.core.MathX
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -55,76 +65,72 @@ fun MenuScreen(
     onSettings: () -> Unit,
     debugActive: Boolean = false
 ) {
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF090C0E))
-    ) {
-        val narrow = maxWidth < 620.dp
+    var confirmNewRun by remember { mutableStateOf(false) }
+    BoxWithConstraints(Modifier.fillMaxSize().background(GameColors.panelSoft)) {
         val compact = maxWidth < 850.dp || maxHeight < 470.dp
-
+        val cardWidth = (maxWidth * 0.46f).coerceIn(220.dp, 370.dp)
         CinematicRoadBackground()
-
-        Box(
-            Modifier
-                .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.safeDrawing)
+        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(
+            listOf(Color(0xA610171B), Color.Transparent, Color(0xB310171B)))))
+        Row(
+            Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(if (compact) 20.dp else 40.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 24.dp else 48.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            MenuBrand(
-                compact = compact,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(
-                        start = if (compact) 22.dp else 52.dp,
-                        top = when {
-                            narrow && canContinue -> 72.dp
-                            compact -> 24.dp
-                            else -> 42.dp
-                        }
-                    )
-            )
-
-            if (canContinue) {
-                RunChip(
-                    distanceKm = runDistanceKm,
-                    clock = runClock,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(
-                            end = if (compact) 18.dp else 34.dp,
-                            top = if (compact) 16.dp else 28.dp
-                        )
-                )
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                MenuBrand(compact)
+                Spacer(Modifier.height(if (compact) 14.dp else 24.dp))
+                Text("FUEL · SCRAP · TYRES · PARTS", color = GameColors.text,
+                    fontSize = if (compact) 12.sp else 16.sp, fontWeight = FontWeight.Medium,
+                    letterSpacing = 1.sp)
+                Text("Repair with scrap. Fill fuel, oil and coolant.", color = GameColors.textDim,
+                    fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                Spacer(Modifier.height(if (compact) 20.dp else 40.dp))
+                if (compact) Text(String.format("PERSONAL BEST  ·  %.1f KM", profile.bestDistanceKm),
+                    color = GameColors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                else ProfileStats(profile)
             }
-
-            MenuActions(
-                canContinue = canContinue,
-                compact = compact,
-                debugActive = debugActive,
-                onContinue = onContinue,
-                onNewRun = onNewRun,
-                onSettings = onSettings,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(
-                        start = if (compact) 18.dp else 52.dp,
-                        end = 18.dp,
-                        bottom = if (compact) 18.dp else 38.dp
-                    )
-            )
-
-            if (!compact) {
-                ProfileStats(
-                    profile = profile,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 34.dp, bottom = 28.dp)
-                )
+            Column(
+                Modifier.width(cardWidth)
+                    .verticalScroll(rememberScrollState())
+                    .background(GameColors.hudBg, RoundedCornerShape(20.dp))
+                    .border(1.dp, GameColors.outline, RoundedCornerShape(20.dp))
+                    .padding(if (compact) 18.dp else 26.dp)
+            ) {
+                Text(if (canContinue) "SAVED RUN" else "NEW RUN",
+                    color = GameColors.accent, fontSize = 11.sp,
+                    letterSpacing = 1.4.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(10.dp))
+                Text(if (canContinue) "Continue from last stop." else "Fit parts. Fill fluids.",
+                    color = GameColors.text, fontSize = if (compact) 19.sp else 24.sp,
+                    fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                if (canContinue) RunChip(runDistanceKm, runClock)
+                else Text("Search the garage for missing parts, fuel, oil and coolant. Then start the engine.",
+                    color = GameColors.textDim, fontSize = 12.sp)
+                Spacer(Modifier.height(18.dp))
+                MenuActions(canContinue, compact = true, debugActive, onContinue,
+                    onNewRun = { if (canContinue) confirmNewRun = true else onNewRun() },
+                    onSettings = onSettings)
+            }
+        }
+        if (confirmNewRun) {
+            Scrim(onDismiss = { confirmNewRun = false })
+            GamePanel("REPLACE THIS RUN?", Modifier.align(Alignment.Center).widthIn(max = 430.dp)
+                .padding(20.dp), fillHeight = false, onClose = { confirmNewRun = false }) {
+                Text("Your current car and supplies will be lost. Your personal best stays saved.",
+                    color = GameColors.textDim, fontSize = 14.sp)
+                Spacer(Modifier.height(18.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    GameButton("KEEP RUN", { confirmNewRun = false }, Modifier.weight(1f))
+                    GameButton("REPLACE RUN", { confirmNewRun = false; onNewRun() },
+                        Modifier.weight(1f), style = BtnStyle.Danger)
+                }
             }
         }
     }
 }
-
 @Composable
 private fun MenuBrand(compact: Boolean, modifier: Modifier = Modifier) {
     Column(modifier) {
@@ -137,7 +143,7 @@ private fun MenuBrand(compact: Boolean, modifier: Modifier = Modifier) {
             )
             Spacer(Modifier.width(9.dp))
             Text(
-                "ROAD SURVIVAL",
+                "OPEN ROAD",
                 color = GameColors.accent,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
@@ -313,13 +319,14 @@ private fun ProfileStat(label: String, value: String) {
 
 @Composable
 private fun CinematicRoadBackground() {
+    val materials = remember { sk.kubis.endlessdrive.ui.game.MaterialPainter() }
     // Posun o jednu medzeru je cyklický: na konci má cesta presne rovnaké
     // rozloženie značiek ako na začiatku, takže animácia nikdy neskočí.
     val roadPhase = rememberInfiniteTransition(label = "menu road motion").animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 780, easing = LinearEasing),
+            animation = tween(durationMillis = 2400, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "road travelling toward camera"
@@ -440,6 +447,11 @@ private fun CinematicRoadBackground() {
                 )
             )
 
+            materials.quad(this, sk.kubis.endlessdrive.ui.game.MaterialKind.ASPHALT, 0.90f,
+                w * 0.519f, roadCrestY, w * 0.521f, roadCrestY,
+                w * 0.88f, h, w * 0.14f, h,
+                0f, 12f, -roadPhase * 5f, 60f - roadPhase * 5f)
+
             drawLine(
                 Color(0xB8D2AE63),
                 Offset(w * 0.519f, roadCrestY),
@@ -453,37 +465,8 @@ private fun CinematicRoadBackground() {
                 strokeWidth = 2f
             )
 
-            // Perspektívne značky zrýchľujú a rastú smerom k divákovi. Posun
-            // roadPhase ich vedie od horizontu po spodný okraj bez pohybu
-            // samotného kopca alebo horizontu.
-            for (i in 0 until 9) {
-                val t0 = ((i + roadPhase) / 9f) % 1f
-                val t1 = (t0 + (0.045f + 0.018f * t0)).coerceAtMost(0.998f)
-                val p0 = t0 * t0
-                val p1 = t1 * t1
-                val x0 = w * (0.52f + 0.015f * p0)
-                val x1 = w * (0.52f + 0.015f * p1)
-                drawLine(
-                    color = Color(0xC8E0D4AE),
-                    start = Offset(x0, roadCrestY + (h - roadCrestY) * p0),
-                    end = Offset(x1, roadCrestY + (h - roadCrestY) * p1),
-                    strokeWidth = 1.2f + 7f * p1
-                )
-            }
-
-            // Drobné odrazky na okrajoch dávajú pohybu čitateľnosť aj tam,
-            // kde stredovú čiaru prekrýva spodné menu.
-            for (i in 0 until 12) {
-                val t = ((i + roadPhase) / 12f) % 1f
-                val p = t * t
-                val y = roadCrestY + (h - roadCrestY) * p
-                val leftX = w * (0.519f + (0.14f - 0.519f) * p)
-                val rightX = w * (0.521f + (0.88f - 0.521f) * p)
-                val radius = 0.7f + 3.2f * p
-                val reflector = Color(0xB8D2AE63).copy(alpha = 0.28f + 0.52f * p)
-                drawCircle(reflector, radius, Offset(leftX, y))
-                drawCircle(reflector, radius, Offset(rightX, y))
-            }
+            drawMenuRoadMarkings(w, h, roadCrestY, roadPhase)
+            drawMenuRoadAtmosphere(w, h, roadCrestY, roadPhase)
 
             drawPine(w * 0.035f, h * 0.84f, h * 0.45f, Color(0xFF09100E))
             drawPine(w * 0.12f, h * 0.80f, h * 0.30f, Color(0xFF0B1411))
@@ -515,6 +498,106 @@ private fun CinematicRoadBackground() {
                 )
         )
     }
+}
+
+/** Stredová čiara a patníky – tenšie, s fade na okrajoch slučky. */
+private fun DrawScope.drawMenuRoadMarkings(w: Float, h: Float, crestY: Float, phase: Float) {
+    for (i in 0 until 12) {
+        val t0 = ((i + phase) / 12f) % 1f
+        val fade = MenuRoadFx.travelFade(t0)
+        if (fade < 0.04f) continue
+        val t1 = (t0 + (0.026f + 0.010f * t0)).coerceAtMost(0.998f)
+        val p0 = MenuRoadFx.perspective(t0)
+        val p1 = MenuRoadFx.perspective(t1)
+        drawLine(
+            color = Color(0xC8E0D4AE).copy(alpha = 0.55f * fade + 0.25f * p1),
+            start = Offset(MenuRoadFx.centerX(w, p0), MenuRoadFx.roadY(crestY, h, p0)),
+            end = Offset(MenuRoadFx.centerX(w, p1), MenuRoadFx.roadY(crestY, h, p1)),
+            strokeWidth = MenuRoadFx.dashStroke(p1),
+            cap = StrokeCap.Round
+        )
+    }
+    for (i in 0 until 14) {
+        val t = ((i + phase) / 14f) % 1f
+        val fade = MenuRoadFx.travelFade(t)
+        if (fade < 0.05f) continue
+        val p = MenuRoadFx.perspective(t)
+        val y = MenuRoadFx.roadY(crestY, h, p)
+        val postH = 2.0f + 12f * p
+        val postW = (0.65f + 1.7f * p).coerceAtLeast(0.8f)
+        val cap = Color(0xE0D2AE63).copy(alpha = fade * (0.30f + 0.50f * p))
+        val stem = Color(0xFFD9D3C4).copy(alpha = fade * (0.22f + 0.40f * p))
+        for (lane in floatArrayOf(-1.02f, 1.02f)) {
+            val x = MenuRoadFx.laneX(w, p, lane)
+            drawLine(stem, Offset(x, y), Offset(x, y - postH), postW, StrokeCap.Round)
+            drawCircle(cap, postW * 0.55f, Offset(x, y - postH + postH * 0.20f))
+        }
+    }
+}
+
+/**
+ * Prach, dym a drobný grit sedia na asfalte (alebo tesne nad ním)
+ * a s perspektivou prichádzajú ku kamere. Žiadne HUD gule na úbežníku.
+ */
+private fun DrawScope.drawMenuRoadAtmosphere(w: Float, h: Float, crestY: Float, phase: Float) {
+    val dust = Color(0xFFB8A888)
+    val exhaust = Color(0xFF9AA19A)
+    val grit = Color(0xFF6B5A44)
+    for (i in 0 until 20) {
+        val t = ((i + phase) / 20f) % 1f
+        val fade = MenuRoadFx.travelFade(t)
+        if (fade < 0.05f) continue
+        val p = MenuRoadFx.perspective(t)
+        val y = MenuRoadFx.roadY(crestY, h, p)
+        val lane = if (i % 2 == 0) -0.36f else 0.36f
+        val jitter = (MathX.hash01(i, 71) - 0.5f) * 0.10f
+        val x = MenuRoadFx.laneX(w, p, lane + jitter)
+        val lift = (1.1f + 5.5f * p) * (0.35f + MathX.hash01(i, 19) * 0.35f)
+        val r = MenuRoadFx.particleRadius(p, 3.4f)
+        drawMenuPuff(dust.copy(alpha = fade * (0.10f + 0.22f * p)), Offset(x, y - lift), r)
+    }
+    for (i in 0 until 10) {
+        val t = ((i + phase * 0.85f + 0.12f) / 10f) % 1f
+        val fade = MenuRoadFx.travelFade(t)
+        if (fade < 0.06f) continue
+        val p = MenuRoadFx.perspective(t)
+        val y = MenuRoadFx.roadY(crestY, h, p)
+        val x = MenuRoadFx.laneX(w, p, -0.08f + (MathX.hash01(i, 43) - 0.5f) * 0.12f)
+        val lift = 2.2f + 9f * p
+        val r = MenuRoadFx.particleRadius(p, 2.6f)
+        drawMenuPuff(
+            exhaust.copy(alpha = fade * (0.08f + 0.16f * p)),
+            Offset(x, y - lift),
+            r
+        )
+    }
+    for (i in 0 until 12) {
+        val t = ((i + phase) / 12f) % 1f
+        if (t < 0.52f) continue
+        val fade = MenuRoadFx.travelFade(t)
+        if (fade < 0.08f) continue
+        val p = MenuRoadFx.perspective(t)
+        val y = MenuRoadFx.roadY(crestY, h, p)
+        val lane = if (i % 2 == 0) -0.42f else 0.42f
+        val x = MenuRoadFx.laneX(w, p, lane)
+        val r = MenuRoadFx.particleRadius(p, 1.35f)
+        drawCircle(grit.copy(alpha = fade * 0.38f), r, Offset(x, y - r * 0.4f))
+    }
+}
+
+private fun DrawScope.drawMenuPuff(color: Color, center: Offset, r: Float) {
+    val rr = r.coerceAtLeast(0.55f)
+    drawCircle(color, rr * 0.56f, center)
+    drawCircle(
+        color.copy(alpha = color.alpha * 0.40f),
+        rr * 0.36f,
+        Offset(center.x + rr * 0.38f, center.y - rr * 0.10f)
+    )
+    drawCircle(
+        color.copy(alpha = color.alpha * 0.30f),
+        rr * 0.26f,
+        Offset(center.x - rr * 0.28f, center.y + rr * 0.08f)
+    )
 }
 
 private fun DrawScope.drawPine(x: Float, baseY: Float, height: Float, color: Color) {

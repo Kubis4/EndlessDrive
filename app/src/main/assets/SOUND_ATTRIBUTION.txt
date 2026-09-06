@@ -1,0 +1,34 @@
+# Sound attributions (EndlessDrive)
+
+## OpenGameArt — Car Engine Loop (qubodup)
+https://opengameart.org/content/car-engine-loop-96khz-4s
+License: CC-BY 3.0 / GPL
+→ engine idle / rev
+
+## OpenGameArt — Car tire squeal skid loop / Car Tire Skid Squealing
+https://opengameart.org/content/car-tire-squeal-skid-loop
+https://opengameart.org/content/car-tire-skid-squealing
+License: CC-BY 3.0
+→ brake / skid / ice surface
+
+## OpenGameArt — Car engine start 01
+https://opengameart.org/content/car-engine-start-01
+→ engine start
+
+## OpenGameArt — 25 CC0 mud sfx
+https://opengameart.org/content/25-cc0-mud-sfx
+License: CC0
+→ mud surface splatters / enter
+
+## OpenGameArt — 40 CC0 water / splash / slime SFX
+https://opengameart.org/content/40-cc0-water-splash-slime-sfx
+License: CC0
+→ water surface loop + splash enter
+
+## SoundBible
+Tire squealing / mud recordings used for blowout accents and mud bed.
+→ https://soundbible.com/
+
+## Internet Archive — GOLD TAPE 13 / 13.1 Cars (trimmed)
+https://archive.org/details/GOLD_TAPE_13_13.1_Cars
+→ wet road / rough gravel drive beds (slate trimmed where possible)

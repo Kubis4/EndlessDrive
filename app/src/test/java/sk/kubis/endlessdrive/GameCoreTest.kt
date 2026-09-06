@@ -11,6 +11,7 @@ import sk.kubis.endlessdrive.core.SeededRandom
 import sk.kubis.endlessdrive.domain.model.BranchStyle
 import sk.kubis.endlessdrive.domain.model.ComponentCondition
 import sk.kubis.endlessdrive.domain.model.ComponentSlot
+import sk.kubis.endlessdrive.domain.model.DebugOptions
 import sk.kubis.endlessdrive.domain.model.DriveLayout
 import sk.kubis.endlessdrive.domain.model.EndReason
 import sk.kubis.endlessdrive.domain.model.FluidType
@@ -30,10 +31,33 @@ import sk.kubis.endlessdrive.game.world.TerrainProfile
 import sk.kubis.endlessdrive.domain.model.BuildingType
 import sk.kubis.endlessdrive.game.save.RunCodec
 import sk.kubis.endlessdrive.game.world.LootGenerator
+import sk.kubis.endlessdrive.game.world.SurfacePatch
 import sk.kubis.endlessdrive.game.world.WorldBuilding
 import sk.kubis.endlessdrive.game.world.WorldGenerator
 
 class GameCoreTest {
+
+    @Test
+    fun newRunLikeConstructionSurvivesStarterKitAndTutorialWorld() {
+        // Menu NEW RUN / REPLACE RUN stavia engine od nuly s náhodným seedom
+        // a aktuálnymi ladiacimi prepínačmi – nesmie spadnúť ani bez save, ani
+        // pri nahradení rozohranej jazdy.
+        repeat(12) { i ->
+            val engine = GameEngine(
+                seed = 1_000_003L + i * 97L,
+                bestDistanceKm = if (i % 2 == 0) 0f else 12.4f,
+                debugOptions = if (i % 3 == 0) {
+                    DebugOptions(allComponents = true, fullFluids = true, fullBody = true)
+                } else {
+                    DebugOptions.OFF
+                }
+            )
+            assertEquals(GamePhase.PREP, engine.phase)
+            assertTrue(engine.segment.buildings.isNotEmpty())
+            assertTrue(engine.car.hasPart(ComponentSlot.TIRE_FRONT))
+            assertTrue(engine.car.hasPart(ComponentSlot.TIRE_REAR))
+        }
+    }
 
     @Test
     fun segmentIsDeterministic() {
@@ -99,6 +123,35 @@ class GameCoreTest {
     }
 
     @Test
+    fun sunPathFollowsElapsedTimeNotClockHours() {
+        val t1540 = DayCycle.at(15, 40)
+        assertEquals("15:40", DayCycle.clock(t1540))
+        val sun1540 = DayCycle.sunProgress(t1540)
+        val sun1500 = DayCycle.sunProgress(DayCycle.at(15, 0))
+        val sun1600 = DayCycle.sunProgress(DayCycle.at(16, 0))
+        assertTrue(sun1540 in sun1500..sun1600)
+        assertEquals(
+            sun1500 + (40f / 60f) * (sun1600 - sun1500),
+            sun1540,
+            1e-5f
+        )
+
+        val laterSameMinute = t1540 + 0.4f / (24f * 60f)
+        assertEquals("15:40", DayCycle.clock(laterSameMinute))
+        assertTrue(DayCycle.sunProgress(laterSameMinute) > sun1540)
+
+        val afterSecond = DayCycle.advance(t1540, 1f)
+        val step = DayCycle.sunProgress(afterSecond) - sun1540
+        assertTrue(step > 0f)
+        assertTrue("slnko nesmie skočiť o hodinu za 1 s", step < 0.01f)
+        assertEquals(
+            DayCycle.moonProgress(t1540),
+            DayCycle.sunProgress(t1540 - 0.5f),
+            1e-6f
+        )
+    }
+
+    @Test
     fun headlightsDrainBatteryAndKillTheRun() {
         val engine = GameEngine(3L, 0f)
         engine.prepareForDriving()
@@ -127,7 +180,7 @@ class GameCoreTest {
             // Hráč nemá náhradnú ani v batohu, ani nablízku.
             engine.inventory.clear()
             engine.segment.buildings.clear()
-            repeat(60) { engine.advance(1f / 60f) }
+            repeat(300) { engine.advance(1f / 60f) }
         }
         assertEquals(GamePhase.GAME_OVER, engine.phase)
         assertEquals(EndReason.BATTERY_DEAD, engine.endReason)
@@ -147,6 +200,10 @@ class GameCoreTest {
     fun wornAlternatorCannotChargeBatteryToFull() {
         val car = drivingCar("FWD")
         car.mount(
+            ComponentSlot.BATTERY,
+            ItemStack(ItemCatalog.BATTERY.id, ComponentCondition.NEW, 1f)
+        )
+        car.mount(
             ComponentSlot.ALTERNATOR,
             ItemStack(ItemCatalog.ALTERNATOR.id, ComponentCondition.CRITICAL, 0.04f)
         )
@@ -154,6 +211,177 @@ class GameCoreTest {
         repeat(600) { car.tickElectrics(1f / 60f, headlightsOn = false) }
         assertTrue("4 % alternátor musí strácať energiu", car.batteryCharge < 0.99f)
         assertTrue(car.batteryChargeCeiling < 0.5f)
+    }
+
+    @Test
+    fun newBatteryStartsCharged() {
+        val car = Car()
+        car.batteryCharge = 0f
+        car.mount(
+            ComponentSlot.BATTERY,
+            ItemStack(ItemCatalog.BATTERY.id, ComponentCondition.NEW, 1f)
+        )
+        assertEquals(1f, car.parts[ComponentSlot.BATTERY]?.health ?: 0f, 0.001f)
+        assertEquals("nová batéria musí prísť nabitá", 1f, car.batteryCharge, 0.001f)
+
+        val debugCar = Car().apply {
+            installStarterKit(
+                SeededRandom(9L),
+                DebugOptions(allComponents = true, fullUpgrades = true, fullFluids = true)
+            )
+        }
+        assertEquals(1f, debugCar.parts[ComponentSlot.BATTERY]?.health ?: 0f, 0.001f)
+        assertTrue(
+            "full car nesmie začínať na 0 % SoC",
+            debugCar.batteryCharge >= 0.95f
+        )
+    }
+
+    @Test
+    fun carMenuDoesNotDrainHeadlightsAndRemountKeepsSoc() {
+        val engine = GameEngine(3L, 0f)
+        engine.prepareForDriving()
+        engine.inventory.clear()
+        engine.boot.clear()
+        assertTrue(engine.toggleHeadlights())
+        engine.car.batteryCharge = 0.62f
+        val health = engine.car.parts.getValue(ComponentSlot.BATTERY).health
+        assertTrue(health > 0.8f)
+
+        engine.timeHeldByMenu = true
+        repeat(3_600) { engine.advance(1f / 60f) }
+        assertEquals(
+            "otvorenie CAR nesmie vybiť nabitie",
+            0.62f,
+            engine.car.batteryCharge,
+            0.001f
+        )
+
+        engine.timeHeldByMenu = false
+        repeat(1_200) { engine.advance(1f / 60f) }
+        val afterDrive = engine.car.batteryCharge
+        assertTrue("svetlá žerú batériu, kým ide herný čas", afterDrive < 0.62f - 0.01f)
+        assertTrue("20 s stretávacích nesmie zjesť väčšinu nabitia", afterDrive > 0.55f)
+
+        assertTrue(engine.unmountSlot(ComponentSlot.BATTERY))
+        assertEquals(0f, engine.car.batteryCharge, 0.001f)
+        val packed = engine.inventory.slots.first { it?.defId == ItemCatalog.BATTERY.id }!!
+        assertEquals(afterDrive, packed.heldCharge, 0.001f)
+        assertEquals(health, packed.health, 0.001f)
+
+        val idx = engine.inventory.slots.indexOfFirst { it?.defId == ItemCatalog.BATTERY.id }
+        assertTrue(engine.useInventoryItem(idx, ComponentSlot.BATTERY))
+        assertEquals(
+            "tá istá batéria si drží SoC, nie zdravie ako plný kus",
+            afterDrive,
+            engine.car.batteryCharge,
+            0.001f
+        )
+        assertEquals(health, engine.car.parts.getValue(ComponentSlot.BATTERY).health, 0.001f)
+        assertTrue(
+            "100 % zdravie + zostatok nabitia musí vedieť naštartovať",
+            engine.car.canStart()
+        )
+    }
+
+    @Test
+    fun fullChargeLastsAReasonableDriveWithHeadlights() {
+        val car = drivingCar("FWD")
+        car.mount(
+            ComponentSlot.BATTERY,
+            ItemStack(ItemCatalog.BATTERY.id, ComponentCondition.NEW, 1f)
+        )
+        car.mount(
+            ComponentSlot.ALTERNATOR,
+            ItemStack(ItemCatalog.ALTERNATOR.id, ComponentCondition.NEW, 1f)
+        )
+        car.batteryCharge = 1f
+        car.engineRunning = false
+        repeat(480) { car.tickElectrics(1f, headlightsOn = true) }
+        assertTrue(
+            "8 min stretávacích bez motora má nechať zásobu",
+            car.batteryCharge > 0.20f
+        )
+
+        car.batteryCharge = 1f
+        car.engineRunning = true
+        repeat(480) { car.tickElectrics(1f, headlightsOn = true) }
+        assertTrue(
+            "so zdravým alternátorom SoC ostáva vysoké",
+            car.batteryCharge > 0.85f
+        )
+        assertTrue(car.batteryCharge <= car.batteryChargeCeiling + 0.02f)
+    }
+
+    @Test
+    fun emptySocCannotStartButLootBatteryArrivesCharged() {
+        val engine = GameEngine(3L, 0f)
+        engine.prepareForDriving()
+        engine.inventory.clear()
+        engine.car.batteryCharge = 0f
+        engine.advance(1f / 60f)
+        assertFalse("prázdne SoC nesmie naštartovať, aj keď zdravie drží", engine.car.canStart())
+        assertEquals("Battery is flat", engine.blockedReason)
+
+        engine.car.mount(
+            ComponentSlot.BATTERY,
+            ItemStack(ItemCatalog.BATTERY.id, ComponentCondition.NEW, 1f)
+        )
+        engine.advance(1f / 60f)
+        assertEquals(1f, engine.car.batteryCharge, 0.001f)
+        assertTrue(engine.car.canStart())
+        assertNull(engine.blockedReason)
+    }
+
+    @Test
+    fun demountedBatterySocSurvivesSaveAndRemount() {
+        val engine = GameEngine(3L, 0f)
+        engine.prepareForDriving()
+        engine.inventory.clear()
+        engine.boot.clear()
+        engine.car.batteryCharge = 0.37f
+        assertTrue(engine.unmountSlot(ComponentSlot.BATTERY))
+        val restored = GameEngine.restore(
+            RunCodec.decode(RunCodec.encode(engine.snapshot()))!!,
+            0f
+        )
+        val packed = restored.inventory.slots.first { it?.defId == ItemCatalog.BATTERY.id }!!
+        assertEquals(0.37f, packed.heldCharge, 0.001f)
+        val idx = restored.inventory.slots.indexOfFirst { it?.defId == ItemCatalog.BATTERY.id }
+        assertTrue(restored.useInventoryItem(idx, ComponentSlot.BATTERY))
+        assertEquals(0.37f, restored.car.batteryCharge, 0.001f)
+        assertTrue(restored.car.canStart())
+    }
+
+    @Test
+    fun halfHealthAlternatorCannotHoldFullSoc() {
+        val car = drivingCar("FWD")
+        car.mount(
+            ComponentSlot.BATTERY,
+            ItemStack(ItemCatalog.BATTERY.id, ComponentCondition.NEW, 1f)
+        )
+        car.mount(
+            ComponentSlot.ALTERNATOR,
+            ItemStack(ItemCatalog.ALTERNATOR.id, ComponentCondition.DAMAGED, 0.50f)
+        )
+        car.engineRunning = true
+        assertTrue(
+            "strop má kopírovať zdravie alternátora (~50 %)",
+            car.batteryChargeCeiling in 0.48f..0.58f
+        )
+
+        car.batteryCharge = 1f
+        repeat(90) { car.tickElectrics(1f, headlightsOn = false) }
+        assertTrue(
+            "50 % alternátor nesmie udržať 100 % SoC",
+            car.batteryCharge <= car.batteryChargeCeiling + 0.02f
+        )
+        assertTrue(car.batteryCharge < 0.70f)
+
+        car.batteryCharge = 0.20f
+        repeat(180) { car.tickElectrics(1f, headlightsOn = false) }
+        assertTrue(car.batteryCharge <= car.batteryChargeCeiling + 0.02f)
+        assertTrue("slabý alternátor nesmie nabíjať na 100 %", car.batteryCharge < 0.90f)
     }
 
     @Test
@@ -1021,6 +1249,69 @@ class GameCoreTest {
     }
 
     @Test
+    fun regionBlendDoesNotPostBiomeAheadAdvisory() {
+        val engine = GameEngine(31L, 0f, DebugOptions(allComponents = true, fullFluids = true))
+        engine.prepareForDriving()
+        engine.tryStartEngine()
+        engine.resumeDriving()
+        engine.car.x = engine.segment.transitionStartWorldX +
+            engine.segment.transitionLength * 0.35f
+        engine.car.speed = 8f
+        engine.advance(1f / 30f)
+        val blend = engine.biomeBlend
+        assertTrue("test musí stáť v prelínení, amount=${blend.amount}", blend.amount >= 0.08f)
+        assertNotEquals(blend.from, blend.to)
+        sk.kubis.endlessdrive.domain.model.BiomeType.entries.forEach { biome ->
+            assertNotEquals("${biome.displayName} ahead", engine.message)
+        }
+    }
+
+    @Test
+    fun winterFlagFollowsTheRoadUnderTheCar() {
+        val engine = GameEngine(31L, 0f, DebugOptions(allComponents = true, fullFluids = true))
+        engine.prepareForDriving()
+        engine.tryStartEngine()
+        engine.resumeDriving()
+        engine.car.x = engine.segment.transitionStartWorldX +
+            engine.segment.transitionLength * 0.7f
+        engine.advance(1f / 30f)
+        assertEquals(
+            "HUD zimy nesmie predvídať ďalší región",
+            engine.segment.paving.winter,
+            engine.isWinter
+        )
+    }
+
+    @Test
+    fun patchAheadUsesHysteresisSoItDoesNotBlinkAtTheThreshold() {
+        val engine = GameEngine(8L, 0f, DebugOptions(allComponents = true, fullFluids = true))
+        engine.prepareForDriving()
+        engine.tryStartEngine()
+        engine.resumeDriving()
+        engine.segment.patches.clear()
+        val patch = SurfacePatch(RoadSurface.MUD, start = 120f, end = 150f)
+        engine.segment.patches += patch
+        engine.car.speed = 0.2f
+        engine.throttleInput = 0f
+
+        engine.car.x = engine.segment.worldOrigin + 60f
+        engine.advance(1f / 30f)
+        assertNull("ďalej ako 50 m sa ešte neukáže", engine.patchAhead)
+
+        engine.car.x = engine.segment.worldOrigin + 75f
+        engine.advance(1f / 30f)
+        assertEquals(patch.surface, engine.patchAhead?.surface)
+
+        engine.car.x = engine.segment.worldOrigin + 55f
+        engine.advance(1f / 30f)
+        assertEquals("hysterézia má hlášku udržať", patch.surface, engine.patchAhead?.surface)
+
+        engine.car.x = engine.segment.worldOrigin + 40f
+        engine.advance(1f / 30f)
+        assertNull(engine.patchAhead)
+    }
+
+    @Test
     fun laterRegionsRotateButSnowyMountainsStayLate() {
         val terrain = TerrainProfile(720L)
 
@@ -1053,6 +1344,37 @@ class GameCoreTest {
             "po neskoršej vzdialenosti sa už zasnežené hory musia objaviť",
             lateIndustrial.any { it == BranchStyle.ALPINE }
         )
+    }
+
+    @Test
+    fun firstRegionVariesAndNeverStartsInSnow() {
+        val styles = (1L..90L).map { WorldGenerator.startingStyle(it) }.toSet()
+        assertTrue("štart musí striedať krajiny, padlo $styles", styles.size >= 3)
+        assertTrue("sneh nesmie byť na štarte", styles.none { it == BranchStyle.ALPINE })
+        assertTrue(
+            "piesočná búrka je neskôr",
+            styles.none { it == BranchStyle.SANDSTORM || it == BranchStyle.DUST_STORM }
+        )
+    }
+
+    @Test
+    fun livingAndDeadForestDoNotFollowEachOther() {
+        val terrain = TerrainProfile(404L)
+        listOf(BranchStyle.FOREST, BranchStyle.FOREST_ALIVE).forEach { style ->
+            val destinations = (1L..120L).map { seed ->
+                WorldGenerator.createSegment(
+                    seed, style, 0f, 4_000f, terrain, false
+                ).choices.single().style
+            }
+            assertTrue(
+                "$style musí mať viac ako jedno pokračovanie: ${destinations.toSet()}",
+                destinations.toSet().size >= 2
+            )
+            assertTrue(
+                "$style nesmie prejsť do druhého lesa, padlo ${destinations.toSet()}",
+                destinations.none { it.biome.wooded }
+            )
+        }
     }
 
     /**
@@ -1237,6 +1559,18 @@ private fun GameEngine.prepareForDriving() {
         if (!car.hasPart(slot)) {
             car.mount(slot, ItemStack(def.id, ComponentCondition.USED, 0.7f))
         }
+    }
+    if ((car.parts[ComponentSlot.BATTERY]?.health ?: 0f) < 0.8f) {
+        car.mount(
+            ComponentSlot.BATTERY,
+            ItemStack(ItemCatalog.BATTERY.id, ComponentCondition.USED, 0.85f)
+        )
+    }
+    if ((car.parts[ComponentSlot.ALTERNATOR]?.health ?: 0f) < 0.7f) {
+        car.mount(
+            ComponentSlot.ALTERNATOR,
+            ItemStack(ItemCatalog.ALTERNATOR.id, ComponentCondition.USED, 0.85f)
+        )
     }
     car.batteryCharge = 0.8f
     car.fuel = 30f

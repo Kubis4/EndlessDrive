@@ -25,5 +25,16 @@ data class DebugOptions(
 
     companion object {
         val OFF = DebugOptions()
+        /**
+         * Plná výbava, kvapaliny a testovacia trať. Na ladenie pruženia
+         * bez zháňania dielov – nové spustenie jazdy.
+         */
+        val TUNE_SUSPENSION = DebugOptions(
+            fullUpgrades = true,
+            fullBody = true,
+            fullFluids = true,
+            testTrack = true,
+            repairControls = true
+        )
     }
 }

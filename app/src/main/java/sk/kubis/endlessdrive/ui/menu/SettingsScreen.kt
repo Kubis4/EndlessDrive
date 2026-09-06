@@ -18,54 +18,105 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import sk.kubis.endlessdrive.domain.model.AudioSettings
 import sk.kubis.endlessdrive.domain.model.DebugOptions
+import sk.kubis.endlessdrive.domain.model.ThrottleMode
 import sk.kubis.endlessdrive.ui.theme.BtnStyle
 import sk.kubis.endlessdrive.ui.theme.GameButton
 import sk.kubis.endlessdrive.ui.theme.GameColors
 
 /**
- * Nastavenia. Zatiaľ v nich je len ladiaca sekcia – prepínače, ktoré menia
- * to, s čím jazda začína, aby sa dala testovať jedna vec bez zháňania lootu.
+ * Nastavenia: ovládanie plynu, zvuk a ladiace prepínače.
  */
 @Composable
 fun SettingsScreen(
     options: DebugOptions,
     onChange: (DebugOptions) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    audioSettings: AudioSettings = AudioSettings(),
+    onAudioChange: (AudioSettings) -> Unit = {},
+    throttleMode: ThrottleMode = ThrottleMode.BINARY,
+    onThrottleModeChange: (ThrottleMode) -> Unit = {},
+    showFps: Boolean = false,
+    onShowFpsChange: (Boolean) -> Unit = {}
 ) {
     Box(
         Modifier
             .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
             .background(
                 Brush.verticalGradient(
-                    listOf(Color(0xFF0E1522), Color(0xFF241C13), Color(0xFF3A3524))
+                    listOf(GameColors.panelSoft, GameColors.panelHigh)
                 )
             )
     ) {
         Column(
             Modifier
                 .align(Alignment.Center)
-                .fillMaxWidth(0.72f)
-                .padding(vertical = 20.dp)
+                .widthIn(max = 680.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 20.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            Text(
-                "SETTINGS",
-                color = GameColors.text,
-                fontSize = 30.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 3.sp
-            )
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("SETTINGS", modifier = Modifier.weight(1f), color = GameColors.text,
+                    fontSize = 30.sp, fontWeight = FontWeight.Bold, letterSpacing = 3.sp)
+                GameButton("BACK", onBack, style = BtnStyle.Ghost, compact = true)
+            }
             Spacer(Modifier.height(18.dp))
+
+            Text("DISPLAY", color = GameColors.accent, fontSize = 12.sp,
+                fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+            Toggle("FPS counter", "Show the live frame-rate counter in the driving HUD.", showFps, onShowFpsChange)
+            Spacer(Modifier.height(18.dp))
+
+            Text("CONTROLS", color = GameColors.accent, fontSize = 12.sp,
+                fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+            Text(
+                "How the right pedal works. Brake stays a hold button.",
+                color = GameColors.textDim, fontSize = 13.sp
+            )
+            Spacer(Modifier.height(10.dp))
+            Toggle(
+                title = "Throttle pedal",
+                detail = "Hold for full power. Same as before.",
+                checked = throttleMode == ThrottleMode.BINARY,
+                onToggle = { if (throttleMode != ThrottleMode.BINARY) onThrottleModeChange(ThrottleMode.BINARY) }
+            )
+            Toggle(
+                title = "Throttle slide",
+                detail = "Swipe up from the bottom to feather power and cut wheelspin on launch.",
+                checked = throttleMode == ThrottleMode.SLIDE,
+                onToggle = { if (throttleMode != ThrottleMode.SLIDE) onThrottleModeChange(ThrottleMode.SLIDE) }
+            )
+            Spacer(Modifier.height(24.dp))
+
+            Text("SOUND", color = GameColors.accent, fontSize = 12.sp,
+                fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+            Text("Tyre sounds are brief traction cues. Set them to zero for silent tyres.",
+                color = GameColors.textDim, fontSize = 13.sp)
+            AudioSlider("Master volume", audioSettings.master) { onAudioChange(audioSettings.copy(master = it)) }
+            AudioSlider("Road & weather", audioSettings.surfaces) { onAudioChange(audioSettings.copy(surfaces = it)) }
+            AudioSlider("Tyre slip", audioSettings.tyres) { onAudioChange(audioSettings.copy(tyres = it)) }
+            GameButton("RESET SOUND", { onAudioChange(AudioSettings()) }, compact = true)
+            Spacer(Modifier.height(24.dp))
 
             Text(
                 "TESTING",
@@ -125,9 +176,25 @@ fun SettingsScreen(
             Spacer(Modifier.height(20.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 GameButton("BACK", onBack, style = BtnStyle.Primary)
+                GameButton("FULL CAR + TRACK", { onChange(DebugOptions.TUNE_SUSPENSION) }, compact = true)
                 GameButton("TURN ALL OFF", { onChange(DebugOptions.OFF) })
             }
         }
+    }
+}
+
+@Composable
+private fun AudioSlider(label: String, value: Float, onChange: (Float) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(label, color = GameColors.text, fontSize = 14.sp)
+            Text(if (value <= 0f) "OFF" else "${(value * 100).toInt()}%",
+                color = GameColors.accent, fontSize = 13.sp)
+        }
+        Slider(value = value, onValueChange = onChange,
+            modifier = Modifier.semantics { contentDescription = label },
+            colors = SliderDefaults.colors(thumbColor = GameColors.accent,
+                activeTrackColor = GameColors.accent, inactiveTrackColor = GameColors.outline))
     }
 }
 

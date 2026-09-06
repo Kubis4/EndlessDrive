@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -29,15 +32,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import sk.kubis.endlessdrive.R
 import sk.kubis.endlessdrive.core.GameConfig
 import sk.kubis.endlessdrive.domain.model.GamePhase
+import sk.kubis.endlessdrive.game.car.TireInjury
 import sk.kubis.endlessdrive.ui.theme.BtnStyle
 import sk.kubis.endlessdrive.ui.theme.GameButton
 import sk.kubis.endlessdrive.ui.theme.GameColors
@@ -46,6 +50,7 @@ import sk.kubis.endlessdrive.ui.theme.Type
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.TextStyle
 import kotlin.math.cos
+import kotlin.math.min
 import kotlin.math.sin
 
 /**
@@ -67,6 +72,7 @@ private const val SPEEDO_MAX = 180f
  * kontrolky a ovládanie, napravo rýchlosť a trasa.
  */
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun Dashboard(
     ui: GameUiState,
     onStart: () -> Unit,
@@ -79,15 +85,15 @@ fun Dashboard(
     onRest: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Bez podkladu – budíky a kontrolky ležia priamo na scéne. Tmavý blok cez
-    // spodok obrazovky ukrajoval z kreslenej kulisy, ktorá je na ňom to pekné.
+    // Palubovka sedí priamo na scéne. Tmavý film cez spodok by zakryl cestu
+    // aj hlinu; čitateľnosť drží tieň textu a vlastný podklad kontrolek.
     val driving = ui.phase == GamePhase.DRIVING
-    Row(
+    FlowRow(
         modifier
             .fillMaxWidth()
-            .padding(start = Space.l, end = Space.l, top = Space.xs, bottom = Space.s),
+            .padding(start = Space.l, end = Space.l, top = Space.s, bottom = Space.s),
         // Za jazdy je obsah len budíky + ručná brzda, takže sa dá vycentrovať.
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalArrangement = Arrangement.spacedBy(Space.l, Alignment.CenterHorizontally)
     ) {
         // --- Budíky, pod nimi kontrolky -----------------------------------
@@ -109,14 +115,29 @@ fun Dashboard(
                     mixLabel = "C ${(ui.coolantPurity * 100f).toInt()} · W ${(coolantWater * 100f).toInt()}"
                 )
                 // Tachometer je najväčší – tak to má auto aj tak sa to číta.
+                // Keď stojí, ten istý budík ukáže stav auta (nie 0 km/h).
                 Gauge(
-                    label = if (ui.speedKmh < -0.5f) "REVERSE" else "km/h",
-                    ratio = (kotlin.math.abs(ui.speedKmh) / SPEEDO_MAX).coerceIn(0f, 1f),
-                    value = kotlin.math.abs(ui.speedKmh).toInt().toString(),
+                    label = if (!driving) {
+                        "CONDITION"
+                    } else if (ui.speedKmh < -0.5f) {
+                        "REVERSE"
+                    } else {
+                        "km/h"
+                    },
+                    ratio = if (!driving) {
+                        ui.overallHealth.coerceIn(0f, 1f)
+                    } else {
+                        (kotlin.math.abs(ui.speedKmh) / SPEEDO_MAX).coerceIn(0f, 1f)
+                    },
+                    value = if (!driving) {
+                        "${(ui.overallHealth * 100).toInt()} %"
+                    } else {
+                        kotlin.math.abs(ui.speedKmh).toInt().toString()
+                    },
                     redFrom = 1f,
                     diameter = 74.dp,
                     valueSize = Type.title,
-                    accent = if (ui.speedKmh < -0.5f) GameColors.warn else GameColors.accent
+                    accent = if (driving && ui.speedKmh < -0.5f) GameColors.warn else GameColors.accent
                 )
                 Gauge(
                     label = "FUEL",
@@ -136,26 +157,55 @@ fun Dashboard(
 
         // --- Ovládanie ----------------------------------------------------
         if (!driving) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(Space.s),
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                Modifier.width(420.dp).align(Alignment.Bottom),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                GameButton("PACK", onInventory, compact = true)
-                GameButton("CAR", onCar, compact = true)
-                if (ui.exploring) {
-                    GameButton("LEAVE", onLeave, compact = true)
-                } else if (ui.hasNearbyBuilding) {
-                    GameButton("SEARCH", onEnter, style = BtnStyle.Ghost, compact = true)
+                FlowRow(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    GameButton("PACK", onInventory, compact = true)
+                    GameButton("CAR", onCar, compact = true)
+                    if (ui.exploring) {
+                        GameButton("LEAVE", onLeave, compact = true)
+                    } else if (ui.hasNearbyBuilding) {
+                        GameButton("SEARCH", onEnter, compact = true)
+                    }
+                    if (ui.canRest) {
+                        GameButton("SLEEP", onRest, compact = true)
+                    }
                 }
-                if (ui.canRest) {
-                    GameButton("SLEEP", onRest, style = BtnStyle.Ghost, compact = true)
-                }
-                Spacer(Modifier.width(Space.s))
-                if (!ui.engineRunning) {
-                    GameButton("START", onStart, style = BtnStyle.Primary)
-                } else {
-                    GameButton("OFF", onStopEngine, compact = true)
-                    GameButton("DRIVE", onDrive, style = BtnStyle.Primary)
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (!ui.engineRunning) {
+                        GameButton(
+                            "START",
+                            onStart,
+                            style = BtnStyle.Primary,
+                            iconRes = R.drawable.ic_start_engine,
+                            modifier = Modifier.width(144.dp)
+                        )
+                    } else {
+                        GameButton(
+                            text = "OFF",
+                            onClick = onStopEngine,
+                            compact = true,
+                            iconRes = R.drawable.ic_stop_engine,
+                            iconOnly = true,
+                        )
+                        GameButton(
+                            "DRIVE",
+                            onDrive,
+                            style = BtnStyle.Primary,
+                            modifier = Modifier.width(144.dp)
+                        )
+                    }
                 }
             }
         }
@@ -195,18 +245,28 @@ fun TripBadge(ui: GameUiState, showFps: Boolean, modifier: Modifier = Modifier) 
             horizontalArrangement = Arrangement.spacedBy(Space.s),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                (if (ui.isNight) "☾ " else "☀ ") + ui.clock,
-                color = GameColors.textDim,
-                fontSize = Type.label
-            )
             Row(
-                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                AutomotiveIconView(AutomotiveIcon.SCRAP, GameColors.accent, Modifier.size(14.dp))
+                AutomotiveIconView(
+                    if (ui.isNight) AutomotiveIcon.MOON else AutomotiveIcon.SUN,
+                    GameColors.textDim,
+                    Modifier.size(12.dp)
+                )
                 Text(
-                    "${ui.scrap} SCRAP",
+                    ui.clock,
+                    color = GameColors.textDim,
+                    fontSize = Type.label
+                )
+            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ScrapCurrencyIcon(Modifier.size(16.dp))
+                Text(
+                    "${ui.scrap}",
                     color = GameColors.accent,
                     fontSize = Type.label,
                     fontWeight = FontWeight.Bold
@@ -362,7 +422,7 @@ private fun Gauge(
 }
 
 /**
- * Kontrolky ako v aute: zhasnuté sú sotva viditeľné, rozsvietené kričia.
+ * Kontrolky ako v aute: zhasnuté tlmená sivá, rozsvietené plná farba v glyfe.
  * Nahrádzajú prúžky oleja, chladiacej a batérie – tie zaujímajú len vtedy,
  * keď je s nimi problém.
  */
@@ -416,17 +476,47 @@ private fun TellTales(ui: GameUiState) {
                 else -> LampState.Off
             }
         )
-        // Gumy a brzdy nemajú kvapalinu ani budík – bez kontrolky by sa hráč
-        // o ich stave dozvedel až v paneli auta.
-        PartLamp(AutomotiveIcon.TYRE, ui, "TYRES")
-        PartLamp(AutomotiveIcon.BRAKE, ui, "BRK")
+        // Opotrebenie / defekt gumy — nie TPMS a nie preklz (ten má vlastnú kontrolku).
+        TyreWearLamp(ui)
+        // ESC silueta: jantárové blikajúce wheelspin pri preklze.
         Lamp(
-            icon = AutomotiveIcon.LOW_BEAM,
-            state = if (ui.headlightsOn) LampState.On else LampState.Off,
-            // Reálne kontrolky: stretávacie zelené, diaľkové modré.
-            onColor = if (ui.highBeamsOn) Color(0xFF4D8DFF) else Color(0xFF45C96B)
+            icon = AutomotiveIcon.WHEELSPIN,
+            state = if (ui.wheelSlip > 0.25f) LampState.WarnBlink else LampState.Off
         )
+        PartLamp(AutomotiveIcon.BRAKE, ui, "BRK")
+        // Stretávacie (zelená) / diaľkové (modrá) — D-tvar bez vlnovky.
+        Lamp(
+            icon = if (ui.highBeamsOn) AutomotiveIcon.HIGH_BEAM else AutomotiveIcon.LOW_BEAM,
+            state = if (ui.headlightsOn) LampState.On else LampState.Off,
+            onColor = if (ui.highBeamsOn) Color(0xFF1A5CFF) else Color(0xFF2EBB55)
+        )
+        // Prídavné / strešné — D-tvar s vodorovnými lúčmi a zvislou vlnovkou.
+        if (ui.hasExpeditionKit) {
+            Lamp(
+                icon = AutomotiveIcon.ROOF_LIGHT,
+                state = if (ui.roofLightsOn) LampState.On else LampState.Off,
+                onColor = Color(0xFFE0A33C)
+            )
+        }
     }
+}
+
+@Composable
+private fun TyreWearLamp(ui: GameUiState) {
+    val punctured = ui.frontTireInjury == TireInjury.PUNCTURED ||
+        ui.rearTireInjury == TireInjury.PUNCTURED
+    val shredded = ui.frontTireInjury == TireInjury.SHREDDED ||
+        ui.rearTireInjury == TireInjury.SHREDDED
+    val health = min(ui.frontTireHealth, ui.rearTireHealth)
+    val fitted = ui.parts.firstOrNull { it.tag == "TYRES" }?.fitted != false
+    Lamp(
+        icon = AutomotiveIcon.TYRE,
+        state = when {
+            !fitted || shredded || punctured || health < 0.2f -> LampState.Alarm
+            health < 0.45f -> LampState.Warn
+            else -> LampState.Off
+        }
+    )
 }
 
 @Composable
@@ -438,7 +528,6 @@ private fun PartLamp(icon: AutomotiveIcon, ui: GameUiState, tag: String) {
             part == null -> LampState.Off
             !part.fitted -> LampState.Alarm
             // Diel, ktorý sa práve ničí, bliká bez ohľadu na to, koľko mu ostáva.
-            // Preklz zodiera gumy hneď – vidieť to má hráč vtedy, nie až potom.
             part.wearing -> LampState.Alarm
             part.health < 0.2f -> LampState.Alarm
             part.health < 0.4f -> LampState.Warn
@@ -447,7 +536,7 @@ private fun PartLamp(icon: AutomotiveIcon, ui: GameUiState, tag: String) {
     )
 }
 
-private enum class LampState { Off, On, Warn, Alarm }
+private enum class LampState { Off, On, Warn, WarnBlink, Alarm }
 
 @Composable
 private fun Lamp(
@@ -462,26 +551,20 @@ private fun Lamp(
         label = "lampPulse"
     )
     val color = when (state) {
-        // Zhasnutá kontrolka musí ostať čitateľná aj na svetlej oblohe aj na
-        // tmavej hline – preto nie priehľadná, ale tlmená svetlá.
-        LampState.Off -> GameColors.text.copy(alpha = 0.40f)
+        // Tlmená sivá = zhasnutá; rozsvietená = plná chart farba v glyfe (bez boxu/glow).
+        LampState.Off -> Color(0xFFADB6B3)
         LampState.On -> onColor
         LampState.Warn -> GameColors.warn
+        // Wheelspin: jantár bliká, kým kolesá preklzujú.
+        LampState.WarnBlink -> GameColors.warn.copy(alpha = pulse)
         // Len skutočná porucha bliká – inak by prístrojovka blikala stále.
         LampState.Alarm -> GameColors.danger.copy(alpha = pulse)
     }
+    // Ako Subaru chart: len plochý piktogram na čiernom pozadí, bez rámu a bloomu.
     Box(
-        Modifier
-            .size(width = 36.dp, height = 24.dp)
-            // Vlastný tmavý podklad namiesto bloku cez celú lištu – kontrolka
-            // si nesie kontrast so sebou a kulisa medzi nimi ostáva vidieť.
-            .background(
-                if (state == LampState.Off) Color(0x66000000) else color.copy(alpha = 0.22f),
-                RoundedCornerShape(6.dp)
-            )
-            .border(1.dp, color.copy(alpha = if (state == LampState.Off) 0.55f else 1f), RoundedCornerShape(6.dp)),
+        Modifier.size(width = 24.dp, height = 20.dp),
         contentAlignment = Alignment.Center
     ) {
-        AutomotiveIconView(icon, color, Modifier.size(19.dp))
+        AutomotiveIconView(icon, color, Modifier.size(18.dp))
     }
 }

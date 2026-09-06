@@ -9,6 +9,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,7 +29,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import sk.kubis.endlessdrive.domain.model.RoadSurface
 import sk.kubis.endlessdrive.ui.theme.Chip
 import sk.kubis.endlessdrive.ui.theme.GameColors
 import sk.kubis.endlessdrive.ui.theme.StatBar
@@ -39,55 +40,14 @@ import sk.kubis.endlessdrive.ui.theme.purityColor
  * doske dole, sem patrí len to, čo si žiada okamžitú pozornosť.
  */
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun AlertColumn(ui: GameUiState, modifier: Modifier = Modifier) {
-    val message = ui.message
-    val warnings = buildList {
-        // Zima je stav celej vetvy, nie chvíľková udalosť – hlásime ju vždy.
-        if (ui.isWinter) {
-            add((if (ui.hasChains) "SNOW · CHAINS ON" else "SNOW · NO CHAINS") to
-                (if (ui.hasChains) GameColors.ok else GameColors.danger))
-        } else if (ui.hasChains) {
-            add("CHAINS ON DRY ROAD" to GameColors.warn)
-        }
-        // Naplavenina má prednosť – hráč musí vedieť, prečo auto zrazu nejde.
-        ui.surface.chip?.let { add(it to GameColors.warn) }
-        ui.surfaceAhead?.let { (surface, meters) ->
-            if (ui.surface == RoadSurface.ASPHALT) {
-                surface.chip?.let { add("$it IN $meters m" to GameColors.accent) }
-            }
-        }
-        if (ui.wheelsLocked) add("WHEELS LOCKED" to GameColors.warn)
-        else if (ui.wheelSlip > 0.45f) add("WHEELSPIN" to GameColors.warn)
-        if (ui.temperature > 110f) add("OVERHEATING" to GameColors.danger)
-        else if (ui.temperature > 98f) add("ENGINE HOT" to GameColors.warn)
-        val fuelRatio = ui.fuelL / ui.fuelCapacityL.coerceAtLeast(1f)
-        if (fuelRatio < 0.08f) add("FUEL CRITICAL" to GameColors.danger)
-        else if (fuelRatio < 0.2f) add("LOW FUEL" to GameColors.warn)
-        if (ui.oilL < 0.4f) add("LOW OIL" to GameColors.danger)
-        if (ui.coolantL < 0.5f) add("LOW COOLANT" to GameColors.danger)
-        if (ui.oilPurity < 0.55f) add("DIRTY OIL" to GameColors.warn)
-        if (ui.wrongFuelFraction >= 0.15f) add("WRONG FUEL" to GameColors.danger)
-        else if (ui.fuelPurity < 0.55f) add("BAD FUEL" to GameColors.warn)
-        // Slabé dobíjanie je porucha alternátora, nie prázdna batéria.
-        if (ui.engineRunning && ui.alternatorOutput in 0.005f..0.22f) {
-            add("ALTERNATOR WEAK" to GameColors.warn)
-        }
-        if (ui.batteryCharge < 0.2f) add("BATTERY LOW" to GameColors.danger)
-        if (ui.isNight && !ui.headlightsOn) add("NO HEADLIGHTS" to GameColors.danger)
-        if (ui.overallHealth < 0.25f) add("CAR FALLING APART" to GameColors.danger)
-    }.filterNot { (text, _) ->
-        // Nezopakujeme to, čo už stojí v hláške.
-        message.isNotBlank() && message.contains(text.split(" ").first(), ignoreCase = true)
-    }
-
-    if (ui.blockedReason == null && message.isBlank() &&
-        warnings.isEmpty() && ui.events.isEmpty()
-    ) return
+    val alerts = composeHudAlerts(ui)
 
     val pulse by rememberInfiniteTransition(label = "alert").animateFloat(
-        initialValue = 0.6f,
+        initialValue = 0.85f,
         targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(750), RepeatMode.Reverse),
+        animationSpec = infiniteRepeatable(tween(1100), RepeatMode.Reverse),
         label = "alertAlpha"
     )
 
@@ -96,28 +56,28 @@ fun AlertColumn(ui: GameUiState, modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
-        if (ui.blockedReason != null) {
-            val prefix = if (ui.engineRunning) "CAN'T MOVE" else "CAN'T START"
-            Banner("$prefix: ${ui.blockedReason}", GameColors.danger.copy(alpha = pulse), strong = true)
+        alerts.block?.let { reason ->
+            Banner(reason, GameColors.danger.copy(alpha = pulse), strong = true)
         }
-        // Hláška sa neopakuje pod dôvodom blokácie – „Missing battery“ dvakrát
-        // pod sebou vyzeralo ako chyba, nie ako dôraz.
-        val duplicate = ui.blockedReason != null &&
-            message.equals(ui.blockedReason, ignoreCase = true)
-        if (message.isNotBlank() && !duplicate) {
-            Banner(message, messageColor(message))
-        }
-        if (ui.events.isNotEmpty()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                ui.events.forEach { (label, secs) ->
+        alerts.message?.let { Banner(it, messageColor(it)) }
+        if (alerts.events.isNotEmpty()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                alerts.events.forEach { (label, secs) ->
                     Chip("$label ${secs}s", GameColors.info)
                 }
             }
         }
-        if (warnings.isNotEmpty()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                warnings.take(4).forEach { (text, color) ->
-                    Chip(text, if (color == GameColors.danger) color.copy(alpha = pulse) else color, filled = true)
+        if (alerts.chips.isNotEmpty()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                alerts.chips.forEach { chip ->
+                    val color = chip.tone.toColor()
+                    Chip(
+                        chip.text,
+                        if (chip.tone == HudTone.DANGER) color.copy(alpha = pulse) else color,
+                        filled = true
+                    )
                 }
             }
         }
@@ -142,6 +102,14 @@ private fun Banner(text: String, color: Color, strong: Boolean = false) {
             fontWeight = if (strong) FontWeight.Bold else FontWeight.Medium
         )
     }
+}
+
+private fun HudTone.toColor(): Color = when (this) {
+    HudTone.DANGER -> GameColors.danger
+    HudTone.WARN -> GameColors.warn
+    HudTone.ACCENT -> GameColors.accent
+    HudTone.OK -> GameColors.ok
+    HudTone.INFO -> GameColors.info
 }
 
 private fun messageColor(message: String): Color {
@@ -223,6 +191,7 @@ fun SideIcons(
     ui: GameUiState,
     showFps: Boolean,
     onToggleLights: () -> Unit,
+    onToggleRoofLights: () -> Unit = {},
     onTogglePause: () -> Unit,
     onToggleFps: () -> Unit,
     modifier: Modifier = Modifier
@@ -245,17 +214,20 @@ fun SideIcons(
                 else -> "Switch headlights off"
             }
         )
+        if (ui.hasExpeditionKit) {
+            AutomotiveIconToggleButton(
+                AutomotiveIcon.ROOF_LIGHT,
+                ui.roofLightsOn,
+                onToggleRoofLights,
+                activeColor = Color(0xFFFFCF75),
+                label = if (ui.roofLightsOn) "Switch roof lights off" else "Switch roof lights on"
+            )
+        }
         HudActionToggleButton(
             icon = if (ui.paused) HudActionIcon.PLAY else HudActionIcon.PAUSE,
             active = ui.paused,
             onClick = onTogglePause,
             label = if (ui.paused) "Resume" else "Pause"
-        )
-        HudActionToggleButton(
-            icon = HudActionIcon.TIMER,
-            active = showFps,
-            onClick = onToggleFps,
-            label = "FPS"
         )
     }
 }

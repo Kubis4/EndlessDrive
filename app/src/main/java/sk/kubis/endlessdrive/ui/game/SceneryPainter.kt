@@ -1,6 +1,7 @@
 package sk.kubis.endlessdrive.ui.game
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
@@ -13,6 +14,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import sk.kubis.endlessdrive.core.GameConfig
@@ -36,6 +38,16 @@ class SceneryPainter(
     private val wreckSprites: List<WreckSprite> = emptyList()
 ) {
     private val propPath = Path()
+    private val canopyPath = Path()
+    private val materials = MaterialPainter()
+    /** Farba lúky z kresby biómu – koruny a tráva sa k nej priblížia. */
+    private var landTint = Color.White
+    private var landTintAmount = 0f
+    private val wreckFilters = arrayOfNulls<ColorFilter>(WRECK_PAINT.size)
+    private val wreckFilterArgb = IntArray(WRECK_PAINT.size) { Int.MIN_VALUE }
+
+    private fun land(color: Color, day: Float): Color =
+        shade(lerp(color, landTint, landTintAmount), day)
 
     /**
      * Vegetácia a stĺpy za cestou.
@@ -51,8 +63,12 @@ class SceneryPainter(
         day: Float,
         depth: DepthProjection,
         heightAt: (Float) -> Float,
-        occupiedAt: (Float) -> Boolean = { false }
+        occupiedAt: (Float) -> Boolean = { false },
+        landTint: Color = Color.White,
+        landTintAmount: Float = 0f
     ) {
+        this@SceneryPainter.landTint = landTint
+        this@SceneryPainter.landTintAmount = landTintAmount.coerceIn(0f, 1f)
         val first = MathX.floorDiv(fromX, CELL)
         val last = MathX.floorDiv(toX, CELL)
         for (cell in first..last) {
@@ -106,18 +122,20 @@ class SceneryPainter(
             val s = depth.ppm * (1f - depth.perspectiveT(d))
             val h = s * 0.62f
             val w = (s * 0.085f).coerceAtLeast(1.5f)
-            drawLine(body, Offset(px, py), Offset(px, py - h), strokeWidth = w)
-            // Čierna hlavica a pod ňou odrazka.
-            drawLine(
-                cap,
-                Offset(px, py - h), Offset(px, py - h + s * 0.10f),
-                strokeWidth = w
-            )
-            drawCircle(
-                reflector.copy(alpha = 0.55f + 0.45f * night),
-                w * 0.55f,
-                Offset(px, py - h + s * 0.17f)
-            )
+            rotate(degrees = slopeAt(wx, heightAt), pivot = Offset(px, py)) {
+                drawLine(body, Offset(px, py), Offset(px, py - h), strokeWidth = w)
+                // Čierna hlavica a pod ňou odrazka.
+                drawLine(
+                    cap,
+                    Offset(px, py - h), Offset(px, py - h + s * 0.10f),
+                    strokeWidth = w
+                )
+                drawCircle(
+                    reflector.copy(alpha = 0.55f + 0.45f * night),
+                    w * 0.55f,
+                    Offset(px, py - h + s * 0.17f)
+                )
+            }
         }
     }
 
@@ -129,8 +147,12 @@ class SceneryPainter(
         day: Float,
         depth: DepthProjection,
         heightAt: (Float) -> Float,
-        occupiedAt: (Float) -> Boolean = { false }
+        occupiedAt: (Float) -> Boolean = { false },
+        landTint: Color = Color.White,
+        landTintAmount: Float = 0f
     ) {
+        this@SceneryPainter.landTint = landTint
+        this@SceneryPainter.landTintAmount = landTintAmount.coerceIn(0f, 1f)
         val first = MathX.floorDiv(fromX, FRONT_CELL)
         val last = MathX.floorDiv(toX, FRONT_CELL)
         for (cell in first..last) {
@@ -144,10 +166,12 @@ class SceneryPainter(
             val fy = depth.atY(depth.frontY(heightAt(wx)), d)
             val s = depth.ppm * (1f - depth.perspectiveT(d))
             val tall = MathX.hash01(cell, 1237)
-            if (tall < 0.25f) {
-                stone(fx, fy, s * (0.10f + tall * 0.16f), day)
-            } else {
-                grassTuft(fx, fy, s * (0.22f + tall * 0.30f), biome, day)
+            rotate(degrees = slopeAt(wx, heightAt), pivot = Offset(fx, fy)) {
+                if (tall < 0.25f) {
+                    stone(fx, fy, s * (0.10f + tall * 0.16f), day)
+                } else {
+                    grassTuft(fx, fy, s * (0.22f + tall * 0.30f), biome, day)
+                }
             }
         }
     }
@@ -168,81 +192,86 @@ class SceneryPainter(
         val py = depth.atY(depth.frontY(heightAt(wx)), d)
         if (px < -120f || px > size.width + 120f) return
         val s = depth.ppm * (1f - depth.perspectiveT(d)) * (0.8f + scaleRnd * 0.55f)
+        val groundDeg = slopeAt(wx, heightAt)
+        fun planted(block: DrawScope.() -> Unit) {
+            rotate(degrees = groundDeg, pivot = Offset(px, py), block)
+        }
 
         when (biome) {
             BiomeType.RURAL -> when {
                 kind < 0.42f -> broadTree(px, py, s, day)
                 kind < 0.62f -> pineTree(px, py, s, day)
                 kind < 0.80f -> bush(px, py, s, day, Color(0xFF4E6B3C))
-                kind < 0.92f -> fence(px, py, s, day)
-                else -> stone(px, py, s * 0.32f, day)
+                kind < 0.92f -> planted { fence(px, py, s, day) }
+                kind < 0.985f -> planted { stone(px, py, s * 0.32f, day) }
+                else -> wreck(px, py, s, day, cell, groundDeg)
             }
             BiomeType.INDUSTRIAL -> when {
                 kind < 0.26f -> pineTree(px, py, s, day)
                 kind < 0.46f -> deadTree(px, py, s, day)
-                kind < 0.66f -> container(px, py, s, day)
-                kind < 0.84f -> fence(px, py, s, day)
-                else -> stone(px, py, s * 0.36f, day)
+                kind < 0.66f -> planted { container(px, py, s, day) }
+                kind < 0.84f -> planted { fence(px, py, s, day) }
+                else -> planted { stone(px, py, s * 0.36f, day) }
             }
             BiomeType.WASTELAND -> when {
                 kind < 0.34f -> deadTree(px, py, s, day)
                 kind < 0.56f -> bush(px, py, s * 0.8f, day, Color(0xFF6E6741))
-                kind < 0.74f -> stone(px, py, s * 0.42f, day)
-                kind < 0.80f -> wreck(px, py, s, day, cell, slopeAt(wx, heightAt))
-                else -> fence(px, py, s * 0.8f, day)
+                kind < 0.74f -> planted { stone(px, py, s * 0.42f, day) }
+                kind < 0.80f -> wreck(px, py, s, day, cell, groundDeg)
+                else -> planted { fence(px, py, s * 0.8f, day) }
             }
             // Uschnutý les je stena holých kmeňov – ihličie ani kry tu nie sú.
             BiomeType.FOREST -> when {
                 kind < 0.58f -> deadTree(px, py, s * 1.15f, day)
                 kind < 0.80f -> pineTree(px, py, s * 1.05f, day)
-                kind < 0.90f -> stone(px, py, s * 0.34f, day)
-                else -> logPile(px, py, s, day)
+                kind < 0.90f -> planted { stone(px, py, s * 0.34f, day) }
+                else -> planted { logPile(px, py, s, day) }
             }
             // Živý les je stena kmeňov – takmer nič iné tam nestojí.
             BiomeType.FOREST_ALIVE -> when {
                 kind < 0.52f -> pineTree(px, py, s * 1.15f, day)
                 kind < 0.80f -> broadTree(px, py, s * 1.05f, day)
                 kind < 0.92f -> bush(px, py, s, day, Color(0xFF3E5E32))
-                else -> logPile(px, py, s, day)
+                else -> planted { logPile(px, py, s, day) }
             }
             BiomeType.DESERT -> when {
                 kind < 0.34f -> cactus(px, py, s, day)
                 kind < 0.52f -> bush(px, py, s * 0.7f, day, Color(0xFF8C8451))
-                kind < 0.70f -> stone(px, py, s * 0.50f, day)
+                kind < 0.70f -> planted { stone(px, py, s * 0.50f, day) }
                 kind < 0.84f -> deadTree(px, py, s * 0.9f, day)
-                kind < 0.89f -> wreck(px, py, s, day, cell, slopeAt(wx, heightAt))
-                else -> fence(px, py, s * 0.75f, day)
+                kind < 0.89f -> wreck(px, py, s, day, cell, groundDeg)
+                else -> planted { fence(px, py, s * 0.75f, day) }
             }
             // Za súmraku ostanú z kulís len siluety – kaktus a skala.
             BiomeType.DESERT_DUSK -> when {
                 kind < 0.40f -> cactus(px, py, s, day)
-                kind < 0.66f -> stone(px, py, s * 0.55f, day)
+                kind < 0.66f -> planted { stone(px, py, s * 0.55f, day) }
                 kind < 0.84f -> deadTree(px, py, s * 0.9f, day)
-                kind < 0.90f -> wreck(px, py, s, day, cell, slopeAt(wx, heightAt))
-                else -> fence(px, py, s * 0.75f, day)
+                kind < 0.90f -> wreck(px, py, s, day, cell, groundDeg)
+                else -> planted { fence(px, py, s * 0.75f, day) }
             }
             // V búrke prežije len to najotužilejšie a aj to je sotva vidieť.
             BiomeType.SANDSTORM -> when {
                 kind < 0.30f -> cactus(px, py, s * 0.85f, day)
                 kind < 0.52f -> deadTree(px, py, s * 0.85f, day)
-                kind < 0.76f -> stone(px, py, s * 0.55f, day)
-                kind < 0.83f -> wreck(px, py, s, day, cell, slopeAt(wx, heightAt))
-                else -> fence(px, py, s * 0.7f, day)
+                kind < 0.76f -> planted { stone(px, py, s * 0.55f, day) }
+                kind < 0.83f -> wreck(px, py, s, day, cell, groundDeg)
+                else -> planted { fence(px, py, s * 0.7f, day) }
             }
             // Prachová búrka stojí nad mestom – pri ceste zostal jeho odpad.
             BiomeType.DUST_STORM -> when {
-                kind < 0.24f -> container(px, py, s * 0.9f, day)
+                kind < 0.24f -> planted { container(px, py, s * 0.9f, day) }
                 kind < 0.44f -> deadTree(px, py, s * 0.85f, day)
-                kind < 0.64f -> fence(px, py, s * 0.8f, day)
-                kind < 0.82f -> stone(px, py, s * 0.5f, day)
-                kind < 0.89f -> wreck(px, py, s, day, cell, slopeAt(wx, heightAt))
+                kind < 0.64f -> planted { fence(px, py, s * 0.8f, day) }
+                kind < 0.82f -> planted { stone(px, py, s * 0.5f, day) }
+                kind < 0.89f -> wreck(px, py, s, day, cell, groundDeg)
                 else -> cactus(px, py, s * 0.8f, day)
             }
             BiomeType.ALPINE -> when {
                 kind < 0.50f -> pineTree(px, py, s * 1.05f, day)
-                kind < 0.78f -> stone(px, py, s * 0.62f, day)
+                kind < 0.78f -> planted { stone(px, py, s * 0.62f, day) }
                 kind < 0.90f -> deadTree(px, py, s * 0.85f, day)
-                else -> logPile(px, py, s, day)
+                else -> planted { logPile(px, py, s, day) }
             }
         }
     }
@@ -278,6 +307,7 @@ class SceneryPainter(
         propPath.lineTo(x + s * 0.13f, y)
         propPath.close()
         drawPath(propPath, bark)
+        materials.shape(this, propPath, MaterialKind.BARK, x, y, s * 1.3f, 0.75f * day)
         drawLine(
             barkLit.copy(alpha = 0.6f),
             Offset(x - s * 0.04f, y - h * 0.05f), Offset(x - s * 0.02f, y - h * 0.55f),
@@ -288,17 +318,25 @@ class SceneryPainter(
         drawLine(bark, Offset(x, y - h * 0.52f), Offset(x + s * 0.32f, y - h * 0.68f), strokeWidth = s * 0.055f)
 
         // Koruna v troch tónoch – tieň, plášť, svetlo.
-        val dark = shade(Color(0xFF2F4F2A), day)
-        val mid = shade(Color(0xFF4A7038), day)
-        val lit = shade(Color(0xFF6E9A46), day)
-        drawCircle(dark, s * 0.74f, Offset(x + s * 0.06f, y - h * 0.66f))
-        drawCircle(dark, s * 0.50f, Offset(x - s * 0.52f, y - h * 0.50f))
-        drawCircle(dark, s * 0.46f, Offset(x + s * 0.54f, y - h * 0.54f))
-        drawCircle(mid, s * 0.62f, Offset(x - s * 0.02f, y - h * 0.72f))
-        drawCircle(mid, s * 0.40f, Offset(x - s * 0.48f, y - h * 0.58f))
-        drawCircle(mid, s * 0.36f, Offset(x + s * 0.50f, y - h * 0.60f))
-        drawCircle(lit, s * 0.34f, Offset(x - s * 0.14f, y - h * 0.88f))
-        drawCircle(lit.copy(alpha = 0.8f), s * 0.22f, Offset(x + s * 0.26f, y - h * 0.82f))
+        val dark = land(Color(0xFF2F4F2A), day)
+        val mid = land(Color(0xFF4A7038), day)
+        val lit = land(Color(0xFF6E9A46), day)
+        canopyPath.reset()
+        fun foliage(color: Color, radius: Float, center: Offset) {
+            drawCircle(color, radius, center)
+            canopyPath.addOval(Rect(center.x - radius, center.y - radius,
+                center.x + radius, center.y + radius))
+        }
+        foliage(dark, s * 0.74f, Offset(x + s * 0.06f, y - h * 0.66f))
+        foliage(dark, s * 0.50f, Offset(x - s * 0.52f, y - h * 0.50f))
+        foliage(dark, s * 0.46f, Offset(x + s * 0.54f, y - h * 0.54f))
+        foliage(mid, s * 0.62f, Offset(x - s * 0.02f, y - h * 0.72f))
+        foliage(mid, s * 0.40f, Offset(x - s * 0.48f, y - h * 0.58f))
+        foliage(mid, s * 0.36f, Offset(x + s * 0.50f, y - h * 0.60f))
+        foliage(lit, s * 0.34f, Offset(x - s * 0.14f, y - h * 0.88f))
+        foliage(lit.copy(alpha = 0.8f), s * 0.22f, Offset(x + s * 0.26f, y - h * 0.82f))
+        materials.shape(this, canopyPath, MaterialKind.LEAVES, x - s, y - h,
+            s * 3.6f, 0.95f * (0.1f + day * 0.9f))
     }
 
     /**
@@ -313,6 +351,7 @@ class SceneryPainter(
             Offset(x, y), Offset(x, y - h * 0.26f),
             strokeWidth = s * 0.14f
         )
+        canopyPath.reset()
         val tiers = 5
         for (i in 0 until tiers) {
             val t = i / (tiers - 1f)
@@ -320,8 +359,8 @@ class SceneryPainter(
             val w = s * (0.92f - t * 0.62f)
             val tierH = h * (0.30f - t * 0.09f)
             // Spodná, tmavšia polovica poschodia.
-            val dark = shade(lerp(Color(0xFF23412A), Color(0xFF33583A), t), day)
-            val lit = shade(lerp(Color(0xFF396540), Color(0xFF548C4E), t), day)
+            val dark = land(lerp(Color(0xFF23412A), Color(0xFF33583A), t), day)
+            val lit = land(lerp(Color(0xFF396540), Color(0xFF548C4E), t), day)
             propPath.reset()
             propPath.moveTo(x - w, cy)
             // Previs na koncoch – vetvy nie sú rovná čiara.
@@ -331,6 +370,7 @@ class SceneryPainter(
             propPath.lineTo(x + w, cy)
             propPath.close()
             drawPath(propPath, dark)
+            canopyPath.addPath(propPath)
             propPath.reset()
             propPath.moveTo(x - w * 0.62f, cy - tierH * 0.30f)
             propPath.lineTo(x, cy - tierH)
@@ -338,11 +378,13 @@ class SceneryPainter(
             propPath.close()
             drawPath(propPath, lit)
         }
+        materials.shape(this, canopyPath, MaterialKind.NEEDLES, x - s, y - h,
+            s * 3.2f, 0.90f * (0.1f + day * 0.9f))
     }
 
     private fun DrawScope.deadTree(x: Float, y: Float, s: Float, day: Float) {
         groundShadow(x, y, s, day, 0.7f)
-        val col = shade(Color(0xFF6B5B4A), day)
+        val col = land(Color(0xFF6B5B4A), day)
         val h = s * 2.2f
         drawLine(col, Offset(x, y), Offset(x - s * 0.08f, y - h), strokeWidth = s * 0.13f, cap = StrokeCap.Round)
         drawLine(col, Offset(x - s * 0.05f, y - h * 0.62f), Offset(x - s * 0.62f, y - h * 0.90f), strokeWidth = s * 0.08f, cap = StrokeCap.Round)
@@ -351,14 +393,19 @@ class SceneryPainter(
 
     private fun DrawScope.bush(x: Float, y: Float, s: Float, day: Float, base: Color) {
         groundShadow(x, y, s, day, 0.6f)
-        val c = shade(base, day)
+        val c = land(base, day)
         drawCircle(c, s * 0.42f, Offset(x, y - s * 0.30f))
         drawCircle(c, s * 0.32f, Offset(x - s * 0.35f, y - s * 0.18f))
         drawCircle(c, s * 0.30f, Offset(x + s * 0.33f, y - s * 0.20f))
+        canopyPath.reset()
+        canopyPath.addOval(Rect(x - s * 0.42f, y - s * 0.72f, x + s * 0.42f, y + s * 0.12f))
+        canopyPath.addOval(Rect(x - s * 0.67f, y - s * 0.50f, x - s * 0.03f, y + s * 0.14f))
+        canopyPath.addOval(Rect(x + s * 0.03f, y - s * 0.50f, x + s * 0.63f, y + s * 0.10f))
+        materials.shape(this, canopyPath, MaterialKind.LEAVES, x, y, s * 3f, 0.85f * day)
     }
 
     private fun DrawScope.grassTuft(x: Float, y: Float, s: Float, biome: BiomeType, day: Float) {
-        val c = shade(
+        val c = land(
             when (biome) {
                 BiomeType.RURAL -> Color(0xFF6F8B4A)
                 BiomeType.INDUSTRIAL -> Color(0xFF6A7355)
@@ -396,6 +443,9 @@ class SceneryPainter(
             topLeft = Offset(x - s * 0.7f, y - s * 0.85f),
             size = Size(s * 1.1f, s * 0.55f)
         )
+        propPath.reset()
+        propPath.addOval(Rect(x - s, y - s * 0.85f, x + s, y + s * 0.15f))
+        materials.shape(this, propPath, MaterialKind.STONE, x, y, s * 6f, 0.8f * day)
     }
 
     private fun DrawScope.fence(x: Float, y: Float, s: Float, day: Float) {
@@ -424,6 +474,21 @@ class SceneryPainter(
             val px = x - w * 0.5f + w * i / 5f
             drawLine(shade(Color(0xFF6A4E36), day), Offset(px, y - h), Offset(px, y), strokeWidth = s * 0.05f)
         }
+    }
+
+    /**
+     * Odstavený vrak ako budova – rovnaká kresba ako kulisa, aby sa
+     * prehľadateľné auto pri ceste nezmenilo na obdĺžnik.
+     */
+    fun DrawScope.drawParkedWreck(
+        x: Float,
+        y: Float,
+        s: Float,
+        day: Float,
+        seed: Int,
+        groundDeg: Float
+    ) {
+        wreck(x, y, s, day, seed, groundDeg)
     }
 
     /**
@@ -540,7 +605,7 @@ class SceneryPainter(
                             image = sprite,
                             dstOffset = IntOffset((x - w * 0.5f).toInt(), topY.toInt()),
                             dstSize = IntSize(w.toInt().coerceAtLeast(1), h.toInt().coerceAtLeast(1)),
-                            colorFilter = bodyPaint(rust)
+                            colorFilter = bodyPaint(rust, paintIdx)
                         )
                     }
                 }
@@ -619,7 +684,10 @@ class SceneryPainter(
      * sa obraz najprv takmer odfarbí a až potom zafarbí; tieňovanie plechu
      * ostane, len sa prenesie do novej farby.
      */
-    private fun bodyPaint(tint: Color, sat: Float = 0.22f, gain: Float = 1.55f): ColorFilter {
+    private fun bodyPaint(tint: Color, paintIdx: Int, sat: Float = 0.22f, gain: Float = 1.55f): ColorFilter {
+        val packed = tint.toArgb()
+        val slot = paintIdx.coerceIn(0, wreckFilters.lastIndex)
+        wreckFilters[slot]?.let { if (wreckFilterArgb[slot] == packed) return it }
         val inv = 1f - sat
         fun row(t: Float, c: Int) = floatArrayOf(
             t * (0.299f * inv + if (c == 0) sat else 0f),
@@ -639,7 +707,10 @@ class SceneryPainter(
                     0f, 0f, 0f, 1f, 0f
                 )
             )
-        )
+        ).also {
+            wreckFilters[slot] = it
+            wreckFilterArgb[slot] = packed
+        }
     }
 
     /** Splasnuté koleso vraku – nie dokonalý kruh, guma je dole sadnutá. */
@@ -662,7 +733,7 @@ class SceneryPainter(
     /** Saguaro – jediný tvar, ktorý púšť pomenuje na prvý pohľad. */
     private fun DrawScope.cactus(x: Float, y: Float, s: Float, day: Float) {
         groundShadow(x, y, s, day, 0.6f)
-        val c = shade(Color(0xFF4B7247), day)
+        val c = land(Color(0xFF4B7247), day)
         val h = s * 2.1f
         drawLine(c, Offset(x, y), Offset(x, y - h), strokeWidth = s * 0.30f, cap = StrokeCap.Round)
         // Ramená sa zdvíhajú nahor – bez nich by to bol len zelený stĺpik.
@@ -783,28 +854,30 @@ class SceneryPainter(
             val s = depth.ppm * (1f - depth.perspectiveT(d))
             val big = i % 5 == 0
             val h = s * (if (big) 1.5f else 0.75f)
-            drawLine(
-                shade(Color(0xFFD8D2C4), day),
-                Offset(px, py), Offset(px, py - h),
-                strokeWidth = (s * (if (big) 0.13f else 0.10f)).coerceAtLeast(1.5f)
-            )
-            drawLine(
-                shade(Color(0xFFB85C38), day),
-                Offset(px, py - h), Offset(px, py - h + s * 0.18f),
-                strokeWidth = (s * 0.13f).coerceAtLeast(1.5f)
-            )
-            if (big) {
-                val w = s * 1.05f
-                drawRect(
-                    shade(Color(0xFF2F4F3A), day),
-                    topLeft = Offset(px - w * 0.5f, py - h - s * 0.62f),
-                    size = Size(w, s * 0.62f)
+            rotate(degrees = slopeAt(wx, heightAt), pivot = Offset(px, py)) {
+                drawLine(
+                    shade(Color(0xFFD8D2C4), day),
+                    Offset(px, py), Offset(px, py - h),
+                    strokeWidth = (s * (if (big) 0.13f else 0.10f)).coerceAtLeast(1.5f)
                 )
-                drawRect(
-                    shade(Color(0xFFDDD6C6), day),
-                    topLeft = Offset(px - w * 0.42f, py - h - s * 0.46f),
-                    size = Size(w * 0.84f, s * 0.10f)
+                drawLine(
+                    shade(Color(0xFFB85C38), day),
+                    Offset(px, py - h), Offset(px, py - h + s * 0.18f),
+                    strokeWidth = (s * 0.13f).coerceAtLeast(1.5f)
                 )
+                if (big) {
+                    val w = s * 1.05f
+                    drawRect(
+                        shade(Color(0xFF2F4F3A), day),
+                        topLeft = Offset(px - w * 0.5f, py - h - s * 0.62f),
+                        size = Size(w, s * 0.62f)
+                    )
+                    drawRect(
+                        shade(Color(0xFFDDD6C6), day),
+                        topLeft = Offset(px - w * 0.42f, py - h - s * 0.46f),
+                        size = Size(w * 0.84f, s * 0.10f)
+                    )
+                }
             }
         }
     }

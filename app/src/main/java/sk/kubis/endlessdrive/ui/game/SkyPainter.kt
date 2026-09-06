@@ -8,8 +8,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.lerp
 import sk.kubis.endlessdrive.core.MathX
 import sk.kubis.endlessdrive.domain.model.BiomeType
-import kotlin.math.PI
-import kotlin.math.sin
+import sk.kubis.endlessdrive.game.DayCycle
 
 /**
  * Doplnky nad kreslené pozadie: hviezdy, slnko s mesiacom a hmla nad
@@ -52,25 +51,38 @@ class SkyPainter {
     }
 
     private fun DrawScope.drawCelestial(time: Float, day: Float, horizonY: Float) {
-        // Slnko: východ pri 0.25, západ pri 0.75. Mesiac o pol dňa posunutý.
-        drawDisc(time, horizonY, sun = true, visible = day > 0.02f)
-        drawDisc(time - 0.5f, horizonY, sun = false, visible = day < 0.75f)
+        // Slnko aj mesiac idú po tej istej dráhe z [DayCycle] – plynulo s časom.
+        drawDisc(DayCycle.sunProgress(time), horizonY, sun = true, visible = day > 0.02f)
+        drawDisc(DayCycle.moonProgress(time), horizonY, sun = false, visible = day < 0.75f)
     }
 
-    private fun DrawScope.drawDisc(time: Float, horizonY: Float, sun: Boolean, visible: Boolean) {
+    private fun DrawScope.drawDisc(progress: Float, horizonY: Float, sun: Boolean, visible: Boolean) {
         if (!visible) return
-        val t = ((time % 1f) + 1f) % 1f
-        val u = (t - 0.25f) / 0.5f
+        val u = progress
         if (u < -0.06f || u > 1.06f) return
         val x = size.width * u.coerceIn(-0.05f, 1.05f)
-        val arc = sin((u.coerceIn(0f, 1f) * PI).toDouble()).toFloat()
+        val arc = DayCycle.celestialArc(u)
         val y = horizonY - arc * horizonY * 0.72f - horizonY * 0.05f
         val r = if (sun) size.height * 0.055f else size.height * 0.042f
 
         val core = if (sun) Color(0xFFFFE9A8) else Color(0xFFE6ECF5)
         val glow = if (sun) Color(0xFFFFC46B) else Color(0xFFAFC4E8)
-        drawCircle(glow.copy(alpha = 0.20f), r * 2.9f, Offset(x, y))
-        drawCircle(glow.copy(alpha = 0.32f), r * 1.7f, Offset(x, y))
+        // Soft atmospheric bloom instead of two visibly solid rings.
+        drawCircle(
+            Brush.radialGradient(
+                listOf(glow.copy(alpha = 0.42f), glow.copy(alpha = 0.12f), Color.Transparent),
+                center = Offset(x, y), radius = r * 3.5f
+            ), radius = r * 3.5f, center = Offset(x, y)
+        )
+        if (sun) {
+            val dusk = (1f - arc * 2.5f).coerceIn(0f, 1f)
+            if (dusk > 0f) drawRect(
+                Brush.verticalGradient(
+                    listOf(Color.Transparent, Color(0xFFFFA45B).copy(alpha = dusk * 0.14f), Color.Transparent),
+                    startY = horizonY * 0.45f, endY = horizonY * 1.15f
+                ), size = Size(size.width, horizonY * 1.15f)
+            )
+        }
         drawCircle(core, r, Offset(x, y))
         if (!sun) {
             // Krátery / fáza.
@@ -113,8 +125,8 @@ class SkyPainter {
         BiomeType.WASTELAND -> Color(0xFFD8C7A8)
         BiomeType.DESERT -> Color(0xFFF0D9A6)
         BiomeType.DESERT_DUSK -> Color(0xFFE8A867)
-        BiomeType.FOREST -> Color(0xFFC3CEC4)
-        BiomeType.FOREST_ALIVE -> Color(0xFFCADCC9)
+        BiomeType.FOREST -> Color(0xFF8A9488)
+        BiomeType.FOREST_ALIVE -> Color(0xFF8FA882)
         BiomeType.SANDSTORM -> Color(0xFFD9B078)
         BiomeType.DUST_STORM -> Color(0xFFD5B37F)
         BiomeType.ALPINE -> Color(0xFFD7E4EA)

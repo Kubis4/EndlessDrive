@@ -10,6 +10,7 @@ import sk.kubis.endlessdrive.domain.model.ItemCatalog
 import sk.kubis.endlessdrive.domain.model.RoadFeature
 import sk.kubis.endlessdrive.domain.model.RoadPaving
 import sk.kubis.endlessdrive.game.event.RoadEvent
+import sk.kubis.endlessdrive.game.car.TireInjury
 
 /**
  * Odfotená rozohraná jazda. Ukladáme len to, čo sa nedá dopočítať:
@@ -42,7 +43,8 @@ data class RunSnapshot(
     /** Materiál získaný zošrotovaním predmetov v tejto jazde. */
     val scrap: Int = 0,
     /** Režim svetiel; false pri starom save znamená stretávacie. */
-    val highBeamsOn: Boolean = false
+    val highBeamsOn: Boolean = false,
+    val roofLightsOn: Boolean = false
 )
 
 data class EventState(val kind: RoadEvent, val remaining: Float)
@@ -72,7 +74,8 @@ data class PartState(
     val defId: String,
     val condition: ComponentCondition,
     val health: Float,
-    val paintIndex: Int = -1
+    val paintIndex: Int = -1,
+    val injury: TireInjury = TireInjury.INFLATED
 )
 
 data class StackState(
@@ -85,7 +88,9 @@ data class StackState(
     val heldFluidL: Float = 0f,
     val heldPurity: Float = 1f,
     val heldDieselFraction: Float = 0f,
-    val paintIndex: Int = -1
+    val paintIndex: Int = -1,
+    /** SoC vymontovanej batérie; -1 = loot/nový kus (nabitý na zdravie). */
+    val heldCharge: Float = -1f
 )
 
 data class SegmentState(
@@ -139,7 +144,7 @@ object RunCodec {
             listOf(
                 s.seed, s.phase.name, s.distanceM, s.maxReachedX, s.elapsed,
                 s.timeOfDay, s.headlightsOn, s.fuelBurnedL, s.itemsLooted,
-                s.buildingsVisited, s.fluidRescues, s.batteryRescues, s.scrap, s.highBeamsOn
+                s.buildingsVisited, s.fluidRescues, s.batteryRescues, s.scrap, s.highBeamsOn, s.roofLightsOn
             ).joinToString("|")
         )
         val c = s.car
@@ -151,7 +156,7 @@ object RunCodec {
             ).joinToString("|")
         )
         appendLine(c.parts.joinToString(";") {
-            "${it.slot.name}:${it.defId}:${it.condition.name}:${it.health}:${it.paintIndex}"
+            "${it.slot.name}:${it.defId}:${it.condition.name}:${it.health}:${it.paintIndex}:${it.injury.name}"
         })
         appendLine(s.inventory.joinToString(";") { it?.let(::encodeStack) ?: "-" })
         appendLine(s.boot.joinToString(";") { it?.let(::encodeStack) ?: "-" })
@@ -195,11 +200,13 @@ object RunCodec {
             val condition = ComponentCondition.valueOf(f[2])
             val health = f[3].toFloat()
             val paintIndex = f.getOrNull(4)?.toIntOrNull() ?: -1
+            val injury = f.getOrNull(5)?.let { runCatching { TireInjury.valueOf(it) }.getOrNull() }
+                ?: TireInjury.INFLATED
             when (f[0]) {
                 "TIRES" -> {
                     // Starý save: jedna sada → predok aj zadok.
-                    parts += PartState(ComponentSlot.TIRE_FRONT, defId, condition, health, paintIndex)
-                    parts += PartState(ComponentSlot.TIRE_REAR, defId, condition, health, paintIndex)
+                    parts += PartState(ComponentSlot.TIRE_FRONT, defId, condition, health, paintIndex, injury)
+                    parts += PartState(ComponentSlot.TIRE_REAR, defId, condition, health, paintIndex, injury)
                 }
                 // Starý pár dverí sa po migrácii rozdelí na oba nové sloty.
                 "DOORS" -> {
@@ -213,16 +220,18 @@ object RunCodec {
                     defId = defId,
                     condition = condition,
                     health = health,
-                    paintIndex = paintIndex
+                    paintIndex = paintIndex,
+                    injury = injury
                 )
             }
         }
         val inventory = lines[4].split(";").map { if (it == "-" || it.isBlank()) null else decodeStack(it) }
         val boot = lines[5].split(";").map { if (it == "-" || it.isBlank()) null else decodeStack(it) }
         val seg = lines[6].split("|")
-        val events = lines[7].split(";").filter { it.isNotBlank() }.map { e ->
+        val events = lines[7].split(";").filter { it.isNotBlank() }.mapNotNull { e ->
             val f = e.split(":")
-            EventState(RoadEvent.valueOf(f[0]), f[1].toFloat())
+            val kind = runCatching { RoadEvent.valueOf(f[0]) }.getOrNull() ?: return@mapNotNull null
+            EventState(kind, f[1].toFloat())
         }
         val buildings = lines.drop(8).filter { it.isNotBlank() }.map { line ->
             val f = line.split("|")
@@ -288,13 +297,15 @@ object RunCodec {
             ),
             events = events,
             scrap = h.getOrNull(12)?.toIntOrNull() ?: 0,
-            highBeamsOn = h.getOrNull(13)?.toBooleanStrictOrNull() ?: false
+            highBeamsOn = h.getOrNull(13)?.toBooleanStrictOrNull() ?: false,
+            roofLightsOn = h.getOrNull(14)?.toBooleanStrictOrNull() ?: false
         )
     }.getOrNull()
 
     private fun encodeStack(s: StackState) =
         "${s.defId}:${s.condition.name}:${s.health}:${s.count}:${s.purity}" +
-            ":${s.heldFluidL}:${s.heldPurity}:${s.heldDieselFraction}:${s.paintIndex}"
+            ":${s.heldFluidL}:${s.heldPurity}:${s.heldDieselFraction}:${s.paintIndex}" +
+            ":${s.heldCharge}"
 
     private fun decodeStack(text: String): StackState {
         val f = text.split(":")
@@ -312,7 +323,8 @@ object RunCodec {
             heldFluidL = f.getOrNull(5)?.toFloatOrNull() ?: 0f,
             heldPurity = f.getOrNull(6)?.toFloatOrNull() ?: 1f,
             heldDieselFraction = f.getOrNull(7)?.toFloatOrNull() ?: 0f,
-            paintIndex = f.getOrNull(8)?.toIntOrNull() ?: -1
+            paintIndex = f.getOrNull(8)?.toIntOrNull() ?: -1,
+            heldCharge = f.getOrNull(9)?.toFloatOrNull() ?: -1f
         )
     }
 }

@@ -1,5 +1,6 @@
 package sk.kubis.endlessdrive
 
+import android.content.Context
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -13,6 +14,10 @@ import sk.kubis.endlessdrive.ui.EndlessDriveRoot
 import sk.kubis.endlessdrive.ui.theme.EndlessDriveTheme
 
 class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AudioAttribution.wrap(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

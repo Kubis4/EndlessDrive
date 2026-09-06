@@ -64,4 +64,29 @@ class SurfacePatchPlacementTest {
         }
         assertTrue("test musí nájsť aspoň nejakú vodu, našiel $water", water > 20)
     }
+
+    @Test
+    fun surfacePatchesAreLongEnoughToReadAndFeel() {
+        var sand = 0
+        var mud = 0
+        eachPatch { where, _, patch ->
+            when (patch.surface) {
+                RoadSurface.SAND -> {
+                    sand++
+                    assertTrue("$where: piesok je príliš krátky (${patch.length} m)", patch.length >= 36f)
+                }
+                RoadSurface.MUD -> {
+                    mud++
+                    assertTrue("$where: bahno je príliš krátke (${patch.length} m)", patch.length >= 32f)
+                }
+                RoadSurface.WATER -> assertTrue("$where: voda je príliš krátka", patch.length >= 32f)
+                RoadSurface.GRAVEL -> assertTrue("$where: štrk je príliš krátky", patch.length >= 24f)
+                RoadSurface.ICE, RoadSurface.SLUSH ->
+                    assertTrue("$where: zimný úsek je príliš krátky", patch.length >= 28f)
+                RoadSurface.ASPHALT -> Unit
+            }
+        }
+        assertTrue("test musí nájsť piesok", sand > 20)
+        assertTrue("test musí nájsť bahno", mud > 20)
+    }
 }

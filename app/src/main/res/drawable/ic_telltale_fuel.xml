@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ISO 7000-0245 fuel pump: station body + hose + nozzle. Flat outline/fill. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M3.2,5.2 h9.6 v14.5 H3.2 Z"
+        android:strokeWidth="1.55"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineJoin="miter" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M5.0,7.2 h6.0 v4.2 H5.0 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M2.4,19.7 h11.2 v1.55 H2.4 Z" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M12.8,6.5 C15.4,6.1 18.0,7.0 18.2,9.6 v5.3"
+        android:strokeWidth="1.5"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M16.5,14.6 h3.4 v5.4 h-3.4 Z" />
+</vector>

@@ -1,6 +1,7 @@
 package sk.kubis.endlessdrive.game.inventory
 
 import sk.kubis.endlessdrive.core.GameConfig
+import sk.kubis.endlessdrive.domain.model.ItemCatalog
 import sk.kubis.endlessdrive.domain.model.ItemStack
 
 class Inventory(
@@ -64,6 +65,7 @@ class Inventory(
         // Kvapalina sa priloží k rovnakému kanistru – miesto v batohu nepotrebuje,
         // hmotnosť sa jej ale počíta rovnako ako všetkému ostatnému.
         if (def.fluid != null && slots.any { it?.defId == stack.defId }) return true
+        if (def.id == ItemCatalog.PUNCTURE_KIT.id && slots.any { it?.defId == stack.defId }) return true
         return slots.any { it == null }
     }
 
@@ -82,6 +84,13 @@ class Inventory(
                     existing.purity = (existing.purity * have + stack.purity * add) / total
                 }
                 existing.setFluidLitres(total)
+                return true
+            }
+        }
+        if (stack.defId == ItemCatalog.PUNCTURE_KIT.id) {
+            val idx = slots.indexOfFirst { it?.defId == stack.defId }
+            if (idx >= 0) {
+                slots[idx]!!.count += stack.count.coerceAtLeast(1)
                 return true
             }
         }

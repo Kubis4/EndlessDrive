@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import sk.kubis.endlessdrive.domain.model.BuildingType
 import sk.kubis.endlessdrive.game.world.WorldBuilding
 
@@ -25,26 +26,36 @@ class BuildingPainter {
         py: Float,
         s: Float,
         day: Float,
-        near: Boolean
+        near: Boolean,
+        slopeDeg: Float = 0f
     ) {
         val night = 1f - day
         val lit = night > 0.35f && !b.looted
-        // Tieň na zemi.
-        drawOval(
-            Color.Black.copy(alpha = 0.22f),
-            topLeft = Offset(px - s * 2.2f, py - s * 0.12f),
-            size = Size(s * 4.4f, s * 0.34f)
-        )
-        when (b.type) {
-            BuildingType.HOUSE -> house(px, py, s, day, lit)
-            BuildingType.GARAGE -> garage(px, py, s, day, lit)
-            BuildingType.GAS_STATION -> gasStation(
-                px, py, s, day, lit, b.pumpFuelL > 0.05f || b.pumpDieselL > 0.05f
+        // Stojí na svahu ako vozovka – otočka okolo päty, nie celej oblohy.
+        rotate(degrees = slopeDeg, pivot = Offset(px, py)) {
+            // Tieň na zemi.
+            drawOval(
+                Color.Black.copy(alpha = 0.22f),
+                topLeft = Offset(px - s * 2.2f, py - s * 0.12f),
+                size = Size(s * 4.4f, s * 0.34f)
             )
-            BuildingType.AUTO_SHOP -> autoShop(px, py, s, day, lit)
+            when (b.type) {
+                BuildingType.HOUSE -> house(px, py, s, day, lit)
+                BuildingType.GARAGE -> garage(px, py, s, day, lit)
+                BuildingType.GAS_STATION -> gasStation(
+                    px, py, s, day, lit, b.pumpFuelL > 0.05f || b.pumpDieselL > 0.05f
+                )
+                BuildingType.AUTO_SHOP -> autoShop(px, py, s, day, lit)
+                // Vrak kreslí SceneryPainter zo spritov – tu ostane len tieň a značka.
+                BuildingType.WRECK -> Unit
+            }
+            if (b.landmark) depotFlag(px, py, s, day)
+            if (near) drawSearchMarker(px, py, s, b.looted)
         }
-        if (b.landmark) depotFlag(px, py, s, day)
-        if (near) marker(px, py, s, b.looted)
+    }
+
+    fun DrawScope.drawSearchMarker(x: Float, y: Float, s: Float, looted: Boolean) {
+        marker(x, y, s, looted)
     }
 
     private fun DrawScope.house(x: Float, y: Float, s: Float, day: Float, lit: Boolean) {

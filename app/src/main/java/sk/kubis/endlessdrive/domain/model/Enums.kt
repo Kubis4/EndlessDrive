@@ -45,7 +45,17 @@ enum class ComponentSlot(val displayName: String, val group: String) {
     /** Batoh alebo debna v kufri – miesto navyše. */
     CARGO("Cargo box", "Storage"),
     /** Strešný nosič – miesto navyše, ale aj odpor vzduchu. Vidno ho na aute. */
-    ROOF_RACK("Roof rack", "Storage")
+    ROOF_RACK("Roof rack", "Storage");
+
+    /**
+     * Plech karosérie, ktorý berie lak. Svetlá, sklo, interiér a nosič
+     * ostávajú ako v predlohe – číre, chróm, sivý kov.
+     */
+    val takesBodyPaint: Boolean
+        get() = when (this) {
+            DOOR_FRONT, DOOR_REAR, HOOD, TRUNK_LID, FRONT_BUMPER, REAR_BUMPER -> true
+            else -> false
+        }
 }
 
 /** Pneumatikové sloty – predok a zadok zvlášť. */
@@ -160,7 +170,9 @@ enum class BuildingType(val displayName: String) {
     HOUSE("House"),
     GARAGE("Garage"),
     GAS_STATION("Fuel station"),
-    AUTO_SHOP("Repair shop")
+    AUTO_SHOP("Repair shop"),
+    /** Odstavené auto pri ceste – dá sa prehľadať, často je v ňom scrap. */
+    WRECK("Abandoned car")
 }
 
 enum class BiomeType(val displayName: String) {
@@ -188,6 +200,31 @@ enum class BiomeType(val displayName: String) {
 
     /** Les v ktoromkoľvek stave – hustá kulisa kmeňov po oboch stranách. */
     val wooded: Boolean get() = this == FOREST || this == FOREST_ALIVE
+
+    /**
+     * Biómy s rovnakou kresbou oblohy. Prechod v rámci rodiny nevyzerá
+     * ako nová lokalita, preto sa za sebou nespájajú.
+     */
+    val backdropFamily: Int
+        get() = when (this) {
+            RURAL, FOREST_ALIVE, ALPINE -> 1
+            FOREST -> 2
+            DESERT, WASTELAND -> 3
+            DESERT_DUSK -> 4
+            INDUSTRIAL -> 5
+            SANDSTORM -> 6
+            DUST_STORM -> 7
+        }
+
+    /**
+     * Susedné regióny. Živý a suchý les majú inú oblohu, ale oba sú les –
+     * striedanie A–B–A–B pôsobí ako blikanie tej istej krajiny, nie ako cesta.
+     * Vidiek zdieľa kresbu so živým lesom, preto ostáva v [backdropFamily].
+     */
+    fun sharesSceneryWith(other: BiomeType): Boolean =
+        this == other ||
+            backdropFamily == other.backdropFamily ||
+            (wooded && other.wooded)
 }
 
 /**
@@ -215,58 +252,54 @@ enum class BranchStyle(
     val unlockDistance: Float = 0f,
     val pickWeight: Float = 1f
 ) {
-    // Hint je nálada, nie zoznam – čo je za zákrutou, sa hráč dozvie až tam.
     SAFE_RURAL(
-        "Countryside", "Fields, fences and silence",
-        BiomeType.RURAL, 0.85f, 0.12f, 1.15f, 0.72f, 0.60f, 1.20f,
+        "Countryside", "Smoother road · more buildings",
+        BiomeType.RURAL, 0.85f, 0.12f, 1.15f, 0.72f, 0.82f, 1.20f,
         accentArgb = 0xFF6B8F5A, pickWeight = 1.15f
     ),
     FOREST(
-        "Dead forest", "Bare trunks and no birdsong",
-        BiomeType.FOREST, 0.95f, 0.16f, 1.12f, 0.95f, 0.45f, 1.15f,
+        "Dead forest", "Hills · fewer buildings",
+        BiomeType.FOREST, 0.95f, 0.16f, 1.12f, 0.95f, 0.72f, 1.15f,
         accentArgb = 0xFF6E7A6A, pickWeight = 0.95f
     ),
-    // Živý les je tá istá cesta v lepšom stave – viac tieňa, menej sucha.
     FOREST_ALIVE(
-        "Living forest", "Cool shade between the trunks",
-        BiomeType.FOREST_ALIVE, 0.95f, 0.15f, 1.10f, 0.92f, 0.50f, 1.15f,
+        "Living forest", "Hills · moderate loot",
+        BiomeType.FOREST_ALIVE, 0.95f, 0.15f, 1.10f, 0.92f, 0.74f, 1.15f,
         accentArgb = 0xFF3F7A4E, pickWeight = 1.05f
     ),
     INDUSTRIAL(
-        "Industry", "Smoke on the horizon",
+        "Industry", "More parts · higher fuel use",
         BiomeType.INDUSTRIAL, 1.25f, 0.18f, 1.28f, 0.88f, 0.85f, 1.05f,
         accentArgb = 0xFF6A7A8A, pickWeight = 1.0f
     ),
     DESERT(
-        "Desert", "Heat over an empty road",
-        BiomeType.DESERT, 1.20f, 0.22f, 1.38f, 0.82f, 0.35f, 1.10f,
+        "Desert", "Fewer buildings · more fuel use",
+        BiomeType.DESERT, 1.20f, 0.22f, 1.38f, 0.82f, 0.52f, 1.10f,
         accentArgb = 0xFFC9924A, unlockDistance = 1200f, pickWeight = 0.95f
     ),
-    // Tá istá púšť, ale po západe – chladnejšie, tmavšie, menej vidieť.
     DESERT_DUSK(
-        "Mesa", "Sunset over the plateaus",
+        "Mesa", "Few buildings · more fuel use",
         BiomeType.DESERT_DUSK, 1.25f, 0.24f, 1.32f, 0.86f, 0.30f, 1.10f,
         accentArgb = 0xFF9A5F6E, unlockDistance = 1800f, pickWeight = 0.85f
     ),
     // „Shortcut“ mýlilo – hráč nikam neskracuje, ide po horšej ceste.
     SHORTCUT_RISK(
-        "Backroad", "Unmarked and unmaintained",
-        BiomeType.WASTELAND, 1.50f, 0.28f, 1.45f, 1.05f, 0.55f, 0.85f,
+        "Backroad", "Rougher road · more loot",
+        BiomeType.WASTELAND, 1.50f, 0.28f, 1.45f, 1.05f, 0.68f, 0.85f,
         accentArgb = 0xFFB85C38, pickWeight = 1.0f
     ),
     SANDSTORM(
-        "Sandstorm", "The horizon is gone",
+        "Sandstorm", "Sand · high fuel use · more loot",
         BiomeType.SANDSTORM, 1.70f, 0.30f, 1.60f, 0.95f, 0.40f, 0.80f,
         accentArgb = 0xFFA8763C, unlockDistance = 3000f, pickWeight = 0.70f
     ),
-    // Búrka nad mestom – v prachu presvitajú domy, takže je čo prehľadať.
     DUST_STORM(
-        "Dust storm", "Somewhere in there was a town",
+        "Dust storm", "Low visibility · more buildings",
         BiomeType.DUST_STORM, 1.65f, 0.30f, 1.58f, 0.90f, 0.95f, 0.80f,
         accentArgb = 0xFFB08A4E, unlockDistance = 3600f, pickWeight = 0.60f
     ),
     ALPINE(
-        "Snowy mountains", "Rock, thin air and a white road",
+        "Snowy mountains", "Snow · steep · winter tyres",
         BiomeType.ALPINE, 1.35f, 0.24f, 1.42f, 1.35f, 0.28f, 1.10f,
         accentArgb = 0xFF8FB7CC, unlockDistance = 9000f, pickWeight = 0.75f
     );

@@ -8,6 +8,7 @@ import sk.kubis.endlessdrive.domain.model.RoadFeature
 import sk.kubis.endlessdrive.domain.model.RoadSurface
 import sk.kubis.endlessdrive.game.PrepStep
 import sk.kubis.endlessdrive.game.car.Car
+import sk.kubis.endlessdrive.game.car.TireInjury
 
 /** Stav HUD / overlayov – aktualizuje sa max ~10×/s, nie každú snímku. */
 data class GameUiState(
@@ -60,6 +61,8 @@ data class GameUiState(
     val engineRunning: Boolean = false,
     val headlightsOn: Boolean = false,
     val highBeamsOn: Boolean = false,
+    val hasExpeditionKit: Boolean = false,
+    val roofLightsOn: Boolean = false,
     val isNight: Boolean = false,
     val clock: String = "08:00",
     val hasNearbyBuilding: Boolean = false,
@@ -87,7 +90,16 @@ data class GameUiState(
     /** Čo práve najviac ničí motor (null = nič mimoriadne). */
     val wearWarning: String? = null,
     /** Invalidácia inventára / panelov auta. */
-    val bagRevision: Int = 0
+    val bagRevision: Int = 0,
+    /**
+     * Hash zdravia, defektu a šrotu. MountedPart sa mení na mieste, takže
+     * Compose inak panel CAR preskočí a percentá ostanú staré.
+     */
+    val partsRevision: Int = 0,
+    val frontTireInjury: TireInjury = TireInjury.INFLATED,
+    val rearTireInjury: TireInjury = TireInjury.INFLATED,
+    val frontTireHealth: Float = 1f,
+    val rearTireHealth: Float = 1f
 )
 
 /**

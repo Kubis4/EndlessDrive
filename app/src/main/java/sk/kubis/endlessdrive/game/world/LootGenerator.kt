@@ -56,6 +56,11 @@ object LootGenerator {
                 luck < 0.92f -> 4
                 else -> 5
             }
+            BuildingType.WRECK -> when {
+                luck < 0.48f -> 0
+                luck < 0.82f -> 1
+                else -> 2
+            }
         }
         // Na začiatku cesty budovy nie sú prázdne – hráč musí mať čo nájsť.
         val earlyFloor = when {
@@ -101,6 +106,7 @@ object LootGenerator {
                     ItemCatalog.BATTERY_GOOD, ItemCatalog.TIRE_SPORT
                 )
                 BuildingType.GAS_STATION -> emptyList()
+                BuildingType.WRECK -> emptyList()
             }
             var spotlight = spotlightPool.getOrNull((bucket + type.ordinal) % spotlightPool.size.coerceAtLeast(1))
             if (spotlight?.let { it.id == ItemCatalog.SNOW_CHAINS.id || it.id == ItemCatalog.TIRE_WINTER.id } == true &&
@@ -123,6 +129,7 @@ object LootGenerator {
                 BuildingType.GAS_STATION -> listOf(ItemCatalog.FUEL_CAN, ItemCatalog.DIESEL_CAN)
                 BuildingType.AUTO_SHOP ->
                     listOf(ItemCatalog.TIRE, ItemCatalog.BATTERY, ItemCatalog.OIL_BOTTLE)
+                BuildingType.WRECK -> listOf(ItemCatalog.SCRAP_PILE)
             }
             result += makeStack(rng, type, rng.pick(fallback), distance)
         }
@@ -153,6 +160,22 @@ object LootGenerator {
         def: ItemDef,
         distance: Float
     ): ItemStack {
+        if (def.id == ItemCatalog.SCRAP_PILE.id) {
+            return ItemStack(
+                defId = def.id,
+                condition = ComponentCondition.NEW,
+                health = 1f,
+                count = 2 + rng.nextInt(3)
+            )
+        }
+        if (def.id == ItemCatalog.PUNCTURE_KIT.id) {
+            return ItemStack(
+                defId = def.id,
+                condition = ComponentCondition.NEW,
+                health = 1f,
+                count = 1
+            )
+        }
         if (def.fluid != null) {
             return ItemStack(
                 defId = def.id,
@@ -173,7 +196,7 @@ object LootGenerator {
             else -> ComponentCondition.CRITICAL
         }
         val health = condition.maxHealth * rng.nextFloat(0.72f, 1f)
-        val paintIndex = if (def.mountsTo?.group == "Body") {
+        val paintIndex = if (def.mountsTo?.takesBodyPaint == true) {
             rng.nextInt(VehiclePaint.entries.size)
         } else -1
         return ItemStack(def.id, condition, health, paintIndex = paintIndex)
@@ -187,6 +210,7 @@ object LootGenerator {
             BuildingType.GARAGE -> rng.nextFloat(0.55f, 0.95f)
             BuildingType.GAS_STATION -> rng.nextFloat(0.70f, 1.0f)
             BuildingType.AUTO_SHOP -> rng.nextFloat(0.75f, 1.0f)
+            BuildingType.WRECK -> rng.nextFloat(0.40f, 0.80f)
         }
         return if (rng.chance(0.08f)) base * rng.nextFloat(0.4f, 0.7f) else base
     }
@@ -207,6 +231,7 @@ object LootGenerator {
             Entry(ItemCatalog.BACKPACK, 8f),
             Entry(ItemCatalog.BOOT_CRATE, 5f),
             Entry(ItemCatalog.ROOF_RACK, 4f),
+            Entry(ItemCatalog.EXPEDITION_RACK, 2f),
             Entry(ItemCatalog.FRONT_BUMPER, 7f),
             Entry(ItemCatalog.TRUNK_LID, 7f),
             Entry(ItemCatalog.HEADLIGHT, 6f),
@@ -218,6 +243,7 @@ object LootGenerator {
             Entry(ItemCatalog.TIRE, 5f),
             Entry(ItemCatalog.BATTERY, 5f),
             Entry(ItemCatalog.SNOW_CHAINS, 3f),
+            Entry(ItemCatalog.PUNCTURE_KIT, 4f),
             Entry(ItemCatalog.ALTERNATOR, 4f),
             Entry(ItemCatalog.BRAKES, 4f)
         )
@@ -232,8 +258,10 @@ object LootGenerator {
             Entry(ItemCatalog.TIRE_OFFROAD, 2f),
             Entry(ItemCatalog.TIRE_WINTER, 4f),
             Entry(ItemCatalog.SNOW_CHAINS, 7f),
+            Entry(ItemCatalog.PUNCTURE_KIT, 8f),
             Entry(ItemCatalog.BOOT_CRATE, 6f),
             Entry(ItemCatalog.ROOF_RACK, 4f),
+            Entry(ItemCatalog.EXPEDITION_RACK, 2f),
             Entry(ItemCatalog.SUSPENSION, 4f),
             Entry(ItemCatalog.SUSPENSION_LOW, 2f),
             Entry(ItemCatalog.DRIVE_RWD, 3f),
@@ -260,6 +288,7 @@ object LootGenerator {
             Entry(ItemCatalog.TIRE_POOR, 5f),
             Entry(ItemCatalog.TIRE, 6f),
             Entry(ItemCatalog.BATTERY, 5f),
+            Entry(ItemCatalog.PUNCTURE_KIT, 10f),
             Entry(ItemCatalog.FUEL_TANK, 3f)
         )
         BuildingType.AUTO_SHOP -> listOf(
@@ -282,8 +311,10 @@ object LootGenerator {
             Entry(ItemCatalog.TIRE_OFFROAD, 5f),
             Entry(ItemCatalog.TIRE_WINTER, 6f),
             Entry(ItemCatalog.SNOW_CHAINS, 8f),
+            Entry(ItemCatalog.PUNCTURE_KIT, 11f),
             Entry(ItemCatalog.BOOT_CRATE, 5f),
             Entry(ItemCatalog.ROOF_RACK, 5f),
+            Entry(ItemCatalog.EXPEDITION_RACK, 3f),
             Entry(ItemCatalog.SUSPENSION_GOOD, 4f),
             Entry(ItemCatalog.SUSPENSION_LIFT, 3f),
             Entry(ItemCatalog.SUSPENSION_LOW, 3f),
@@ -300,7 +331,16 @@ object LootGenerator {
             Entry(ItemCatalog.SEAT_FRONT, 6f),
             Entry(ItemCatalog.SEAT_REAR, 9f),
             Entry(ItemCatalog.REAR_BUMPER, 7f),
-            Entry(ItemCatalog.OIL_BOTTLE, 8f)
+            Entry(ItemCatalog.OIL_BOTTLE, 8f),
+            Entry(ItemCatalog.SCRAP_PILE, 9f)
+        )
+        BuildingType.WRECK -> listOf(
+            Entry(ItemCatalog.SCRAP_PILE, 18f),
+            Entry(ItemCatalog.TIRE_POOR, 6f),
+            Entry(ItemCatalog.PUNCTURE_KIT, 3f),
+            Entry(ItemCatalog.BATTERY, 4f),
+            Entry(ItemCatalog.HOOD, 5f),
+            Entry(ItemCatalog.DOOR_FRONT, 4f)
         )
     }
 
@@ -356,6 +396,8 @@ object LootGenerator {
     }
 
     private fun familyOf(def: ItemDef): String = when {
+        def.id == ItemCatalog.SCRAP_PILE.id -> "scrap"
+        def.id == ItemCatalog.PUNCTURE_KIT.id -> "tool"
         def.fluid != null -> "fluid"
         def.axleTire -> "tyre"
         def.mountsTo in setOf(

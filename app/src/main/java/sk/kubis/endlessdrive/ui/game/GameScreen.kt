@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
@@ -65,8 +66,11 @@ import sk.kubis.endlessdrive.domain.model.FluidGrade
 import sk.kubis.endlessdrive.domain.model.FluidType
 import sk.kubis.endlessdrive.domain.model.FuelKind
 import sk.kubis.endlessdrive.domain.model.GamePhase
+import sk.kubis.endlessdrive.domain.model.AudioSettings
 import sk.kubis.endlessdrive.domain.model.ItemDef
 import sk.kubis.endlessdrive.domain.model.ItemStack
+import sk.kubis.endlessdrive.domain.model.ThrottleMode
+import sk.kubis.endlessdrive.game.car.TireInjury
 import sk.kubis.endlessdrive.domain.model.SedanSpec
 import sk.kubis.endlessdrive.domain.model.VehiclePaint
 import sk.kubis.endlessdrive.game.GameEngine
@@ -85,22 +89,25 @@ import sk.kubis.endlessdrive.ui.theme.purityColor
 
 /** Odstup UI od okrajov – zaoblené displeje a výrezy nesmú nič odrezať. */
 private val SCREEN_MARGIN = 10.dp
-private val CAR_ACTION_WIDTH = 108.dp
-private val CAR_ACTION_HEIGHT = 32.dp
+private val CAR_ACTION_HEIGHT = 36.dp
 
 @Composable
 fun GameScreen(
     viewModel: GameViewModel,
     assets: GameAssets,
-    onExitToMenu: () -> Unit
+    onExitToMenu: () -> Unit,
+    audioSettings: AudioSettings = AudioSettings(),
+    throttleMode: ThrottleMode = ThrottleMode.BINARY,
+    showFps: Boolean = false,
+    onToggleFps: () -> Unit = {}
 ) {
     var showInventory by remember { mutableStateOf(false) }
     var showCar by remember { mutableStateOf(false) }
-    var showFps by rememberSaveable { mutableStateOf(false) }
     val renderer = remember(assets) { GameRenderer(assets) }
     val density = LocalDensity.current
     val context = LocalContext.current
     val audio = remember(context) { GameAudio(context) }
+    LaunchedEffect(audio, audioSettings) { audio.settings = audioSettings }
     val configuration = LocalConfiguration.current
     val compactLoot = configuration.screenWidthDp < 760 || configuration.screenHeightDp < 500
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
@@ -157,8 +164,11 @@ fun GameScreen(
         }
     }
 
-    val anyPanelOpen = showInventory || showCar || ui.exploring ||
-        ui.paused || ui.phase == GamePhase.GAME_OVER
+    val garageOpen = showInventory || showCar
+    DisposableEffect(garageOpen) {
+        viewModel.setGarageOpen(garageOpen)
+        onDispose { viewModel.setGarageOpen(false) }
+    }
 
     Box(Modifier.fillMaxSize().background(GameColors.panelSoft)) {
         // Scéna ide cez celú plochu vrátane výrezu. Odsadenie plátna do čiernych
@@ -204,15 +214,20 @@ fun GameScreen(
                 ui = ui,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 12.dp, start = 120.dp, end = 120.dp)
+                    // Vyhradí skutočný stred medzi odznakom jazdy a tromi
+                    // pravými tlačidlami. Samotný padding na prirodzene širokom
+                    // obsahu dovolil dlhej hláške vliezť pod obe skupiny.
+                    .fillMaxWidth()
+                    .padding(top = 12.dp, start = 150.dp, end = 210.dp)
             )
 
             SideIcons(
                 ui = ui,
                 showFps = showFps,
                 onToggleLights = { viewModel.toggleHeadlights() },
+                onToggleRoofLights = { viewModel.toggleRoofLights() },
                 onTogglePause = { viewModel.setPaused(!ui.paused) },
-                onToggleFps = { showFps = !showFps },
+                onToggleFps = onToggleFps,
                 // Vrch obrazovky je po presune vitals do dosky voľný – ikony
                 // tam nezavadzajú a neplávajú cez scénu.
                 modifier = Modifier
@@ -223,10 +238,11 @@ fun GameScreen(
             // --- Ovládanie podľa fázy ----------------------------------------
             if (ui.phase == GamePhase.DRIVING) {
                 GameControls(
-                    onGasChanged = viewModel::onGasChanged,
+                    onThrottle = viewModel::onThrottle,
                     onBrakeChanged = viewModel::onBrakeChanged,
                     onStop = viewModel::stop,
                     buildingNearby = ui.hasNearbyBuilding,
+                    throttleMode = throttleMode,
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -238,8 +254,14 @@ fun GameScreen(
                     ui = ui,
                     onStart = { viewModel.startEngine() },
                     onStopEngine = { viewModel.stopEngine() },
-                    onInventory = { showInventory = true },
-                    onCar = { showCar = true },
+                    onInventory = {
+                        viewModel.setGarageOpen(true)
+                        showInventory = true
+                    },
+                    onCar = {
+                        viewModel.setGarageOpen(true)
+                        showCar = true
+                    },
                     onEnter = { viewModel.enterBuilding() },
                     onLeave = { viewModel.leaveBuilding() },
                     onDrive = { viewModel.resume() },
@@ -305,14 +327,32 @@ fun GameScreen(
             }
 
             if (showCar) {
-                Overlay(safeArea, onDismiss = { showCar = false }) {
+                val partsRev = ui.partsRevision
+                val bagRev = ui.bagRevision
+                val scrapNow = ui.scrap
+                val ftHealth = ui.frontTireHealth
+                val rtHealth = ui.rearTireHealth
+                val ftInjury = ui.frontTireInjury
+                val rtInjury = ui.rearTireInjury
+                Overlay(
+                    safeArea,
+                    invalidate = partsRev,
+                    onDismiss = { showCar = false }
+                ) {
                     CarPanel(
                         engine = engine,
-                        bagRevision = ui.bagRevision,
+                        bagRevision = bagRev,
+                        partsRevision = partsRev,
+                        scrap = scrapNow,
+                        frontTireHealth = ftHealth,
+                        rearTireHealth = rtHealth,
+                        frontTireInjury = ftInjury,
+                        rearTireInjury = rtInjury,
                         layers = assets.sedan,
                         debugRepair = viewModel.debugOptions.repairControls,
                         onRepair = { viewModel.repair(it) },
                         onScrapRepair = { viewModel.repairWithScrap(it) },
+                        onPatchPuncture = { viewModel.repairPuncture(it) },
                         onUpgrade = { viewModel.upgradeWithScrap(it) },
                         onDrain = { fluid, litres -> viewModel.drainFluid(fluid, litres) },
                         onUnmount = { viewModel.unmount(it) },
@@ -363,9 +403,12 @@ fun GameScreen(
 @Composable
 private fun Overlay(
     insets: PaddingValues,
+    invalidate: Int = 0,
     onDismiss: (() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit
 ) {
+    @Suppress("UNUSED_VARIABLE")
+    val seen = invalidate
     Scrim(onDismiss = onDismiss)
     Box(Modifier.fillMaxSize().padding(insets), content = content)
 }
@@ -385,7 +428,7 @@ private fun JunctionPanel(
 ) {
     GamePanel(
         title = "JUNCTION",
-        subtitle = "Which way? What lies past the turn you only learn out there.",
+        subtitle = "Pick a road. Hints show fuel, loot and terrain.",
         modifier = modifier,
         header = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -473,13 +516,18 @@ private fun InventoryPanel(
                 pack.slots.forEachIndexed { i, stack ->
                     if (stack == null) return@forEachIndexed
                     val tyre = stack.def.axleTire
+                    val kit = stack.def.isPunctureKit
                     ItemCard(
                         revision = bagRevision,
                         stack = stack,
                         // Pri gume porovnávame s tou horšou z náprav.
                         mounted = if (tyre) engine.car.worstTyre()
                         else stack.def.mountsTo?.let { engine.car.parts[it] },
-                        primaryLabel = if (stack.def.fluid != null) "POUR IN" else "FIT",
+                        primaryLabel = when {
+                            stack.def.fluid != null -> "POUR IN"
+                            kit -> "USE"
+                            else -> "FIT"
+                        },
                         onPrimary = { onUse(i, null) },
                         secondaryLabel = if (engine.bootReachable) "TO BOOT" else null,
                         onSecondary = if (engine.bootReachable) ({ onStow(i) }) else null,
@@ -504,14 +552,21 @@ private fun InventoryPanel(
                 boot.slots.forEachIndexed { i, stack ->
                     if (stack == null) return@forEachIndexed
                     val tyre = stack.def.axleTire
-                    val mountable = stack.def.fluid != null || stack.def.mountTargets().isNotEmpty()
+                    val kit = stack.def.isPunctureKit
+                    val mountable = stack.def.fluid != null ||
+                        stack.def.mountTargets().isNotEmpty() ||
+                        kit
                     ItemCard(
                         revision = bagRevision,
                         stack = stack,
                         mounted = if (tyre) engine.car.worstTyre()
                         else stack.def.mountsTo?.let { engine.car.parts[it] },
                         // Motor sa montuje rovno z kufra – na chrbát sa nezmestí.
-                        primaryLabel = if (stack.def.fluid != null) "POUR IN" else "FIT",
+                        primaryLabel = when {
+                            stack.def.fluid != null -> "POUR IN"
+                            kit -> "USE"
+                            else -> "FIT"
+                        },
                         onPrimary = { if (mountable) onUseFromBoot(i, null) },
                         secondaryLabel = "TAKE",
                         onSecondary = { onTake(i) },
@@ -524,6 +579,20 @@ private fun InventoryPanel(
             }
             CarSummary(engine, bagRevision, Modifier.weight(1f).fillMaxHeight())
         }
+    }
+}
+
+@Composable
+private fun FluidStat(
+    label: String,
+    ratio: Float,
+    value: String,
+    color: Color,
+    inner: Float,
+    innerColor: Color
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        StatBar(label, ratio, value, color, inner = inner, innerColor = innerColor)
     }
 }
 
@@ -556,29 +625,29 @@ private fun CarSummary(engine: GameEngine, revision: Int, modifier: Modifier = M
         )
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatBar(
+            FluidStat(
                 car.requiredFuelKind.displayName.uppercase(),
                 (car.fuel / car.fuelCapacity).coerceIn(0f, 1f),
                 "${car.fuel.toInt()} L",
                 levelColor((car.fuel / car.fuelCapacity).coerceIn(0f, 1f)),
-                inner = car.fuelPurity,
-                innerColor = purityColor(car.fuelPurity)
+                car.fuelPurity,
+                purityColor(car.fuelPurity)
             )
-            StatBar(
+            FluidStat(
                 "OIL",
                 (car.oil / car.oilCapacity).coerceIn(0f, 1f),
                 String.format("%.1f L", car.oil),
                 levelColor((car.oil / car.oilCapacity).coerceIn(0f, 1f)),
-                inner = car.oilPurity,
-                innerColor = purityColor(car.oilPurity)
+                car.oilPurity,
+                purityColor(car.oilPurity)
             )
-            StatBar(
+            FluidStat(
                 "COOLANT",
                 (car.coolant / car.coolantCapacity).coerceIn(0f, 1f),
                 String.format("%.1f L", car.coolant),
                 levelColor((car.coolant / car.coolantCapacity).coerceIn(0f, 1f)),
-                inner = car.coolantPurity,
-                innerColor = purityColor(car.coolantPurity)
+                car.coolantPurity,
+                purityColor(car.coolantPurity)
             )
         }
         Spacer(Modifier.height(6.dp))
@@ -607,16 +676,12 @@ private fun CarSummary(engine: GameEngine, revision: Int, modifier: Modifier = M
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Za názvom slotu ide v zátvorke to, čím sa namontovaný diel
-                // líši – bez toho sa hráč nedozvedel, ktorý motor či pruženie
-                // vlastne má. Riadok si berie zvyšok šírky a dlhý názov radšej
-                // skráti; inak by percentá vpravo vytisol do stĺpca znakov.
                 Text(
                     buildString {
                         append(slot.displayName)
                         part?.def?.slotDetail(slot)?.takeIf { it.isNotBlank() }
                             ?.let { append(" ($it)") }
-                        part?.paintIndex?.takeIf { it >= 0 && part.def.mountsTo?.group == "Body" }
+                        part?.paintIndex?.takeIf { it >= 0 && part.def.mountsTo?.takesBodyPaint == true }
                             ?.let { append(" · ${VehiclePaint.at(it).displayName}") }
                     },
                     color = if (part == null) GameColors.textDim else GameColors.text,
@@ -631,8 +696,19 @@ private fun CarSummary(engine: GameEngine, revision: Int, modifier: Modifier = M
                     Chip("PERMANENT", GameColors.ok)
                 } else {
                     Text(
-                        "${(part.health * 100).toInt()} %",
-                        color = healthColor(part.health),
+                        buildString {
+                            append("${(part.health * 100).toInt()} %")
+                            when (part.injury) {
+                                TireInjury.PUNCTURED -> append(" · FLAT")
+                                TireInjury.SHREDDED -> append(" · RIM")
+                                else -> Unit
+                            }
+                        },
+                        color = if (part.injury == TireInjury.INFLATED) {
+                            healthColor(part.health)
+                        } else {
+                            GameColors.danger
+                        },
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
@@ -692,6 +768,8 @@ private fun ItemCard(
                     if (isFluid) {
                         Chip(stack.grade.displayName, purityColor(stack.purity))
                         Chip("${(stack.purity * 100).toInt()} %", purityColor(stack.purity))
+                    } else if (def.isPunctureKit) {
+                        Chip("PATCHES A FLAT", GameColors.ok)
                     } else if (!def.hasDurability) {
                         Chip("PERMANENT", GameColors.ok)
                     } else {
@@ -700,7 +778,7 @@ private fun ItemCard(
                     }
                     Chip("${(def.weight * stack.count).toInt()} kg", GameColors.textDim)
                 }
-                if (stack.paintIndex >= 0 && def.mountsTo?.group == "Body") {
+                if (stack.paintIndex >= 0 && def.mountsTo?.takesBodyPaint == true) {
                     val paint = VehiclePaint.at(stack.paintIndex)
                     Spacer(Modifier.height(5.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1022,10 +1100,17 @@ private fun LootItemCard(
 private fun CarPanel(
     engine: GameEngine,
     bagRevision: Int,
+    partsRevision: Int,
+    scrap: Int,
+    frontTireHealth: Float,
+    rearTireHealth: Float,
+    frontTireInjury: TireInjury,
+    rearTireInjury: TireInjury,
     layers: SedanLayers,
     debugRepair: Boolean,
     onRepair: (ComponentSlot) -> Unit,
     onScrapRepair: (ComponentSlot) -> Unit,
+    onPatchPuncture: (ComponentSlot) -> Unit,
     onUpgrade: (ComponentSlot) -> Unit,
     onDrain: (FluidType, Float?) -> Unit,
     onUnmount: (ComponentSlot) -> Unit,
@@ -1034,319 +1119,425 @@ private fun CarPanel(
     modifier: Modifier = Modifier
 ) {
     @Suppress("UNUSED_VARIABLE")
-    val rev = bagRevision
-    var section by remember { mutableStateOf<CarSection?>(null) }
+    val rev = bagRevision + 31 * partsRevision + scrap
+    var section by rememberSaveable { mutableStateOf(CarSection.PREDOK) }
     var selected by remember { mutableStateOf<ComponentSlot?>(null) }
     var pendingDrain by remember { mutableStateOf<FluidType?>(null) }
-    val selectedPart = selected?.let { engine.car.parts[it] }
     val car = engine.car
+    val overallNow = car.overallHealth
 
     GamePanel(
         title = "CAR",
-        subtitle = "Scrap ${engine.scrap} · Condition ${(car.overallHealth * 100).toInt()} % · " +
-            "${car.fittedHudLabel(ComponentSlot.ENGINE)} · ${car.fittedHudLabel(ComponentSlot.DRIVETRAIN)} · " +
-            "F ${car.fittedHudLabel(ComponentSlot.TIRE_FRONT)} / R ${car.fittedHudLabel(ComponentSlot.TIRE_REAR)} · " +
-            car.fittedHudLabel(ComponentSlot.SUSPENSION),
         onClose = onClose,
-        modifier = modifier
+        modifier = modifier,
+        header = {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ScrapCurrencyIcon(Modifier.size(20.dp))
+                    CarHeaderStat("SCRAP", "$scrap", GameColors.accent)
+                }
+                CarHeaderStat(
+                    "CONDITION",
+                    "${(overallNow * 100).toInt()} %",
+                    healthColor(overallNow)
+                )
+            }
+        }
     ) {
-        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(
+            Modifier.fillMaxWidth().weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             CarView(
                 layers = layers,
                 car = car,
+                revision = partsRevision,
+                frontHealth = frontTireHealth,
+                rearHealth = rearTireHealth,
+                frontInjury = frontTireInjury,
+                rearInjury = rearTireInjury,
                 section = section,
                 onSection = {
-                    section = if (section == it) null else it
+                    section = it
                     selected = null
                     pendingDrain = null
                 },
                 modifier = Modifier.weight(1.05f).fillMaxHeight()
             )
-            SlotGrid(
-                engine = engine,
-                revision = bagRevision,
-                section = section,
-                selected = selected,
-                onSelect = {
-                    selected = it
-                    pendingDrain = null
-                },
-                modifier = Modifier.weight(1f).fillMaxHeight()
-            )
+            Column(Modifier.weight(1f).fillMaxHeight()) {
+                SectionLabel(
+                    section.label.uppercase(),
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+                SlotGrid(
+                    engine = engine,
+                    revision = partsRevision,
+                    section = section,
+                    selected = selected,
+                    onSelect = {
+                        selected = it
+                        pendingDrain = null
+                    },
+                    modifier = Modifier.weight(1f).fillMaxWidth()
+                )
+            }
         }
 
-        Spacer(Modifier.height(10.dp))
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .background(GameColors.panelSoft, RoundedCornerShape(10.dp))
-                .border(1.dp, GameColors.outline, RoundedCornerShape(10.dp))
-                .padding(10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(1f).padding(end = 10.dp)) {
-                val drain = pendingDrain
-                if (drain != null) {
-                    val amount = car.fluidLevel(drain)
-                    Text(
-                        "DRAIN ${drain.displayName.uppercase()}",
-                        color = GameColors.danger,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "${String.format("%.1f", amount)} L currently in ${drainLocation(drain)}.",
-                        color = GameColors.text,
-                        fontSize = 13.sp
-                    )
-                    Text(
-                        "Drained fluid is discarded and cannot be recovered.",
-                        color = GameColors.warn,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    if (car.engineRunning) {
-                        Text("Switch the engine off first.", color = GameColors.danger, fontSize = 12.sp)
-                    } else if (engine.phase == GamePhase.DRIVING) {
-                        Text("Park the car first.", color = GameColors.danger, fontSize = 12.sp)
-                    }
-                } else {
-                    when {
-                        selected == null -> Text(
-                            "Pick a part on the right or a zone on the car.",
-                            color = GameColors.textDim,
-                            fontSize = 13.sp
-                        )
-                        selectedPart == null -> {
-                            Text(selected!!.displayName, color = GameColors.accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                            Text("Missing — find one and fit it", color = GameColors.danger, fontSize = 12.sp)
-                        }
-                        else -> {
-                            Text(
-                                "${selected!!.displayName} · ${selectedPart.def.name}",
-                                color = GameColors.accent,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                if (!selectedPart.def.hasDurability) {
-                                    Chip("PERMANENT", GameColors.ok)
-                                } else {
-                                    Chip(selectedPart.condition.displayName, healthColor(selectedPart.health))
-                                    Chip("${(selectedPart.health * 100).toInt()} %", healthColor(selectedPart.health))
-                                }
-                            }
-                            if (selectedPart.paintIndex >= 0 && selectedPart.def.mountsTo?.group == "Body") {
-                                val paint = VehiclePaint.at(selectedPart.paintIndex)
-                                Spacer(Modifier.height(4.dp))
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    PaintedPartPreview(
-                                        slot = selected,
-                                        paint = paint,
-                                        modifier = Modifier.width(68.dp).height(32.dp)
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        "Paint: ${paint.displayName}",
-                                        color = Color(paint.argb),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-                            }
-                            val extra = partExtraHint(selected!!, selectedPart.def, car)
-                            if (extra != null) {
-                                Text(extra, color = GameColors.text, fontSize = 12.sp)
-                            }
-                            if (debugRepair) {
-                                Text(
-                                    "Debug repair is enabled in Settings.",
-                                    color = GameColors.textDim,
-                                    fontSize = 11.sp
-                                )
-                            }
-                        }
-                    }
-                }
+        Spacer(Modifier.height(8.dp))
+        CarWorkshopBar(
+            engine = engine,
+            car = car,
+            partsRevision = partsRevision,
+            selected = selected,
+            pendingDrain = pendingDrain,
+            debugRepair = debugRepair,
+            onPendingDrain = { pendingDrain = it },
+            onRepair = onRepair,
+            onScrapRepair = onScrapRepair,
+            onPatchPuncture = onPatchPuncture,
+            onUpgrade = onUpgrade,
+            onDrain = onDrain,
+            onUnmount = onUnmount,
+            onSwapTyres = onSwapTyres
+        )
+    }
+}
+
+@Composable
+private fun CarHeaderStat(label: String, value: String, color: Color) {
+    Column(horizontalAlignment = Alignment.End) {
+        Text(
+            label,
+            color = GameColors.textDim,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.9.sp
+        )
+        Text(value, color = color, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+    }
+}
+
+@Composable
+private fun CarWorkshopBar(
+    engine: GameEngine,
+    car: Car,
+    partsRevision: Int,
+    selected: ComponentSlot?,
+    pendingDrain: FluidType?,
+    debugRepair: Boolean,
+    onPendingDrain: (FluidType?) -> Unit,
+    onRepair: (ComponentSlot) -> Unit,
+    onScrapRepair: (ComponentSlot) -> Unit,
+    onPatchPuncture: (ComponentSlot) -> Unit,
+    onUpgrade: (ComponentSlot) -> Unit,
+    onDrain: (FluidType, Float?) -> Unit,
+    onUnmount: (ComponentSlot) -> Unit,
+    onSwapTyres: () -> Unit
+) {
+    @Suppress("UNUSED_VARIABLE")
+    val rev = partsRevision
+    val selectedPart = selected?.let { engine.car.parts[it] }
+    val liveHealth = selectedPart?.health ?: -1f
+    val liveInjury = selectedPart?.injury ?: TireInjury.INFLATED
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(GameColors.panelSoft, RoundedCornerShape(10.dp))
+            .border(1.dp, GameColors.outline, RoundedCornerShape(10.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        val drain = pendingDrain
+        if (drain != null) {
+            val amount = car.fluidLevel(drain)
+            val step = drainStep(drain).coerceAtMost(amount)
+            val ready = !car.engineRunning && engine.phase != GamePhase.DRIVING
+            val drainNote = when {
+                car.engineRunning -> "Switch the engine off first."
+                engine.phase == GamePhase.DRIVING -> "Park the car first."
+                else -> "${String.format("%.1f", amount)} L in ${drainLocation(drain)} — discarded."
             }
-            Column(horizontalAlignment = Alignment.End) {
-                val drain = pendingDrain
-                if (drain != null) {
-                    val amount = car.fluidLevel(drain)
-                    val step = drainStep(drain).coerceAtMost(amount)
-                    val ready = !car.engineRunning && engine.phase != GamePhase.DRIVING
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        GameButton(
-                            "CANCEL",
-                            { pendingDrain = null },
-                            compact = true,
-                            modifier = carActionModifier()
-                        )
-                        if (amount > step + 0.05f) {
-                            GameButton(
-                                "DRAIN ${String.format("%.1f", step)} L",
-                                {
-                                    onDrain(drain, step)
-                                    pendingDrain = null
-                                },
-                                compact = true,
-                                enabled = ready,
-                                style = BtnStyle.Danger,
-                                modifier = carActionModifier()
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(6.dp))
+            Text(
+                "DRAIN ${drain.displayName.uppercase()}",
+                color = GameColors.danger,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
+            Text(
+                drainNote,
+                color = if (ready) GameColors.warn else GameColors.danger,
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                val drainMod = Modifier.weight(1f).height(CAR_ACTION_HEIGHT)
+                GameButton("CANCEL", { onPendingDrain(null) }, compact = true, modifier = drainMod)
+                if (amount > step + 0.05f) {
                     GameButton(
-                        "DRAIN ALL ${String.format("%.1f", amount)} L",
+                        "DRAIN ${String.format("%.1f", step)} L",
                         {
-                            onDrain(drain, null)
-                            pendingDrain = null
+                            onDrain(drain, step)
+                            onPendingDrain(null)
                         },
                         compact = true,
                         enabled = ready,
                         style = BtnStyle.Danger,
-                        modifier = carActionModifier()
+                        modifier = drainMod
                     )
-                } else {
-                    Chip("${engine.scrap} SCRAP", GameColors.accent)
-                    Spacer(Modifier.height(6.dp))
-                    val tyreSelected = selected == ComponentSlot.TIRE_FRONT ||
-                        selected == ComponentSlot.TIRE_REAR
-                    // Bez výberu je dostupná iba rýchla výmena náprav.
-                    if (selected == null) {
-                        GameButton(
-                            "SWAP TYRES",
-                            onSwapTyres,
-                            compact = true,
-                            modifier = carActionModifier()
+                }
+                GameButton(
+                    "DRAIN ALL ${String.format("%.1f", amount)} L",
+                    {
+                        onDrain(drain, null)
+                        onPendingDrain(null)
+                    },
+                    compact = true,
+                    enabled = ready,
+                    style = BtnStyle.Danger,
+                    modifier = drainMod
+                )
+            }
+        } else {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                when {
+                    selected == null -> Text(
+                        "Pick a part in this zone.",
+                        color = GameColors.textDim,
+                        fontSize = 12.sp,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    selectedPart == null -> {
+                        Text(
+                            selected!!.displayName,
+                            color = GameColors.accent,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
+                        )
+                        Text(
+                            "Empty — find one and fit it",
+                            color = GameColors.danger,
+                            fontSize = 12.sp,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
-                    if (selectedPart != null) {
-                        val slot = selected!!
-                        val repairCost = engine.scrapRepairCost(slot)
-                        val upgradeTarget = engine.scrapUpgradeTarget(slot)
-                        val upgradeCost = engine.scrapUpgradeCost(slot)
-                        val workshopBlock = engine.scrapWorkshopBlockReason()
-                        val drainAction = when (selected) {
-                            ComponentSlot.ENGINE -> FluidType.OIL to "DRAIN OIL"
-                            ComponentSlot.FUEL_TANK -> FluidType.FUEL to "DRAIN FUEL"
-                            ComponentSlot.RADIATOR -> FluidType.COOLANT to "DRAIN COOLANT"
-                            else -> null
-                        }
-                        if (workshopBlock != null && (repairCost != null || upgradeTarget != null)) {
+                    else -> {
+                        val part = selectedPart
+                        val status = partStatusLabel(part)
+                        Text(
+                            selected!!.displayName,
+                            color = GameColors.accent,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
+                        )
+                        if (part.def.hasDurability) {
                             Text(
-                                workshopBlock.uppercase(),
-                                color = GameColors.danger,
-                                fontSize = 10.sp,
+                                "${(liveHealth * 100).toInt()} %",
+                                color = status.second,
+                                fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(bottom = 4.dp)
+                                maxLines = 1
                             )
-                        } else if (repairCost != null || upgradeTarget != null) {
+                        }
+                        Chip(status.first, status.second)
+                        if (part.paintIndex >= 0 && part.def.mountsTo?.takesBodyPaint == true) {
+                            val paint = VehiclePaint.at(part.paintIndex)
+                            PaintSwatch(paint)
                             Text(
-                                "READY · NO REPAIR SHOP REQUIRED",
-                                color = GameColors.ok,
-                                fontSize = 9.sp,
+                                paint.displayName,
+                                color = Color(paint.argb),
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.padding(bottom = 4.dp)
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-                        // Najčastejšia kombinácia pri pneumatikách je v jednom
-                        // riadku. Predtým boli SWAP a REPAIR nad sebou a práve
-                        // karta nápravy bola zbytočne trikrát vyššia než brzdy.
-                        if (tyreSelected || repairCost != null || upgradeTarget != null) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                if (tyreSelected) {
-                                    GameButton(
-                                        "SWAP TYRES",
-                                        onSwapTyres,
-                                        compact = true,
-                                        modifier = carActionModifier()
-                                    )
-                                }
-                                if (repairCost != null) {
-                                    GameButton(
-                                        "REPAIR −$repairCost",
-                                        { onScrapRepair(slot) },
-                                        compact = true,
-                                        style = BtnStyle.Primary,
-                                        modifier = carActionModifier()
-                                    )
-                                }
-                                if (!tyreSelected && upgradeTarget != null && upgradeCost != null) {
-                                    GameButton(
-                                        "UPGRADE −$upgradeCost",
-                                        { onUpgrade(slot) },
-                                        compact = true,
-                                        style = BtnStyle.Secondary,
-                                        modifier = carActionModifier()
-                                    )
-                                }
-                            }
-                            if (upgradeTarget != null) {
-                                Text(
-                                    "Next: ${upgradeTarget.name}",
-                                    color = GameColors.textDim,
-                                    fontSize = 10.sp,
-                                    modifier = Modifier.padding(top = 3.dp)
-                                )
-                            }
-                        }
-                        Spacer(Modifier.height(5.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            if (tyreSelected && upgradeTarget != null && upgradeCost != null) {
-                                GameButton(
-                                    "UPGRADE −$upgradeCost",
-                                    { onUpgrade(slot) },
-                                    compact = true,
-                                    style = BtnStyle.Secondary,
-                                    modifier = carActionModifier()
-                                )
-                            }
-                            if (drainAction != null && car.fluidLevel(drainAction.first) > 0.05f) {
-                                GameButton(
-                                    drainAction.second,
-                                    { pendingDrain = drainAction.first },
-                                    compact = true,
-                                    style = BtnStyle.Danger,
-                                    modifier = carActionModifier()
-                                )
-                            }
-                            if (debugRepair && !tyreSelected) {
-                                GameButton(
-                                    "FREE REPAIR",
-                                    { onRepair(slot) },
-                                    compact = true,
-                                    modifier = carActionModifier()
-                                )
-                            }
-                            GameButton(
-                                "REMOVE",
-                                { onUnmount(slot) },
-                                compact = true,
-                                modifier = carActionModifier()
+                        val hint = partBarHint(selected!!, part, car, engine)
+                        if (hint != null) {
+                            Text(
+                                hint,
+                                color = if (part.injury != TireInjury.INFLATED) GameColors.danger else GameColors.textDim,
+                                fontSize = 11.sp,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                        }
-                        if (debugRepair && tyreSelected) {
-                            Spacer(Modifier.height(5.dp))
-                            GameButton(
-                                "FREE REPAIR",
-                                { onRepair(slot) },
-                                compact = true,
-                                modifier = carActionModifier()
-                            )
+                        } else {
+                            Spacer(Modifier.weight(1f))
                         }
                     }
+                }
+            }
+
+            val tyreSelected = selected == ComponentSlot.TIRE_FRONT ||
+                selected == ComponentSlot.TIRE_REAR
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                val actionMod = Modifier.weight(1f).height(CAR_ACTION_HEIGHT)
+                if (selectedPart != null) {
+                    val slot = selected!!
+                    val repairCost = engine.scrapRepairCost(slot)
+                    val upgradeTarget = engine.scrapUpgradeTarget(slot)
+                    val upgradeCost = engine.scrapUpgradeCost(slot)
+                    val workshopBlock = engine.scrapWorkshopBlockReason()
+                    val punctured = engine.canPatchPuncture(slot)
+                    val shredded = liveInjury == TireInjury.SHREDDED
+                    val workshopReady = workshopBlock == null
+                    val kits = engine.punctureKitCount()
+                    val parked = engine.phase != GamePhase.DRIVING &&
+                        kotlin.math.abs(engine.car.speed) <= 0.2f
+                    val patchEnabled = parked && (kits > 0 || workshopReady)
+                    val drainAction = when (slot) {
+                        ComponentSlot.ENGINE -> FluidType.OIL to "DRAIN OIL"
+                        ComponentSlot.FUEL_TANK -> FluidType.FUEL to "DRAIN FUEL"
+                        ComponentSlot.RADIATOR -> FluidType.COOLANT to "DRAIN COOLANT"
+                        else -> null
+                    }
+                    val patchLabel = if (kits > 0) {
+                        "PATCH KIT"
+                    } else {
+                        "PATCH −${engine.scrapPatchCost()}"
+                    }
+                    val primary = when {
+                        shredded && tyreSelected -> CarCta.Swap
+                        punctured -> CarCta.Patch
+                        repairCost != null -> CarCta.Repair
+                        !tyreSelected && upgradeTarget != null && upgradeCost != null -> CarCta.Upgrade
+                        else -> null
+                    }
+                    when (primary) {
+                        CarCta.Swap -> GameButton(
+                            "SWAP",
+                            onSwapTyres,
+                            compact = true,
+                            style = BtnStyle.Primary,
+                            modifier = actionMod
+                        )
+                        CarCta.Patch -> GameButton(
+                            patchLabel,
+                            { onPatchPuncture(slot) },
+                            compact = true,
+                            enabled = patchEnabled,
+                            style = BtnStyle.Primary,
+                            modifier = actionMod
+                        )
+                        CarCta.Repair -> GameButton(
+                            "REPAIR −$repairCost",
+                            { onScrapRepair(slot) },
+                            compact = true,
+                            enabled = workshopReady,
+                            style = BtnStyle.Primary,
+                            modifier = actionMod
+                        )
+                        CarCta.Upgrade -> GameButton(
+                            "UPGRADE −$upgradeCost",
+                            { onUpgrade(slot) },
+                            compact = true,
+                            enabled = workshopReady,
+                            style = BtnStyle.Primary,
+                            modifier = actionMod
+                        )
+                        null -> Unit
+                    }
+                    if (tyreSelected && primary != CarCta.Swap) {
+                        GameButton(
+                            "SWAP",
+                            onSwapTyres,
+                            compact = true,
+                            style = BtnStyle.Ghost,
+                            modifier = actionMod
+                        )
+                    }
+                    if (punctured && !shredded && primary != CarCta.Patch) {
+                        GameButton(
+                            patchLabel,
+                            { onPatchPuncture(slot) },
+                            compact = true,
+                            enabled = patchEnabled,
+                            style = BtnStyle.Ghost,
+                            modifier = actionMod
+                        )
+                    }
+                    if (repairCost != null && !shredded && primary != CarCta.Repair) {
+                        GameButton(
+                            "REPAIR −$repairCost",
+                            { onScrapRepair(slot) },
+                            compact = true,
+                            enabled = workshopReady,
+                            style = BtnStyle.Ghost,
+                            modifier = actionMod
+                        )
+                    }
+                    if (upgradeTarget != null && upgradeCost != null && primary != CarCta.Upgrade) {
+                        GameButton(
+                            "UPGRADE −$upgradeCost",
+                            { onUpgrade(slot) },
+                            compact = true,
+                            enabled = workshopReady,
+                            style = BtnStyle.Ghost,
+                            modifier = actionMod
+                        )
+                    }
+                    if (drainAction != null && car.fluidLevel(drainAction.first) > 0.05f) {
+                        GameButton(
+                            drainAction.second,
+                            { onPendingDrain(drainAction.first) },
+                            compact = true,
+                            style = BtnStyle.Danger,
+                            modifier = actionMod
+                        )
+                    }
+                    GameButton(
+                        "REMOVE",
+                        { onUnmount(slot) },
+                        compact = true,
+                        style = BtnStyle.Ghost,
+                        modifier = actionMod
+                    )
+                    if (debugRepair) {
+                        GameButton(
+                            "DEBUG",
+                            { onRepair(slot) },
+                            compact = true,
+                            style = BtnStyle.Ghost,
+                            modifier = actionMod
+                        )
+                    }
+                } else {
+                    GameButton(
+                        "SWAP TYRES",
+                        onSwapTyres,
+                        compact = true,
+                        style = BtnStyle.Primary,
+                        modifier = actionMod
+                    )
                 }
             }
         }
     }
 }
-
-private fun carActionModifier(): Modifier = Modifier
-    .width(CAR_ACTION_WIDTH)
-    .height(CAR_ACTION_HEIGHT)
 
 private fun drainStep(fluid: FluidType): Float = when (fluid) {
     FluidType.FUEL -> 5f
@@ -1361,121 +1552,178 @@ private fun drainLocation(fluid: FluidType): String = when (fluid) {
     FluidType.BRAKE_FLUID -> "the brake system"
 }
 
+private enum class CarCta { Swap, Patch, Repair, Upgrade }
+
+private fun partStatusLabel(part: MountedPart): Pair<String, Color> = when {
+    !part.def.hasDurability -> "PERMANENT" to GameColors.ok
+    part.injury == TireInjury.SHREDDED -> "ON RIM" to GameColors.danger
+    part.injury == TireInjury.PUNCTURED -> "FLAT" to GameColors.danger
+    else -> part.condition.displayName to healthColor(part.health)
+}
+
+private data class TireStatLine(
+    val gripNow: Int,
+    val gripMax: Int,
+    val snow: Int,
+    val climbDeg: Int,
+    val size: String
+)
+
+private fun tireStatLine(slot: ComponentSlot, def: ItemDef, car: Car): TireStatLine? {
+    if (slot != ComponentSlot.TIRE_FRONT && slot != ComponentSlot.TIRE_REAR) return null
+    val nominal = if (def.grip > 0f) def.grip else def.reliability
+    val tread = car.parts[slot]?.let { car.treadFactor(it.health) } ?: 1f
+    val climb = Math.toDegrees(kotlin.math.atan(car.maxClimbSlope(0.1f, 8f)).toDouble())
+    return TireStatLine(
+        gripNow = (nominal * tread * 100).toInt(),
+        gripMax = (nominal * 100).toInt(),
+        snow = (def.snowGrip * 100).toInt(),
+        climbDeg = climb.toInt(),
+        size = String.format("%.2f", def.wheelScale)
+    )
+}
+
 /** Bočný pohľad zhodný s hrou + klikacie zóny. */
 @Composable
 private fun CarView(
     layers: SedanLayers,
     car: Car,
-    section: CarSection?,
+    revision: Int,
+    frontHealth: Float,
+    rearHealth: Float,
+    frontInjury: TireInjury,
+    rearInjury: TireInjury,
+    section: CarSection,
     onSection: (CarSection) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    @Suppress("UNUSED_VARIABLE")
+    val rev = revision
+    @Suppress("UNUSED_VARIABLE")
+    val visualKey = Triple(frontInjury to frontHealth, rearInjury to rearHealth, rev)
     val aspect = (layers.imageWidth.toFloat() / layers.imageHeight.toFloat()).coerceIn(1.8f, 4.5f)
     val artist = remember { CarArtist() }
     val accent = SedanSpec.accentColor
-    Box(
+    Column(
         modifier
             .background(Color(0xFF2E3B44), RoundedCornerShape(12.dp))
-            .border(1.dp, GameColors.outline, RoundedCornerShape(12.dp)),
-        contentAlignment = Alignment.Center
+            .border(1.dp, GameColors.outline, RoundedCornerShape(12.dp))
+            .padding(8.dp)
     ) {
-        Box(Modifier.fillMaxWidth(0.92f).aspectRatio(aspect)) {
-            Canvas(Modifier.fillMaxSize()) {
-                // Fit sprite do boxu (rovnaký rect pre karosériu aj kolesá).
-                val imgAspect = layers.imageWidth.toFloat() / layers.imageHeight.toFloat()
-                val boxAspect = size.width / size.height.coerceAtLeast(1f)
-                val drawW: Float
-                val drawH: Float
-                if (boxAspect > imgAspect) {
-                    drawH = size.height
-                    drawW = drawH * imgAspect
-                } else {
-                    drawW = size.width
-                    drawH = drawW / imgAspect
-                }
-                val ox = (size.width - drawW) * 0.5f
-                val oy = (size.height - drawH) * 0.5f
-                with(artist) {
-                    drawBodyPreview(car, layers, ox, oy, drawW, drawH)
-                }
-                listOf(ComponentSlot.TIRE_REAR, ComponentSlot.TIRE_FRONT).forEach { slot ->
-                    if (!car.hasPart(slot)) return@forEach
-                    val tire = car.parts[slot]
-                    val r = layers.wheelRadiusFx * drawW * car.wheelScale(slot)
-                    val cy = oy + layers.wheelCenterFy * drawH
-                    val cx = ox + if (slot == ComponentSlot.TIRE_REAR) {
-                        layers.rearWheelFx * drawW
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            CarSection.entries.forEach { zone ->
+                CarZoneTab(
+                    label = zone.label,
+                    active = section == zone,
+                    onClick = { onSection(zone) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Box(
+            Modifier.weight(1f).fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(Modifier.fillMaxWidth(0.96f).aspectRatio(aspect)) {
+                Canvas(Modifier.fillMaxSize()) {
+                    @Suppress("UNUSED_EXPRESSION")
+                    visualKey
+                    @Suppress("UNUSED_EXPRESSION")
+                    frontInjury
+                    @Suppress("UNUSED_EXPRESSION")
+                    rearInjury
+                    @Suppress("UNUSED_EXPRESSION")
+                    frontHealth
+                    @Suppress("UNUSED_EXPRESSION")
+                    rearHealth
+                    val imgAspect = layers.imageWidth.toFloat() / layers.imageHeight.toFloat()
+                    val boxAspect = size.width / size.height.coerceAtLeast(1f)
+                    val drawW: Float
+                    val drawH: Float
+                    if (boxAspect > imgAspect) {
+                        drawH = size.height
+                        drawW = drawH * imgAspect
                     } else {
-                        layers.frontWheelFx * drawW
+                        drawW = size.width
+                        drawH = drawW / imgAspect
                     }
+                    val ox = (size.width - drawW) * 0.5f
+                    val oy = (size.height - drawH) * 0.5f
                     with(artist) {
-                        drawTireScreen(
-                            cx = cx,
-                            cy = cy,
-                            spinDeg = 0f,
-                            r = r,
-                            tireHealth = tire?.health ?: 0.7f,
-                            accent = accent,
-                            blurSteps = 1,
-                            tireId = tire?.defId,
-                            art = layers.wheelImage(tire?.defId)
-                        )
-                        if (car.hasChains) {
-                            drawTireScreen(
+                        drawBodyPreview(car, layers, ox, oy, drawW, drawH)
+                    }
+                    listOf(ComponentSlot.TIRE_REAR, ComponentSlot.TIRE_FRONT).forEach { slot ->
+                        val r = layers.wheelRadiusFx * drawW
+                        val cy = oy + layers.wheelCenterFy * drawH
+                        val cx = ox + if (slot == ComponentSlot.TIRE_REAR) {
+                            layers.rearWheelFx * drawW
+                        } else {
+                            layers.frontWheelFx * drawW
+                        }
+                        with(artist) {
+                            drawAxleWheel(
+                                car = car,
+                                slot = slot,
                                 cx = cx,
                                 cy = cy,
                                 spinDeg = 0f,
-                                r = r,
-                                tireHealth = tire?.health ?: 0.7f,
-                                accent = accent,
-                                blurSteps = 1,
-                                tireId = tire?.defId,
-                                art = layers.chainOverlay()
+                                wellR = r,
+                                layers = layers,
+                                accent = accent
                             )
                         }
                     }
                 }
-            }
-            Row(Modifier.fillMaxSize()) {
-                CarSection.entries.forEach { zone ->
-                    CarZone(
-                        label = zone.label,
-                        active = section == zone,
-                        onClick = { onSection(zone) },
-                        modifier = Modifier.weight(1f).fillMaxHeight()
-                    )
+                Row(Modifier.fillMaxSize()) {
+                    CarSection.entries.forEach { zone ->
+                        CarZoneHit(
+                            active = section == zone,
+                            onClick = { onSection(zone) },
+                            modifier = Modifier.weight(1f).fillMaxHeight()
+                        )
+                    }
                 }
             }
         }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            zoneSummary(section, car),
+            color = GameColors.text,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
-/** Mriežka všetkých slotov – 3 stĺpce, bez scrollovania. */
+/** Mriežka slotov – pri zvolenej zóne len jej diely, nikdy pod detailom. */
 @Composable
 private fun SlotGrid(
     engine: GameEngine,
     revision: Int,
-    section: CarSection?,
+    section: CarSection,
     selected: ComponentSlot?,
     onSelect: (ComponentSlot) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Bez revízie by mriežka po výmene dielu ostala na starých hodnotách.
     @Suppress("UNUSED_VARIABLE")
     val rev = revision
-    val slots = ComponentSlot.entries
-    val columns = 3
+    val slots = section.slots
+    val columns = if (slots.size <= 4) 1 else 2
     val rows = (slots.size + columns - 1) / columns
-    // Riadky si výšku určia podľa obsahu a mriežka sa v prípade potreby posúva.
-    // Pri rovnomernom delení výšky (weight) sa percentá aj „missing“ orezávali.
     Column(
         modifier.verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         for (row in 0 until rows) {
             Row(
                 Modifier.fillMaxWidth().height(IntrinsicSize.Min),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
                 for (col in 0 until columns) {
                     val index = row * columns + col
@@ -1484,11 +1732,14 @@ private fun SlotGrid(
                         continue
                     }
                     val slot = slots[index]
+                    val part = engine.car.parts[slot]
                     SlotChip(
                         slot = slot,
-                        part = engine.car.parts[slot],
+                        part = part,
+                        health = part?.health ?: -1f,
+                        injury = part?.injury ?: TireInjury.INFLATED,
+                        partId = part?.defId.orEmpty(),
                         selected = selected == slot,
-                        dimmed = section != null && !section.slots.contains(slot),
                         onClick = { onSelect(slot) },
                         modifier = Modifier.weight(1f).fillMaxHeight()
                     )
@@ -1502,65 +1753,81 @@ private fun SlotGrid(
 private fun SlotChip(
     slot: ComponentSlot,
     part: MountedPart?,
+    health: Float,
+    injury: TireInjury,
+    partId: String,
     selected: Boolean,
-    dimmed: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val health = part?.health
+    @Suppress("UNUSED_VARIABLE")
+    val seen = partId
+    val missing = health < 0f
     val permanent = part != null && !part.def.hasDurability
+    val paint = part?.takeIf {
+        it.paintIndex >= 0 && it.def.mountsTo?.takesBodyPaint == true
+    }?.let { VehiclePaint.at(it.paintIndex) }
     Column(
         modifier
             .background(
                 when {
                     selected -> GameColors.accent.copy(alpha = 0.28f)
-                    part == null -> GameColors.danger.copy(alpha = 0.18f)
+                    missing -> GameColors.panelSoft
                     else -> GameColors.panelHigh
                 },
                 RoundedCornerShape(8.dp)
             )
             .border(
                 1.dp,
-                if (selected) GameColors.accent else GameColors.outline,
+                when {
+                    selected -> GameColors.accent
+                    missing -> GameColors.outline.copy(alpha = 0.55f)
+                    else -> GameColors.outline
+                },
                 RoundedCornerShape(8.dp)
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 7.dp, vertical = 5.dp),
+            .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.Center
     ) {
-        Text(
-            slot.displayName,
-            color = GameColors.textDim.copy(alpha = if (dimmed) 0.45f else 1f),
-            fontSize = 11.sp,
-            maxLines = 1
-        )
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                slot.displayName,
+                color = if (missing) GameColors.textDim else GameColors.text,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(end = 6.dp)
+            )
+            if (paint != null) {
+                PaintSwatch(paint)
+            }
+        }
         Text(
             when {
-                health == null -> "missing"
+                missing -> "empty"
                 permanent -> "PERMANENT"
+                injury == TireInjury.PUNCTURED -> "${(health * 100).toInt()} % · FLAT"
+                injury == TireInjury.SHREDDED -> "${(health * 100).toInt()} % · RIM"
                 else -> "${(health * 100).toInt()} %"
             },
-            color = (when {
-                health == null -> GameColors.danger
+            color = when {
+                missing -> GameColors.textDim
                 permanent -> GameColors.ok
+                injury != TireInjury.INFLATED -> GameColors.danger
                 else -> healthColor(health)
-            })
-                .copy(alpha = if (dimmed) 0.5f else 1f),
-            fontSize = if (permanent) 11.sp else 15.sp,
-            fontWeight = FontWeight.Bold
+            },
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1
         )
-        if (part != null && part.paintIndex >= 0 && part.def.mountsTo?.group == "Body") {
-            val paint = VehiclePaint.at(part.paintIndex)
-            Text(
-                paint.displayName,
-                color = Color(paint.argb).copy(alpha = if (dimmed) 0.5f else 1f),
-                fontSize = 9.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        if (health != null && !permanent) {
-            Spacer(Modifier.height(3.dp))
+        if (!missing && !permanent) {
+            Spacer(Modifier.height(4.dp))
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -1579,7 +1846,7 @@ private fun SlotChip(
 }
 
 @Composable
-private fun CarZone(
+private fun CarZoneTab(
     label: String,
     active: Boolean,
     onClick: () -> Unit,
@@ -1587,22 +1854,96 @@ private fun CarZone(
 ) {
     Box(
         modifier
-            .padding(3.dp)
             .background(
-                if (active) GameColors.accent.copy(alpha = 0.22f) else Color.Transparent,
+                if (active) GameColors.accent else GameColors.panelSoft,
                 RoundedCornerShape(8.dp)
             )
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.BottomCenter
+            .border(
+                1.dp,
+                if (active) GameColors.accent else GameColors.outline,
+                RoundedCornerShape(8.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(vertical = 5.dp),
+        contentAlignment = Alignment.Center
     ) {
         Text(
             label,
-            color = if (active) GameColors.text else GameColors.text.copy(alpha = 0.7f),
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(bottom = 4.dp)
+            color = if (active) Color(0xFF1B1712) else GameColors.text,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1
         )
     }
+}
+
+@Composable
+private fun CarZoneHit(
+    active: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier
+            .padding(2.dp)
+            .background(
+                if (active) GameColors.accent.copy(alpha = 0.20f) else Color.Transparent,
+                RoundedCornerShape(8.dp)
+            )
+            .then(
+                if (active) Modifier.border(1.5.dp, GameColors.accent.copy(alpha = 0.85f), RoundedCornerShape(8.dp))
+                else Modifier
+            )
+            .clickable(onClick = onClick)
+    )
+}
+
+@Composable
+private fun PaintSwatch(paint: VehiclePaint, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .size(10.dp)
+            .background(Color(paint.argb), RoundedCornerShape(50))
+            .border(1.dp, Color.White.copy(alpha = 0.4f), RoundedCornerShape(50))
+    )
+}
+
+private fun zoneSummary(section: CarSection, car: Car): String = when (section) {
+    CarSection.PREDOK ->
+        "${car.fittedHudLabel(ComponentSlot.ENGINE)} · F ${car.fittedHudLabel(ComponentSlot.TIRE_FRONT)}"
+    CarSection.STRED ->
+        "${car.fittedHudLabel(ComponentSlot.SUSPENSION)} · ${car.fittedHudLabel(ComponentSlot.DRIVETRAIN)}"
+    CarSection.ZADOK ->
+        "R ${car.fittedHudLabel(ComponentSlot.TIRE_REAR)}"
+}
+
+private fun partBarHint(
+    slot: ComponentSlot,
+    part: MountedPart,
+    car: Car,
+    engine: GameEngine
+): String? {
+    val injury = when (part.injury) {
+        TireInjury.SHREDDED -> "Fit a new tyre"
+        TireInjury.PUNCTURED -> if (engine.punctureKitCount() > 0) {
+            "Patch kit in the bag"
+        } else {
+            "Patch the puncture"
+        }
+        else -> null
+    }
+    val tire = tireStatLine(slot, part.def, car)?.let {
+        "Grip ${it.gripNow}/${it.gripMax} · Snow ${it.snow}%"
+    }
+    val extra = partExtraHint(slot, part.def, car)
+    val next = engine.scrapUpgradeTarget(slot)?.let { "Next ${it.name}" }
+    val workshop = engine.canPatchPuncture(slot) ||
+        engine.scrapRepairCost(slot) != null ||
+        engine.scrapUpgradeTarget(slot) != null
+    val block = if (workshop) engine.scrapWorkshopBlockReason() else null
+    return listOfNotNull(injury, tire, extra, next, block)
+        .joinToString(" · ")
+        .ifBlank { null }
 }
 
 private fun partExtraHint(slot: ComponentSlot, def: ItemDef, car: Car): String? = when (slot) {
@@ -1613,8 +1954,11 @@ private fun partExtraHint(slot: ComponentSlot, def: ItemDef, car: Car): String? 
     ComponentSlot.ALTERNATOR ->
         "Charging output ${(car.alternatorOutput * 100).toInt()} % · " +
             "battery ceiling ${(car.batteryChargeCeiling * 100).toInt()} %"
-    ComponentSlot.BATTERY ->
-        "Current charge ${(car.batteryCharge * 100).toInt()} %"
+    ComponentSlot.BATTERY -> {
+        val healthPct = ((car.parts[ComponentSlot.BATTERY]?.health ?: 0f) * 100f).toInt()
+        val socPct = (car.batteryCharge * 100f).toInt()
+        "Electrical charge $socPct % · health $healthPct %"
+    }
     ComponentSlot.CARGO, ComponentSlot.ROOF_RACK ->
         "+${def.extraSlots} slots · +${def.extraWeight.toInt()} kg" +
             if (def.dragAdd > 0f) " · adds aerodynamic drag" else ""
@@ -1622,18 +1966,11 @@ private fun partExtraHint(slot: ComponentSlot, def: ItemDef, car: Car): String? 
         "On snow ×${String.format("%.2f", GameConfig.CHAINS_SNOW_BONUS)} grip · " +
             "on dry tarmac ×${String.format("%.2f", GameConfig.CHAINS_TARMAC_PENALTY)}, " +
             "heavy drag above ${(GameConfig.CHAINS_MAX_SPEED * 3.6f).toInt()} km/h"
-    ComponentSlot.TIRE_FRONT, ComponentSlot.TIRE_REAR -> {
-        val nominal = if (def.grip > 0f) def.grip else def.reliability
-        val tread = car.parts[slot]?.let { car.treadFactor(it.health) } ?: 1f
-        val climb = Math.toDegrees(kotlin.math.atan(car.maxClimbSlope(0.1f, 8f)).toDouble())
-        "Grip ${String.format("%.0f", nominal * tread * 100)} % of ${String.format("%.0f", nominal * 100)} % " +
-            "· snow ${String.format("%.0f", def.snowGrip * 100)} % " +
-            "· climbs ~${String.format("%.0f", climb)}° · size ×${String.format("%.2f", def.wheelScale)}"
-    }
+    ComponentSlot.TIRE_FRONT, ComponentSlot.TIRE_REAR -> null
     else -> null
 }
 
-private enum class CarSection(val label: String, val slots: List<ComponentSlot>) {
+internal enum class CarSection(val label: String, val slots: List<ComponentSlot>) {
     ZADOK(
         "Rear",
         listOf(
@@ -1641,19 +1978,21 @@ private enum class CarSection(val label: String, val slots: List<ComponentSlot>)
             ComponentSlot.DOOR_REAR,
             ComponentSlot.FUEL_TANK,
             ComponentSlot.TIRE_REAR,
-            ComponentSlot.DRIVETRAIN,
             ComponentSlot.CHAINS,
             ComponentSlot.CARGO,
-            ComponentSlot.ROOF_RACK
+            ComponentSlot.TRUNK_LID,
+            ComponentSlot.TAILLIGHT,
+            ComponentSlot.SEAT_REAR
         )
     ),
     STRED(
         "Middle",
         listOf(
             ComponentSlot.DOOR_FRONT,
-            ComponentSlot.ALTERNATOR,
-            ComponentSlot.STARTER,
-            ComponentSlot.SUSPENSION
+            ComponentSlot.SUSPENSION,
+            ComponentSlot.SEAT_FRONT,
+            ComponentSlot.DRIVETRAIN,
+            ComponentSlot.ROOF_RACK
         )
     ),
     PREDOK(
@@ -1663,9 +2002,12 @@ private enum class CarSection(val label: String, val slots: List<ComponentSlot>)
             ComponentSlot.HOOD,
             ComponentSlot.TIRE_FRONT,
             ComponentSlot.ENGINE,
+            ComponentSlot.ALTERNATOR,
+            ComponentSlot.STARTER,
             ComponentSlot.RADIATOR,
             ComponentSlot.BATTERY,
-            ComponentSlot.BRAKES
+            ComponentSlot.BRAKES,
+            ComponentSlot.HEADLIGHT
         )
     )
 }

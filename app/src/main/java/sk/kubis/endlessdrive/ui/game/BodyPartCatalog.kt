@@ -44,9 +44,23 @@ object BodyPartCatalog {
         BodyPart.ROOF_RACK
     )
 
+    /** Predpripravené poradie – v snímke sa znova nefiltruje [order]. */
+    val behindBodyParts: List<BodyPart> = order.filter { behindBody(it) }
+    val inFrontBodyParts: List<BodyPart> = order.filterNot { behindBody(it) }
+
     /** Sedadlá patria za karosériu – vidno ich cez okná a prázdne otvory. */
     fun behindBody(part: BodyPart): Boolean =
         part == BodyPart.REAR_SEAT || part == BodyPart.FRONT_SEAT
+
+    /** Dvere, kapota, veko a nárazníky – nie svetlomety ani sklo. */
+    fun takesBodyPaint(part: BodyPart): Boolean = slotOf(part).takesBodyPaint
+
+    /**
+     * Či sa pri montáži násobí laková maska farbou. Nosič má stálu sivú;
+     * svetlá sa nekryjú vôbec, aby ostali číre ako v PNG.
+     */
+    fun appliesPaintTint(part: BodyPart): Boolean =
+        takesBodyPaint(part) || part == BodyPart.ROOF_RACK
 
     // Namerané na základe 1472×459; delíme, aby z toho boli podiely.
     private const val BASE_W = 1472f
@@ -123,7 +137,9 @@ object BodyPartCatalog {
  *
  * Predlohy sú štvorcové a stred obrázka je stred kolesa, takže sa kreslia
  * okolo osi a otáčajú s ňou – žiadna kotva netreba. Zimná guma vlastnú
- * kresbu (zatiaľ) nemá a berie si štandardnú.
+ * kresbu (zatiaľ) nemá a berie si štandardnú. Defekt sa z tej istej predlohy
+ * odvodí pri načítaní (placka gumy, kruhový disk), takže každý model ostane
+ * vizuálne iný.
  */
 object WheelCatalog {
     const val DEFAULT = R.drawable.wheel_std

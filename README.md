@@ -1,5 +1,38 @@
 # Endless Drive
 
+### Expedition polish (September 2026)
+
+- Audio comfort: normal braking is silent; tyre squeal is a short cue (under one
+  second) and stays silent during sustained wheelspin. It rearms after grip returns.
+  Ice entry no longer squeals. Surface ambience is quieter, impacts are spaced out,
+  and consecutive mud/water samples use different variants. SETTINGS offers saved
+  master, road/weather and tyre volume, including fully silent tyres.
+- UI: graphite panels with amber primary actions, higher secondary-text contrast,
+  adaptive dashboard controls and a fading instrument background. The menu separates
+  branding from a clear run card; replacing an existing run asks for confirmation.
+
+- Each new kilometre awards **3 repair scrap**. The trip badge shows distance to
+  the next reward. Rewards use saved maximum progress, so reversing or loading
+  a run does not duplicate them.
+- During quiet driving, a compact route objective suggests the next priority:
+  first kilometre, first depot, reserves, then winter preparation from 7 km.
+  These are guidance milestones, not timed missions.
+- Road events cannot repeat consecutively within a session. At most two timed
+  adverse events can overlap; immediate hazards still depend on driving conditions.
+- Engine audio now has virtual gear changes with hysteresis, a brief shift dip,
+  and audible idle while parked. Radio and animal events play their existing
+  samples. Pausing/backgrounding suspends one-shots as well as loops.
+- Sun and moon bloom use a smooth radial gradient; low sun adds warm horizon light.
+- `JourneyTest` covers kilometre boundaries and save/reload reward protection.
+  Android smoke tests cover panels, driving and pause behavior.
+- Parking handling: front springs are 10% firmer and rear springs 10% softer,
+  reducing unloaded rear ride height while keeping real engine/cargo mass distribution.
+  Reverse torque is metered to available grip on firm dry roads and uses gentler
+  weight transfer. It requires a running engine and fuel. Genuine reverse wheelspin
+  rotates driven wheels faster backwards; blur follows each axle and spray changes
+  direction, including both driven axles on AWD. `ParkingTractionTest` covers this
+  with poor tyres on asphalt, slip on ice, engine-off behavior and cargo sag.
+
 2.5D mobile survival driving / exploration hra. Jazdíš po **nekonečnej procedurálne
 generovanej ceste**, staráš sa o auto, lootuješ opustené budovy a snažíš sa dostať
 čo najďalej.

@@ -9,6 +9,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import sk.kubis.endlessdrive.R
 import sk.kubis.endlessdrive.domain.model.BiomeType
+import sk.kubis.endlessdrive.game.car.WHEEL_HUB_FRAC
+import kotlin.math.hypot
 import kotlin.math.max
 
 /**
@@ -21,25 +23,38 @@ class GameAssets(context: Context) {
      * Auto: holá karoséria plus kresby dielov. Diely idú v polovičnom
      * rozlíšení – na aute majú pri bežnej mierke pár desiatok pixelov.
      */
-    val sedan = SedanLayers(
-        // Základ aj diely v rovnakom zmenšení – inak by si nesedeli mierkou.
-        decodeBitmap(R.drawable.car_base_body, HALF),
-        BodyPartCatalog.specs.mapValues { (_, spec) ->
-            SedanLayers.splitPaintLayers(decodeBitmap(spec.res, HALF))
-        },
-        BodyPartCatalog.variants.mapValues { (_, parts) ->
-            parts.mapValues { (_, res) ->
-                SedanLayers.splitPaintLayers(decodeBitmap(res, HALF))
-            }
-        },
+    val sedan: SedanLayers
+
+    init {
         // Kolesá v plnom rozlíšení – sú malé (256 px) a v paneli CAR veľké.
         // Zdrojové gumy nemajú rovnaký transparentný okraj; pred kreslením ich
-        // preto zrovnáme na rovnaký priemer aj os otáčania.
-        WheelCatalog.all.associateWith { decodeWheel(it) },
-        // Iba kovová vrstva reťazí: kreslí sa nad ľubovoľnú namontovanú gumu,
-        // takže sport/off-road disk pod ňou vizuálne nezmizne.
-        decodeWheel(R.drawable.wheel_chains_overlay)
-    )
+        // preto zrovnáme na rovnaký priemer aj os otáčania. Defekt je odvodená
+        // textúra z tej istej predlohy, nie jedna sivá placka pre všetky modely.
+        val wheels = WheelCatalog.all.associateWith { decodeWheelPair(it) }
+        val chains = decodeWheelPair(R.drawable.wheel_chains_overlay)
+        sedan = SedanLayers(
+            // Základ aj diely v rovnakom zmenšení – inak by si nesedeli mierkou.
+            decodeBitmap(R.drawable.car_base_body, HALF),
+            BodyPartCatalog.specs.mapValues { (part, spec) ->
+                SedanLayers.splitPaintLayers(
+                    decodeBitmap(spec.res, HALF),
+                    extractPaint = BodyPartCatalog.appliesPaintTint(part)
+                )
+            },
+            BodyPartCatalog.variants.mapValues { (_, parts) ->
+                parts.mapValues { (part, res) ->
+                    SedanLayers.splitPaintLayers(
+                        decodeBitmap(res, HALF),
+                        extractPaint = BodyPartCatalog.appliesPaintTint(part)
+                    )
+                }
+            },
+            wheels.mapValues { it.value.first },
+            chains.first,
+            wheels.mapValues { it.value.second },
+            chains.second
+        )
+    }
 
     /**
      * Rozkreslené biómy. Hráč vidí naraz jeden, takže sady sa dekódujú až keď
@@ -56,25 +71,95 @@ class GameAssets(context: Context) {
     }
 
     private fun loadBackdrop(spec: BackdropSpec): BiomeBackdrop {
-        val farBmp = decodeBitmap(spec.far, HALF)
+        val material = if (spec.bakedSun) MaterialKind.SAND else MaterialKind.LEAVES
+        fun finish(res: Int, kind: MaterialKind, strength: Float): Bitmap {
+            val source = decodeBitmap(res, HALF)
+            return TiledArtwork.finish(source, kind, strength,
+                preserveSeam = authoredLoop(res)).also { source.recycle() }
+        }
+        val farBmp = finish(spec.far, MaterialKind.PAPER, 0.25f)
+        val midBmp = finish(spec.mid, material, 0.65f)
+        val nearBmp = finish(spec.near, material, 0.90f)
         return BiomeBackdrop(
             far = farBmp.asImageBitmap(),
-            mid = decode(spec.mid, HALF),
-            near = decode(spec.near, HALF),
+            mid = midBmp.asImageBitmap(),
+            near = nearBmp.asImageBitmap(),
             groundColor = bottomColor(farBmp),
+            meadowColor = bottomColor(midBmp),
             tint = spec.tint ?: Color.White,
-            bakedSun = spec.bakedSun
+            bakedSun = spec.bakedSun,
+            horizonCover = spec.horizonCover,
+            landscapeLift = spec.landscapeLift,
+            widthScale = spec.widthScale,
+            heightScale = spec.heightScale,
+            skyWash = spec.skyWash,
+            farSkyOpacity = spec.farSkyOpacity,
+            farBottomInset = transparentBottomInset(farBmp),
+            midBottomInset = transparentBottomInset(midBmp),
+            nearBottomInset = transparentBottomInset(nearBmp),
+            skyEdgeColor = averageSkyColor(farBmp),
+            midHaze = spec.midHaze,
+            nearHaze = spec.nearHaze,
+            hazeDay = spec.hazeDay,
+            midRise = spec.midRise
         )
     }
 
     /**
-     * Farba spodného okraja kresby. Vypĺňa sa ňou pás medzi pozadím a terénom –
-     * cesta môže klesnúť hlboko pod horizont a bez výplne by tam zívala diera.
+     * Podiel priehľadného priestoru pod posledným súvislým obsahom PNG.
+     * Staršie 3:1 sady majú pod kresbou až štvrtinu prázdneho plátna, zatiaľ
+     * čo nové 4:1 sady končia na hrane. Kotvenie podľa rámu bitmapy preto
+     * vytváralo medzi púšťou a cestou veľký pás.
      */
+    private fun transparentBottomInset(bitmap: Bitmap): Float {
+        if (bitmap.width < 1 || bitmap.height < 1) return 0f
+        val required = (bitmap.width * 0.015f).toInt().coerceAtLeast(1)
+        for (y in bitmap.height - 1 downTo 0) {
+            var count = 0
+            for (x in 0 until bitmap.width) {
+                if ((bitmap.getPixel(x, y) ushr 24) >= 48 && ++count >= required) {
+                    return (bitmap.height - 1 - y) / bitmap.height.toFloat()
+                }
+            }
+        }
+        return 0f
+    }
+
+    /** Stable sky colour sampled once at load time, without repeating a stretched scanline. */
+    private fun averageSkyColor(bitmap: Bitmap): Color {
+        if (bitmap.width < 1 || bitmap.height < 1) return Color(0xFF9BABB5)
+        // Generované PNG môžu mať nad kresbou priehľadný technický okraj.
+        // RGB v ňom býva čierne, hoci sa pixel vôbec nekreslí.
+        for (y in 0 until bitmap.height) {
+            opaqueRowColor(bitmap, y, minCoverage = 0.65f)?.let { return it }
+        }
+        return Color(0xFF9BABB5)
+    }
+
+    /** Ground fill below the backdrop when the road descends. */
     private fun bottomColor(bmp: Bitmap): Color {
         if (bmp.width < 1 || bmp.height < 1) return Color(0xFF6B5340)
-        val argb = bmp.getPixel(bmp.width / 2, bmp.height - 1)
-        return Color(argb)
+        // Spodná kresba tiež nemusí siahať po samotný okraj bitmapy. Hľadáme
+        // prvý súvislý nepriehľadný pás, nie jeden náhodný pixel v strede.
+        for (y in bmp.height - 1 downTo 0) {
+            opaqueRowColor(bmp, y, minCoverage = 0.08f)?.let { return it }
+        }
+        return Color(0xFF6B5340)
+    }
+
+    private fun opaqueRowColor(bitmap: Bitmap, y: Int, minCoverage: Float): Color? {
+        var r = 0L; var g = 0L; var b = 0L; var count = 0
+        for (x in 0 until bitmap.width) {
+            val argb = bitmap.getPixel(x, y)
+            if ((argb ushr 24) >= 200) {
+                r += (argb ushr 16) and 255
+                g += (argb ushr 8) and 255
+                b += argb and 255
+                count++
+            }
+        }
+        if (count < bitmap.width * minCoverage) return null
+        return Color((r / count).toInt(), (g / count).toInt(), (b / count).toInt())
     }
 
     /**
@@ -192,8 +277,14 @@ class GameAssets(context: Context) {
      * prázdneho miesta hore alebo po bokoch, a pri rovnakom dstSize potom
      * pôsobia menšie či excentrické voči ostatným.
      */
-    private fun decodeWheel(resId: Int): ImageBitmap {
-        val trimmed = SedanLayers.cropToOpaque(decodeBitmap(resId), pad = 2)
+    private fun decodeWheelPair(resId: Int): Pair<ImageBitmap, ImageBitmap> {
+        val normalized = normalizeWheel(decodeBitmap(resId))
+        val flat = SedanLayers.flattenPuncturedWheel(normalized)
+        return normalized.asImageBitmap() to flat.asImageBitmap()
+    }
+
+    private fun normalizeWheel(src: Bitmap): Bitmap {
+        val trimmed = SedanLayers.cropToOpaque(src, pad = 2)
         val side = max(trimmed.width, trimmed.height)
         val normalized = Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888)
         Canvas(normalized).drawBitmap(
@@ -202,13 +293,25 @@ class GameAssets(context: Context) {
             (side - trimmed.height) * 0.5f,
             null
         )
-        return normalized.asImageBitmap()
+        return normalized
     }
 
     private fun decodeBitmap(resId: Int, sample: Int = 1): Bitmap {
         val opts = BitmapFactory.Options().apply { inSampleSize = sample }
         return BitmapFactory.decodeResource(app.resources, resId, opts)
             ?: Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888)
+    }
+
+    /**
+     * Les aj priemysel majú už periodickú siluetu – druhé prelínanie by znova
+     * rozrezalo koruny a veže. Zrno ostane; šev v kopci zatvorí heal.
+     */
+    private fun authoredLoop(res: Int): Boolean = when (res) {
+        R.drawable.bg_forest_far, R.drawable.bg_forest_mid, R.drawable.bg_forest_near,
+        R.drawable.bg_forest_alive_far, R.drawable.bg_forest_alive_mid, R.drawable.bg_forest_alive_near,
+        R.drawable.bg_industry_far, R.drawable.bg_industry_mid, R.drawable.bg_industry_near,
+        R.drawable.bg_sandstorm_far, R.drawable.bg_sandstorm_mid, R.drawable.bg_sandstorm_near -> true
+        else -> false
     }
 
     private companion object {
@@ -254,7 +357,24 @@ data class BackdropSpec(
     /** Prefarbenie celej sady – tak sa jedna kresba použije pre dva biómy. */
     val tint: Color? = null,
     /** true = obloha má namaľované slnko, druhé by sme nad ňu kresliť nemali. */
-    val bakedSun: Boolean = false
+    val bakedSun: Boolean = false,
+    /** Podiel spodku far vrstvy, ktorý prekryje slnko za krajinou. */
+    val horizonCover: Float = 0.34f,
+    /** Nízke nové vrstvy zdvihneme nad zadnú hranu lúky. */
+    val landscapeLift: Float = 0f,
+    /** Horizontal art correction independent of horizon height. */
+    val widthScale: Float = 0.85f,
+    /** Vertical scale for artwork whose silhouettes occupy only a low PNG band. */
+    val heightScale: Float = 1f,
+    /** Fraction of the far image blended gradually into the generated sky. */
+    val skyWash: Float = 0.18f,
+    /** Opacity of the far PNG in the sky pass; horizon artwork is redrawn separately. */
+    val farSkyOpacity: Float = 1f,
+    val midHaze: Float = 0.42f,
+    val nearHaze: Float = 0.20f,
+    val hazeDay: Color = Color(0xFFE8EEF2),
+    /** Extra lift of the mid band as a fraction of screen height. */
+    val midRise: Float = 0f
 )
 
 object BackdropCatalog {
@@ -266,44 +386,64 @@ object BackdropCatalog {
     )
 
     val specs: Map<BiomeType, BackdropSpec> = mapOf(
-        BiomeType.DESERT to BackdropSpec(desert.first, desert.second, desert.third, bakedSun = true),
+        BiomeType.DESERT to BackdropSpec(
+            desert.first, desert.second, desert.third, bakedSun = true, landscapeLift = 0.08f,
+            midHaze = 0.10f, nearHaze = 0.05f, hazeDay = Color(0xFFE8B56A)
+        ),
         // Súmrak má slnko namaľované v predlohe, takže ďalšie sa nekreslí.
         BiomeType.DESERT_DUSK to BackdropSpec(
             R.drawable.bg_desert_dusk_far,
             R.drawable.bg_desert_dusk_mid,
             R.drawable.bg_desert_dusk_near,
-            bakedSun = true
+            bakedSun = true, landscapeLift = 0.08f,
+            midHaze = 0.08f, nearHaze = 0.04f, hazeDay = Color(0xFFE8A867)
         ),
         BiomeType.FOREST to BackdropSpec(
-            R.drawable.bg_forest_far, R.drawable.bg_forest_mid, R.drawable.bg_forest_near
+            R.drawable.bg_forest_far, R.drawable.bg_forest_mid, R.drawable.bg_forest_near,
+            landscapeLift = 0.05f,
+            midHaze = 0.08f, nearHaze = 0.03f, hazeDay = Color(0xFF8A9488), midRise = 0.04f
         ),
         BiomeType.FOREST_ALIVE to BackdropSpec(
-            forestAlive.first, forestAlive.second, forestAlive.third
+            forestAlive.first, forestAlive.second, forestAlive.third,
+            horizonCover = 0.34f, landscapeLift = 0.05f,
+            midHaze = 0.07f, nearHaze = 0.03f, hazeDay = Color(0xFF8FA882), midRise = 0.045f
         ),
         BiomeType.INDUSTRIAL to BackdropSpec(
-            R.drawable.bg_industry_far, R.drawable.bg_industry_mid, R.drawable.bg_industry_near
+            R.drawable.bg_industry_far, R.drawable.bg_industry_mid, R.drawable.bg_industry_near,
+            horizonCover = 0.38f, widthScale = 0.70f, heightScale = 1.22f,
+            skyWash = 0.56f, landscapeLift = 0.05f,
+            // Teplý opar zosvetlí tmavé haly bez straty priemyselnej palety.
+            midHaze = 0.20f, nearHaze = 0.11f, hazeDay = Color(0xFF776B60), midRise = 0.028f
         ),
         BiomeType.SANDSTORM to BackdropSpec(
             R.drawable.bg_sandstorm_far, R.drawable.bg_sandstorm_mid, R.drawable.bg_sandstorm_near,
-            bakedSun = true
+            tint = Color(0xFFFFD49B), bakedSun = true, horizonCover = 0.55f,
+            skyWash = 0.82f, farSkyOpacity = 0f,
+            landscapeLift = 0.08f, midHaze = 0.12f, nearHaze = 0.05f,
+            hazeDay = Color(0xFFD3A365)
         ),
         BiomeType.DUST_STORM to BackdropSpec(
             R.drawable.bg_duststorm_far, R.drawable.bg_duststorm_mid, R.drawable.bg_duststorm_near,
-            bakedSun = true
+            tint = Color(0xFFE8C19A), bakedSun = true, horizonCover = 0.55f,
+            skyWash = 0.78f, farSkyOpacity = 0f,
+            landscapeLift = 0.06f, midHaze = 0.13f, nearHaze = 0.06f,
+            hazeDay = Color(0xFFB88D62)
         ),
-        // Vidiek a pustatina vlastnú kresbu nemajú – požičiavajú si najbližšiu
-        // a odlišuje ich tónovanie.
+        // Zachované pôvodné kreslené sady; príbuzné biómy odlišuje tónovanie.
         BiomeType.RURAL to BackdropSpec(
             forestAlive.first, forestAlive.second, forestAlive.third,
-            tint = Color(0xFFF6F2DA)
+            tint = Color(0xFFF4F0D5), landscapeLift = 0.05f,
+            midHaze = 0.08f, nearHaze = 0.04f, hazeDay = Color(0xFFB8C4A0), midRise = 0.04f
         ),
         BiomeType.WASTELAND to BackdropSpec(
             desert.first, desert.second, desert.third,
-            tint = Color(0xFFD6CEC4), bakedSun = true
+            tint = Color(0xFFE8D2B0), bakedSun = true, landscapeLift = 0.08f,
+            midHaze = 0.10f, nearHaze = 0.05f, hazeDay = Color(0xFFE0B57A)
         ),
         BiomeType.ALPINE to BackdropSpec(
             forestAlive.first, forestAlive.second, forestAlive.third,
-            tint = Color(0xFFC7D7DF)
+            tint = Color(0xFF9BBED2), landscapeLift = 0.05f,
+            midHaze = 0.08f, nearHaze = 0.04f, hazeDay = Color(0xFFA8C0C8), midRise = 0.04f
         )
     )
 }
@@ -314,11 +454,36 @@ data class BiomeBackdrop(
     val near: ImageBitmap,
     /** Farba vzdialenej zeme – vypĺňa pás medzi pozadím a terénom. */
     val groundColor: Color = Color(0xFF6B5340),
+    /** Spodok mid vrstvy – apron a lúka sa k nemu priblížia. */
+    val meadowColor: Color = Color(0xFF6B5340),
     /** Prefarbenie celej sady – tak sa jedna kresba použije pre dva biómy. */
     val tint: Color = Color.White,
     /** true = obloha má namaľované slnko, druhé by sme nad ňu kresliť nemali. */
-    val bakedSun: Boolean = false
-)
+    val bakedSun: Boolean = false,
+    val horizonCover: Float = 0.34f,
+    val landscapeLift: Float = 0f,
+    /** Horizontal art correction independent of horizon height. */
+    val widthScale: Float = 0.85f,
+    val heightScale: Float = 1f,
+    val skyWash: Float = 0.18f,
+    val farSkyOpacity: Float = 1f,
+    /** Transparent space below the visible content in each PNG layer. */
+    val farBottomInset: Float = 0f,
+    val midBottomInset: Float = 0f,
+    val nearBottomInset: Float = 0f,
+    val skyEdgeColor: Color = Color(0xFF9BABB5),
+    val midHaze: Float = 0.42f,
+    val nearHaze: Float = 0.20f,
+    val hazeDay: Color = Color(0xFFE8EEF2),
+    val midRise: Float = 0f
+) {
+    fun tinted(color: Color): Color = Color(
+        (color.red * tint.red).coerceIn(0f, 1f),
+        (color.green * tint.green).coerceIn(0f, 1f),
+        (color.blue * tint.blue).coerceIn(0f, 1f),
+        color.alpha
+    )
+}
 
 /**
  * Auto poskladané z dielov: holá karoséria a na nej to, čo je namontované.
@@ -337,7 +502,10 @@ class SedanLayers(
     private val variantImages: Map<String, Map<BodyPart, PaintedSprite>> = emptyMap(),
     /** Kresby kolies podľa zdroja – vyberá sa z nich podľa namontovanej gumy. */
     private val wheelImages: Map<Int, ImageBitmap> = emptyMap(),
-    private val chainOverlayImage: ImageBitmap? = null
+    private val chainOverlayImage: ImageBitmap? = null,
+    /** Spľasnutá guma z tej istej predlohy – cache podľa modelu kolesa. */
+    private val flatWheelImages: Map<Int, ImageBitmap> = emptyMap(),
+    private val flatChainOverlayImage: ImageBitmap? = null
 ) {
 
     /** Holá karoséria – to, s čím jazda začína. */
@@ -395,15 +563,31 @@ class SedanLayers(
         return wheelImages.values.firstOrNull()
     }
 
+    /** Defekt z predlohy daného modelu – rovnaký ráfik aj vzorka gumy. */
+    fun flatWheelImage(tyreId: String?): ImageBitmap? {
+        flatWheelImages[WheelCatalog.resFor(tyreId)]?.let { return it }
+        return flatWheelImages.values.firstOrNull()
+    }
+
     fun chainOverlay(): ImageBitmap? = chainOverlayImage
+
+    fun flatChainOverlay(): ImageBitmap? = flatChainOverlayImage
 
     companion object {
         /**
          * Rozdelí sprite na nemenné sklá/plasty a lakovateľný plech.
          * Zdrojové obrázky sú oranžové; maska vyberá iba ich žlto-oranžové
          * pixely, takže nový lak nepremaľuje modré sklo ani čierne zrkadlo.
+         *
+         * Svetlá a sedadlá [extractPaint] vypínajú – celá predloha ostane
+         * v [PaintedSprite.fixed], inak by sa teplé odlesky skla zobrali
+         * do lakovej masky a zafarbili ako dvere.
          */
-        fun splitPaintLayers(src: Bitmap): PaintedSprite {
+        fun splitPaintLayers(src: Bitmap, extractPaint: Boolean = true): PaintedSprite {
+            if (!extractPaint) {
+                val empty = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+                return PaintedSprite(src.asImageBitmap(), empty.asImageBitmap())
+            }
             val w = src.width
             val h = src.height
             val original = IntArray(w * h)
@@ -527,6 +711,68 @@ class SedanLayers(
                 if (a in 1..40) px[i] = 0
             }
             src.setPixels(px, 0, w, 0, 0, w, h)
+        }
+
+        /**
+         * Z nafúknutého kolesa urobí textúru defektu: disk ostane dierou
+         * (kreslí sa točiaci z predlohy), guma sa v spodku roztiahne na placku.
+         * Každý model si drží vlastnú vzorku aj ráfik.
+         */
+        fun flattenPuncturedWheel(src: Bitmap): Bitmap {
+            val w = src.width
+            val h = src.height
+            val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            if (w < 2 || h < 2) return out
+            val cx = (w - 1) * 0.5f
+            val cy = (h - 1) * 0.5f
+            val r = kotlin.math.min(cx, cy).coerceAtLeast(1f)
+            val srcPx = IntArray(w * h)
+            src.getPixels(srcPx, 0, w, 0, 0, w, h)
+            val dstPx = IntArray(w * h)
+            val hubFrac = WHEEL_HUB_FRAC
+            for (y in 0 until h) {
+                val dy = (y - cy) / r
+                val row = y * w
+                for (x in 0 until w) {
+                    val dx = (x - cx) / r
+                    val destR = hypot(dx, dy)
+                    if (destR <= hubFrac) continue
+                    val mapped = PuncturedTireShape.destToSource(dx, dy, hubFrac) ?: continue
+                    dstPx[row + x] = sampleBilinear(
+                        srcPx, w, h,
+                        cx + mapped.first * r,
+                        cy + mapped.second * r
+                    )
+                }
+            }
+            out.setPixels(dstPx, 0, w, 0, 0, w, h)
+            return out
+        }
+
+        private fun sampleBilinear(px: IntArray, w: Int, h: Int, fx: Float, fy: Float): Int {
+            if (fx < 0f || fy < 0f || fx > w - 1f || fy > h - 1f) return 0
+            val x0 = fx.toInt().coerceIn(0, w - 1)
+            val y0 = fy.toInt().coerceIn(0, h - 1)
+            val x1 = (x0 + 1).coerceAtMost(w - 1)
+            val y1 = (y0 + 1).coerceAtMost(h - 1)
+            val tx = (fx - x0).coerceIn(0f, 1f)
+            val ty = (fy - y0).coerceIn(0f, 1f)
+            if (x0 == x1 && y0 == y1) return px[y0 * w + x0]
+            return lerpArgb(
+                lerpArgb(px[y0 * w + x0], px[y0 * w + x1], tx),
+                lerpArgb(px[y1 * w + x0], px[y1 * w + x1], tx),
+                ty
+            )
+        }
+
+        private fun lerpArgb(a: Int, b: Int, t: Float): Int {
+            val ia = 1f - t
+            fun chan(shift: Int): Int {
+                val ca = (a ushr shift) and 0xFF
+                val cb = (b ushr shift) and 0xFF
+                return (ca * ia + cb * t).toInt().coerceIn(0, 255)
+            }
+            return (chan(24) shl 24) or (chan(16) shl 16) or (chan(8) shl 8) or chan(0)
         }
     }
 }

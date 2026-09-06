@@ -14,13 +14,13 @@ object GameConfig {
     const val FRAME_LOCK_TOLERANCE_NANOS = 2_000_000L
 
     // --- Segmenty / križovatky (dlhé cesty = veľké nádrže majú zmysel) ---
-    /** Regióny sú dlhé; prostredie sa v nich stihne ustáliť aj plynulo zmeniť. */
-    const val SEGMENT_LENGTH_MIN = 5000f
-    const val SEGMENT_LENGTH_MAX = 7200f
-    const val TUTORIAL_SEGMENT_LENGTH = 3400f
+    /** Regióny sú dosť krátke, aby sa krajina striedala každých pár kilometrov. */
+    const val SEGMENT_LENGTH_MIN = 1600f
+    const val SEGMENT_LENGTH_MAX = 2400f
+    const val TUTORIAL_SEGMENT_LENGTH = 1300f
     /** Plynulé prelínanie dvoch susedných regiónov. */
-    const val BIOME_TRANSITION_MIN = 1600f
-    const val BIOME_TRANSITION_MAX = 3000f
+    const val BIOME_TRANSITION_MIN = 380f
+    const val BIOME_TRANSITION_MAX = 720f
     /** Prvá budova nie hneď za štartom. */
     const val BUILDING_MIN_GAP_FROM_START = 200f
     /** Väčší odstup – viac budov celkovo cez dlhšie segmenty, nie hustá osada. */
@@ -33,7 +33,13 @@ object GameConfig {
     // --- Jazda / fyzika auta (Hill Climb arcade) ---
     const val MAX_SPEED = 42f
     const val REVERSE_MAX_SPEED = 8f
-    const val REVERSE_ACCEL = 6f
+    /**
+     * Ťah cúvania (m/s²). Musí utiahnuť krátky kopec ako na screenshote,
+     * ale ostáva pod [ACCEL], aby na rovine nebolo cúvanie rýchlejšie ako vpred.
+     */
+    const val REVERSE_ACCEL = 11.5f
+    /** Cúvanie berie grip z oboch náprav – RWD inak na hrbolci zhadzuje zadok. */
+    const val REVERSE_DRIVE_GRIP = 0.92f
     /**
      * Späť od najďalej dosiahnutého X (HillRush REVERSE_LIMIT).
      *
@@ -73,8 +79,25 @@ object GameConfig {
     const val PITCH_INERTIA = 2.4f
     /** Tvrdosť pruženia (na 1 m stlačenia) – mäkšie = viditeľný bob. */
     const val SUSP_SPRING = 52f
+    /** Front springs support the engine; softer rear springs reduce empty-car rake. */
+    const val FRONT_SPRING_MUL = 1.10f
+    const val REAR_SPRING_MUL = 0.90f
     /** Tlmenie pruženia. */
     const val SUSP_DAMPER = 7.5f
+    /**
+     * Extra tlmenie nad stock (susMul 0.9). Šport/lift tak neskáče karosériou
+     * a zároveň základné pruženie ostane mäkké.
+     */
+    const val SUSP_QUALITY_DAMP_BONUS = 0.85f
+    /**
+     * Krútiaci moment z rozdielu náprav, keď drží len jedna. Bez toho skok
+     * strhne nos na jednu stranu, hneď ako predok opustí rampu.
+     */
+    const val ONE_WHEEL_PITCH_TORQUE = 0.52f
+    /** Vo vzduchu náklon rýchlo dohasína – inak sa dopad zíde s celým impulzom. */
+    const val AIR_PITCH_DAMPING = 1.85f
+    /** Pri dopade zhodíme časť pitch rate, aby jedna náprava nepreklopila auto. */
+    const val LANDING_PITCH_BLEED = 0.62f
     /** High-speed blow-off tlmiča: ostrý hrebeň nesmie vystreliť karosériu. */
     const val SUSP_DAMPER_VELOCITY_LIMIT = 5.5f
     /** Max sila jednej nápravy ako násobok celej statickej váhy auta. */
@@ -99,8 +122,8 @@ object GameConfig {
     const val SHARP_CREST_FORCE_RELIEF = 0.82f
     /** Max stlačenie pruženia (m). */
     const val SUSP_MAX_TRAVEL = 0.55f
-    /** Vizuálne zosilnenie zdvihu pruženia (render). */
-    const val SUSP_VISUAL_GAIN = 1.15f
+    /** Vizuálne zosilnenie zdvihu pruženia (render). Nad 1 koleso ľahko prelezie blatník. */
+    const val SUSP_VISUAL_GAIN = 1.0f
     /** Ako silno pitch sleduje sklon (nižšie = viac voľného náklonu z váhy). */
     const val PITCH_SLOPE_TRACK = 3.2f
     /** Dodatočné tlmenie náklonu pri diaľničnej rýchlosti. */
@@ -154,6 +177,19 @@ object GameConfig {
      * istú rýchlosť ako silný a auto sa na piesku nerozbehlo vôbec.
      */
     const val GRIP_OVERDRIVE = 0.32f
+    /**
+     * Priľnavosť holého ráfika (kov na asfalte). Ďaleko pod defektom – guma
+     * ešte drží, disk sa točí a nebrzdí.
+     */
+    const val RIM_GRIP = 0.08f
+    /** Statické trenie na disku je slabé; guma má [STATIC_GRIP_BONUS]. */
+    const val RIM_STATIC_GRIP_MUL = 0.18f
+    /** Prebytok ťahu na ráfiku takmer nechytí cestu (guma [GRIP_OVERDRIVE]). */
+    const val RIM_GRIP_OVERDRIVE = 0.07f
+    /** Disk sa pretáča hneď, bez rezervy ako guma ([TRACTION_SLACK]). */
+    const val RIM_TRACTION_SLACK = 1.04f
+    /** Koleso na ráfiku sa pri preklze točí rýchlejšie (kov, nie guma). */
+    const val RIM_SLIP_SPIN_BONUS = 16f
 
     // --- Zima ---
     /** Od akej vzdialenosti sa môže objaviť zasnežená vetva (m). */
@@ -167,6 +203,8 @@ object GameConfig {
     const val CHAINS_MAX_SPEED = 12f
     /** Pod týmto zdravím je guma roztrhaná a ide sa na disku. */
     const val BLOWN_TYRE_HEALTH = 0.12f
+    /** Scrap za záplatu defektu, keď hráč nemá puncture kit. */
+    const val PUNCTURE_PATCH_SCRAP = 8
     /** Strop rýchlosti na roztrhanej gume (m/s). */
     const val BLOWN_TYRE_MAX_SPEED = 7f
     /** O koľko °C nižšie drží motor v mraze. */
@@ -255,14 +293,24 @@ object GameConfig {
     const val DAY_LENGTH = 960f
     /** Štart jazdy ~ 7:00 (0 = polnoc, 0.5 = poludnie). */
     const val DAY_START = 0.29f
-    /** Odber batérie svetlami pri vypnutom motore (podiel/s). */
-    const val HEADLIGHT_DRAIN_OFF = 0.007f
-    /** Odber svetlami pri bežiacom motore (alternátor to väčšinou pokryje). */
-    const val HEADLIGHT_DRAIN_ON = 0.004f
+    /**
+     * Odber batérie svetlami pri vypnutom motore (podiel/s).
+     * 100 % SoC má vydržať rozumnú nočnú jazdu, nie minúty.
+     */
+    const val HEADLIGHT_DRAIN_OFF = 0.0014f
+    /** Odber svetlami pri bežiacom motore (zdravý alternátor to pokryje). */
+    const val HEADLIGHT_DRAIN_ON = 0.0009f
     /** Diaľkové svetlá majú dva silnejšie okruhy a väčší odber. */
-    const val HIGH_BEAM_DRAIN_MULTIPLIER = 1.55f
+    const val HIGH_BEAM_DRAIN_MULTIPLIER = 1.40f
+    /** Strešný reflektor – slabší okruh než stretávacie. */
+    const val ROOF_LIGHT_DRAIN_MULTIPLIER = 0.42f
     /** Nabíjanie alternátorom počas jazdy. */
     const val ALTERNATOR_CHARGE = 0.015f
+    /**
+     * Max SoC, ktoré vie alternátor udržať, je približne jeho zdravie.
+     * Malý slack, aby 56 % diel nesadol presne na 56,000 %.
+     */
+    const val ALTERNATOR_SOC_SLACK = 0.04f
     /** Zapaľovanie, čerpadlá a palubná elektrika pri bežiacom motore. */
     const val RUNNING_ELECTRICAL_DRAIN = 0.002f
     /** Pod touto hodnotou denného svetla treba svetlá (iba skutočná tma). */

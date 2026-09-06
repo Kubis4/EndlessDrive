@@ -2,6 +2,7 @@ package sk.kubis.endlessdrive.domain.repository
 
 import kotlinx.coroutines.flow.Flow
 import sk.kubis.endlessdrive.domain.model.DebugOptions
+import sk.kubis.endlessdrive.domain.model.ThrottleMode
 
 data class PlayerProfile(
     val bestDistanceKm: Float = 0f,
@@ -22,4 +23,8 @@ interface PlayerRepository {
     /** Ladiace prepínače z nastavení – držia sa medzi spusteniami. */
     val debugOptions: Flow<DebugOptions>
     suspend fun setDebugOptions(options: DebugOptions)
+
+    /** Schéma plynu: binárny pedál alebo zvislý slide. */
+    val throttleMode: Flow<ThrottleMode>
+    suspend fun setThrottleMode(mode: ThrottleMode)
 }

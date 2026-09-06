@@ -24,7 +24,8 @@ data class MountedPart(
     val defId: String,
     var condition: ComponentCondition,
     var health: Float,
-    var paintIndex: Int = -1
+    var paintIndex: Int = -1,
+    var injury: TireInjury = TireInjury.INFLATED
 ) {
     val def: ItemDef get() = ItemCatalog.byId(defId) ?: ItemCatalog.ENGINE_A
 }
@@ -231,9 +232,13 @@ class Car {
      * sa zodiera pomaly, ale plešatá guma spadne rýchlo.
      */
     fun axleGrip(slot: ComponentSlot): Float {
-        val t = parts[slot] ?: return 0.35f
+        val t = parts[slot] ?: return GameConfig.RIM_GRIP
         val base = if (t.def.grip > 0f) t.def.grip else t.def.reliability
-        return base * treadFactor(t.health)
+        return when (t.injury) {
+            TireInjury.SHREDDED -> GameConfig.RIM_GRIP
+            TireInjury.PUNCTURED -> base * 0.22f
+            TireInjury.INFLATED -> base * treadFactor(t.health)
+        }
     }
 
     /**
@@ -338,15 +343,36 @@ class Car {
         DriveLayout.RWD -> slot == ComponentSlot.TIRE_REAR
     }
 
+    /** 0 = hnané nápravy majú gumu, 1 = idú po ráfiku. */
+    fun drivenRimBlend(): Float {
+        val driven = TIRE_SLOTS.filter { drives(it) }
+        if (driven.isEmpty()) return 0f
+        return driven.count { tireInjury(it) == TireInjury.SHREDDED } / driven.size.toFloat()
+    }
+
     /** Aspoň jedna guma je na handry – auto ide na disku. */
     val hasBlownTyre: Boolean
-        get() = TIRE_SLOTS.any { (parts[it]?.health ?: 1f) < GameConfig.BLOWN_TYRE_HEALTH }
+        get() = hasShreddedTyre || hasPuncturedTyre
+
+    val hasShreddedTyre: Boolean
+        get() = TIRE_SLOTS.any { tireInjury(it) == TireInjury.SHREDDED }
+
+    val hasPuncturedTyre: Boolean
+        get() = TIRE_SLOTS.any { tireInjury(it) == TireInjury.PUNCTURED }
 
     /** Ktorá náprava je roztrhaná (null = obe držia). */
     val blownAxle: ComponentSlot?
-        get() = TIRE_SLOTS.firstOrNull {
-            (parts[it]?.health ?: 1f) < GameConfig.BLOWN_TYRE_HEALTH
-        }
+        get() = TIRE_SLOTS.firstOrNull { tireInjury(it) == TireInjury.SHREDDED }
+
+    /** Extra valivý odpor z defektu a jazdy na ráfiku. */
+    val tireInjuryDrag: Float
+        get() = TIRE_SLOTS.sumOf { slot ->
+            when (tireInjury(slot)) {
+                TireInjury.SHREDDED -> 0.85
+                TireInjury.PUNCTURED -> 0.38
+                TireInjury.INFLATED -> 0.0
+            }
+        }.toFloat()
 
     /** Zlomok gripu, ktorý zo zodratej gumy ostal (0..1.1). */
     fun treadFactor(health: Float): Float {
@@ -359,6 +385,51 @@ class Car {
     /** Násobiteľ veľkosti jedného kolesa. */
     fun wheelScale(slot: ComponentSlot): Float =
         parts[slot]?.def?.wheelScale?.takeIf { it > 0.2f } ?: 1f
+
+    /** Stav gumy na náprave; chýbajúca guma sa správa ako roztrhnutá. */
+    fun tireInjury(slot: ComponentSlot): TireInjury =
+        parts[slot]?.injury ?: TireInjury.SHREDDED
+
+    /**
+     * Priemer na vozovke pre fyziku (spin, odpor). Vizuál drží koleso
+     * v blatníku a defekt kreslí spľasnutím, nie zmenšením celej nápravy.
+     * Roztrhnutá guma (jazda na disku) už ide cez [wheelVisualScale].
+     */
+    fun wheelContactScale(slot: ComponentSlot): Float {
+        val base = wheelScale(slot)
+        return when (tireInjury(slot)) {
+            TireInjury.SHREDDED -> base * WHEEL_HUB_FRAC
+            TireInjury.PUNCTURED -> base * 0.74f
+            TireInjury.INFLATED -> base
+        }
+    }
+
+    /**
+     * Vizuálny polomer nápravy. Defekt ostáva v blatníku – placka je pod
+     * ráfikom. Až roztrhnutá guma spustí os na disk, inak by auto viselo
+     * na neviditeľnej pneumatike.
+     */
+    fun wheelVisualScale(slot: ComponentSlot): Float {
+        val base = wheelScale(slot)
+        return when (tireInjury(slot)) {
+            TireInjury.SHREDDED -> base * WHEEL_HUB_FRAC
+            TireInjury.PUNCTURED, TireInjury.INFLATED -> base
+        }
+    }
+
+    /**
+     * Extra náklon, keď jedna náprava ide na ráfiku. Nose-up je kladný, menší
+     * predný polomer teda sklopí nos k zemi.
+     */
+    fun rimSagPitch(): Float {
+        val wb = (SedanSpec.wheelOffsetX * 2f).coerceAtLeast(0.5f)
+        val rearR = SedanSpec.wheelRadius * wheelVisualScale(ComponentSlot.TIRE_REAR)
+        val frontR = SedanSpec.wheelRadius * wheelVisualScale(ComponentSlot.TIRE_FRONT)
+        return kotlin.math.atan((frontR - rearR) / wb)
+    }
+
+    /** Fyzikálny pitch plus pokles nápravy pri jazde na disku. */
+    val visualPitch: Float get() = pitch + rimSagPitch()
 
     /** Priemerný násobiteľ veľkosti kolies (off-road väčšie, sport menšie). */
     val tireWheelScale: Float
@@ -415,17 +486,43 @@ class Car {
         get() = parts[ComponentSlot.DRIVETRAIN]?.def?.driveLayout ?: DriveLayout.RWD
 
     /**
-     * Efektívne μ na danom povrchu (grip × pruženie × hrboľatosť).
-     * Pri malej rýchlosti platí statické trenie – rozjazd do kopca je preto
-     * o niečo ľahší než držať sa v kopci vo vyššej rýchlosti.
+     * Efektívne μ jednej nápravy (grip × pruženie × hrboľatosť).
+     * Guma má podlahu 0.2 – defekt ostane hrateľný. Ráfik ide nižšie,
+     * bez statického „prilepenia“ ako pneumatika.
      */
-    fun surfaceMu(bumpMul: Float = 0f, atSpeed: Float = 0f): Float {
-        val tire = tireGrip.coerceIn(0.2f, 1.6f)
+    fun axleSurfaceMu(slot: ComponentSlot, bumpMul: Float = 0f, atSpeed: Float = 0f): Float {
+        val shredded = tireInjury(slot) == TireInjury.SHREDDED
+        val raw = axleGrip(slot)
+        val tire = if (shredded) raw.coerceIn(0.04f, 0.25f)
+        else raw.coerceIn(0.2f, 1.6f)
         val sus = (0.75f + 0.25f * suspensionMul.coerceIn(0.3f, 1.3f))
         val rough = 1f / (1f + bumpMul * 0.55f / tireBumpResist)
-        val crawl = 1f + GameConfig.STATIC_GRIP_BONUS *
+        val staticMul = if (shredded) GameConfig.RIM_STATIC_GRIP_MUL else 1f
+        val crawl = 1f + GameConfig.STATIC_GRIP_BONUS * staticMul *
             (1f - (kotlin.math.abs(atSpeed) / 6f).coerceIn(0f, 1f))
         return GameConfig.TIRE_MU * tire * sus * rough * crawl
+    }
+
+    /** Súhrnné μ – predok/zadok podľa pohonu. Ťah a brzda berú nápravy zvlášť. */
+    fun surfaceMu(bumpMul: Float = 0f, atSpeed: Float = 0f): Float {
+        val front = axleSurfaceMu(ComponentSlot.TIRE_FRONT, bumpMul, atSpeed)
+        val rear = axleSurfaceMu(ComponentSlot.TIRE_REAR, bumpMul, atSpeed)
+        return when (driveLayout) {
+            DriveLayout.RWD -> rear * 0.72f + front * 0.28f
+            DriveLayout.FWD -> front * 0.72f + rear * 0.28f
+            DriveLayout.AWD -> (front + rear) * 0.5f
+        }
+    }
+
+    /** μ hnaných náprav – kopec drží to, čo točí. */
+    fun driveAxleMu(bumpMul: Float = 0f, atSpeed: Float = 0f): Float {
+        val front = axleSurfaceMu(ComponentSlot.TIRE_FRONT, bumpMul, atSpeed)
+        val rear = axleSurfaceMu(ComponentSlot.TIRE_REAR, bumpMul, atSpeed)
+        return when (driveLayout) {
+            DriveLayout.RWD -> rear
+            DriveLayout.FWD -> front
+            DriveLayout.AWD -> (front + rear) * 0.5f
+        }
     }
 
     /** Podiel váhy, ktorý ťah vôbec môže využiť – podľa pohonu. */
@@ -442,7 +539,7 @@ class Car {
      * Na rovinke je vždy „dost“ – limit platí len do kopca.
      */
     fun maxClimbSlope(bumpMul: Float = 0f, atSpeed: Float = 0f): Float =
-        surfaceMu(bumpMul, atSpeed) * driveShare
+        driveAxleMu(bumpMul, atSpeed) * driveShare
 
     /** Chladenie: bez chladiča kvapalina sama motor neutiahne. */
     val radiatorMul: Float
@@ -458,12 +555,22 @@ class Car {
             ?.coerceIn(0f, 1.2f)
             ?: 0f
 
-    /** Slabý alternátor neudrží batériu na 100 %, ani po dlhej jazde. */
+    /** Fyzický stav batérie = koľko kapacity ešte drží (karta v CAR). */
+    val batteryHoldCapacity: Float
+        get() = parts[ComponentSlot.BATTERY]?.health?.coerceIn(0f, 1f) ?: 0f
+
+    /**
+     * Max elektrické SoC pri nabíjaní: ~zdravie alternátora, navyše ohraničené
+     * kapacitou batérie. 56 % alternátor nedá 100 % nabitia.
+     */
     val batteryChargeCeiling: Float
         get() {
+            val hold = batteryHoldCapacity
+            if (hold <= 0.001f) return 0f
             val output = alternatorOutput
             if (output <= 0.005f) return 0f
-            return (0.45f + 0.55f * output.coerceIn(0f, 1f)).coerceIn(0f, 1f)
+            val altMax = (output + GameConfig.ALTERNATOR_SOC_SLACK).coerceIn(0f, 1f)
+            return minOf(hold, altMax)
         }
 
     val overallHealth: Float
@@ -535,7 +642,7 @@ class Car {
         coolantPurity = rng.nextFloat(0.45f, 0.95f)
 
         temperature = 40f
-        batteryCharge = if (hasPart(ComponentSlot.BATTERY)) rng.nextFloat(0.25f, 0.75f) else 0f
+        batteryCharge = seededBatteryCharge(rng)
         engineRunning = false
         wheelSpinDeg = 0f
         wheelSpinFrontDeg = 0f
@@ -571,10 +678,12 @@ class Car {
                 item.id,
                 ComponentCondition.NEW,
                 1f,
-                paintIndex = if (item.mountsTo?.group == "Body") {
+                paintIndex = if (item.mountsTo?.takesBodyPaint == true) {
                     slot.ordinal.mod(VehiclePaint.entries.size)
                 } else -1
             )
+            // Nová batéria z debugu nesmie ostať na 0 % SoC z vraku bez batérie.
+            if (slot == ComponentSlot.BATTERY) batteryCharge = 1f
         }
 
         if (debug.allComponents || debug.fullUpgrades) {
@@ -598,9 +707,19 @@ class Car {
             fuelDieselFraction = if (requiredFuelKind == FuelKind.DIESEL) 1f else 0f
             oilPurity = 1f
             coolantPurity = 1f
-            batteryCharge = 1f
+            batteryCharge = batteryHoldCapacity
             temperature = 40f
         }
+    }
+
+    /**
+     * SoC na štarte kopíruje zdravie batérie. Nový kus je plný; vrak nie je
+     * na nule, kým hráč batériu naozaj nevybije.
+     */
+    private fun seededBatteryCharge(rng: SeededRandom): Float {
+        val health = parts[ComponentSlot.BATTERY]?.health ?: return 0f
+        val lo = (health * 0.72f).coerceAtLeast(0.08f)
+        return rng.nextFloat(lo, health).coerceIn(0f, health)
     }
 
     /** Priviaže auto na vozovku (príprava, stop, teleport). */
@@ -608,8 +727,8 @@ class Car {
         val susMul = suspensionMul.coerceIn(0.35f, 1.4f)
         val spring = (GameConfig.SUSP_SPRING * susMul).coerceAtLeast(1f)
         val weight = physicsMass * GameConfig.AIR_GRAVITY
-        val rearSag = weight * rearWeightBias / spring
-        val frontSag = weight * (1f - rearWeightBias) / spring
+        val rearSag = weight * rearWeightBias / (spring * GameConfig.REAR_SPRING_MUL)
+        val frontSag = weight * (1f - rearWeightBias) / (spring * GameConfig.FRONT_SPRING_MUL)
         val wb = SedanSpec.wheelOffsetX.coerceAtLeast(0.25f)
         // Predný motor stlačí predné pružiny viac a auto aj v pokoji sedí
         // mierne nosom dolu. Náklad v kufri spraví presný opak.
@@ -757,14 +876,17 @@ class Car {
     fun mount(slot: ComponentSlot, stack: ItemStack): MountedPart? {
         if (!stack.def.canMountTo(slot)) return null
         val previous = parts[slot]
-        val paintIndex = if (stack.def.mountsTo?.group == "Body") stack.paintIndex else -1
+        val paintIndex = if (stack.def.mountsTo?.takesBodyPaint == true) stack.paintIndex else -1
         parts[slot] = if (stack.def.hasDurability) {
-            MountedPart(stack.defId, stack.condition, stack.health, paintIndex)
+            MountedPart(
+                stack.defId, stack.condition, stack.health, paintIndex,
+                injury = TireInjury.INFLATED
+            )
         } else {
             MountedPart(stack.defId, ComponentCondition.NEW, 1f, paintIndex)
         }
         if (slot == ComponentSlot.BATTERY) {
-            batteryCharge = maxOf(batteryCharge, (0.45f + 0.45f * stack.health).coerceAtMost(1f))
+            batteryCharge = stack.chargeOnMount()
         }
         return previous
     }
@@ -820,6 +942,10 @@ class Car {
         return removed
     }
 
+    /**
+     * Doplní opotrebenie dielu. Defekt ani ráfik tým nezmiznú —
+     * spľasnutú gumu treba záplatou, roztrhnutú výmenou.
+     */
     fun repair(slot: ComponentSlot, amount: Float = 0.25f) {
         val part = parts[slot] ?: return
         if (!part.def.hasDurability) return
@@ -907,21 +1033,24 @@ class Car {
         /** 0 = normálne počasie, 1 = mráz – batéria dáva menej. */
         cold: Float = 0f
     ): EndCause? {
+        val hold = batteryHoldCapacity
         val output = if (charging) alternatorOutput else 0f
         // V mraze batéria dáva menej a samovoľne sa vybíja rýchlejšie.
         val coldDrain = 1f + cold * GameConfig.COLD_BATTERY_DRAIN
+        if (hold <= 0.001f) {
+            batteryCharge = 0f
+            return null
+        }
         if (cold > 0.05f) {
             batteryCharge = (batteryCharge - GameConfig.COLD_BATTERY_DRAIN * 0.004f * cold * dt)
                 .coerceAtLeast(0f)
         }
         if (engineRunning) {
             // Najprv bežný odber auta. Až výkon, ktorý alternátoru zostane,
-            // ide do batérie; 4 % diel teda nemôže pomaly vyrobiť plných 100 %.
+            // ide do batérie; 50 % diel teda nemôže pomaly vyrobiť plných 100 %.
             var chargeRate = 0f
             var drainRate = GameConfig.RUNNING_ELECTRICAL_DRAIN * coldDrain
-            val ceiling = if (output > 0.005f) {
-                (0.45f + 0.55f * output.coerceIn(0f, 1f)).coerceIn(0f, 1f)
-            } else 0f
+            val ceiling = if (output > 0.005f) batteryChargeCeiling else 0f
             if (batteryCharge < ceiling) {
                 val room = ((ceiling - batteryCharge) / 0.18f).coerceIn(0.12f, 1f)
                 chargeRate = GameConfig.ALTERNATOR_CHARGE * output * room
@@ -932,9 +1061,13 @@ class Car {
                 } else {
                     GameConfig.HEADLIGHT_DRAIN_OFF
                 }
-                drainRate += drain * coldDrain * headlightDrainMultiplier.coerceAtLeast(1f)
+                drainRate += drain * coldDrain * headlightDrainMultiplier.coerceAtLeast(0f)
             }
-            batteryCharge = (batteryCharge + (chargeRate - drainRate) * dt).coerceIn(0f, 1f)
+            batteryCharge += (chargeRate - drainRate) * dt
+            if (ceiling > 0.005f && batteryCharge > ceiling) {
+                batteryCharge = maxOf(ceiling, batteryCharge - GameConfig.ALTERNATOR_CHARGE * dt)
+            }
+            batteryCharge = batteryCharge.coerceIn(0f, hold)
             if (headlightsOn && batteryCharge <= 0.001f) return EndCause.BATTERY_DEAD
             return null
         }
@@ -943,11 +1076,12 @@ class Car {
         if (headlightsOn) {
             batteryCharge = (
                 batteryCharge - GameConfig.HEADLIGHT_DRAIN_OFF * coldDrain *
-                    headlightDrainMultiplier.coerceAtLeast(1f) * dt
+                    headlightDrainMultiplier.coerceAtLeast(0f) * dt
                 )
                 .coerceAtLeast(0f)
             if (batteryCharge <= 0.001f) return EndCause.BATTERY_DEAD
         }
+        batteryCharge = batteryCharge.coerceIn(0f, hold)
         return null
     }
 
@@ -1090,7 +1224,9 @@ class Car {
         val g = GameConfig.AIR_GRAVITY
         val susMul = suspensionMul.coerceIn(0.35f, 1.4f)
         val springK = GameConfig.SUSP_SPRING * susMul
-        val dampC = GameConfig.SUSP_DAMPER * (0.55f + 0.45f * susMul)
+        val qualityDamp = 1f + GameConfig.SUSP_QUALITY_DAMP_BONUS *
+            (susMul - 0.9f).coerceAtLeast(0f)
+        val dampC = GameConfig.SUSP_DAMPER * (0.55f + 0.45f * susMul) * qualityDamp
         val ride = rideHeight
         val travel = suspTravel.coerceIn(0.2f, 0.75f)
         val highSpeedStability = MathX.smoothstep(24f, 38f, kotlin.math.abs(speed))
@@ -1120,7 +1256,7 @@ class Car {
         val rearRelVy = vy - wb * pitchRate * cosP - rearGroundVy
         val frontRelVy = vy + wb * pitchRate * cosP - frontGroundVy
 
-        fun axleForce(compRaw: Float, relVy: Float): Pair<Float, Float> {
+        fun axleForce(compRaw: Float, relVy: Float, springMul: Float): Pair<Float, Float> {
             val comp = compRaw.coerceIn(0f, travel)
             if (compRaw <= 0f) return 0f to 0f
             // Tlmiče majú high-speed blow-off. Bez neho veľký rozdiel sklonov
@@ -1129,17 +1265,18 @@ class Car {
                 -GameConfig.SUSP_DAMPER_VELOCITY_LIMIT,
                 GameConfig.SUSP_DAMPER_VELOCITY_LIMIT
             )
-            var n = springK * comp - dampC * dampVelocity
+            val axleSpring = springK * springMul
+            var n = axleSpring * comp - dampC * kotlin.math.sqrt(springMul) * dampVelocity
             // Bottom-out
             if (compRaw > travel) {
-                n += springK * 2.5f * (compRaw - travel)
+                n += axleSpring * 2.5f * (compRaw - travel)
             }
             val maxAxleForce = mass * g * GameConfig.SUSP_AXLE_FORCE_LIMIT
             return n.coerceIn(0f, maxAxleForce) to comp
         }
 
-        val (rearNRaw, rearC) = axleForce(rearTarget - rearBody, rearRelVy)
-        val (frontNRaw, frontC) = axleForce(frontTarget - frontBody, frontRelVy)
+        val (rearNRaw, rearC) = axleForce(rearTarget - rearBody, rearRelVy, GameConfig.REAR_SPRING_MUL)
+        val (frontNRaw, frontC) = axleForce(frontTarget - frontBody, frontRelVy, GameConfig.FRONT_SPRING_MUL)
         val rearN = rearNRaw * crestForceMul
         val frontN = frontNRaw * crestForceMul
         rearComp = rearC
@@ -1152,6 +1289,9 @@ class Car {
         val wasGrounded = grounded
         grounded = totalN > mass * g * 0.04f || rearC > 0.01f || frontC > 0.01f
         airborneFor = if (grounded) 0f else airborneFor + dt
+        val reverseRequested = engineRunning && fuel > 0f && brake > 0.05f &&
+            throttle < 0.05f && speed <= GameConfig.STOP_SPEED * 1.2f && grounded
+        val rearwardInput = brake * if (reverseRequested) GameConfig.REVERSE_ACCEL / GameConfig.ACCEL else 1f
 
         // Vertikálna dynamika + náklon. S rýchlosťou rastie iba jemný
         // aerodynamický prítlak, nie umelý limiter: auto môže ďalej zrýchľovať,
@@ -1168,11 +1308,17 @@ class Car {
         val cgGravityTorque = if (grounded) {
             -centerOfMassOffsetM * mass * g * kotlin.math.cos(pitch)
         } else 0f
-        val torque = (frontN - rearN) * wb + cgGravityTorque +
-            (if (grounded) (throttle - brake) * GameConfig.GROUND_PITCH_TORQUE else 0f) +
+        // Jedna náprava vo vzduchu by inak celým rozdielom síl preklopila nos.
+        val oneWheel = (rearC > 0.01f) != (frontC > 0.01f)
+        val axlePitchMul = if (oneWheel) GameConfig.ONE_WHEEL_PITCH_TORQUE else 1f
+        val torque = (frontN - rearN) * wb * axlePitchMul + cgGravityTorque +
+            (if (grounded) (throttle - rearwardInput) * GameConfig.GROUND_PITCH_TORQUE else 0f) +
             (if (!grounded) (throttle - brake) * GameConfig.AIR_PITCH_TORQUE else 0f)
         val pitchInertia = GameConfig.PITCH_INERTIA * (mass / GameConfig.CAR_MASS)
         pitchRate += (torque / pitchInertia.coerceAtLeast(0.5f)) * dt
+        if (!wasGrounded && grounded) {
+            pitchRate *= GameConfig.LANDING_PITCH_BLEED
+        }
         if (grounded) {
             // Slabšie lepenie na sklon → viditeľný squat/dive a náklon z pruženia.
             val targetPitch = kotlin.math.atan(slope)
@@ -1180,7 +1326,7 @@ class Car {
             val pitchDamping = 2.0f + GameConfig.HIGH_SPEED_PITCH_DAMPING * highSpeedStability
             pitchRate *= (1f - (pitchDamping * dt).coerceIn(0f, 0.7f))
         } else {
-            pitchRate *= (1f - (0.35f * dt).coerceIn(0f, 0.5f))
+            pitchRate *= (1f - (GameConfig.AIR_PITCH_DAMPING * dt).coerceIn(0f, 0.55f))
         }
         pitch = (pitch + pitchRate * dt).coerceIn(-1.1f, 1.1f)
 
@@ -1213,32 +1359,58 @@ class Car {
         val icy = winter || surface == RoadSurface.ICE || surface == RoadSurface.SLUSH
         // Na snehu rozhoduje zimná výbava, na suchu reťaze naopak prekážajú.
         val winterMul = if (icy) winterTraction.coerceIn(0.3f, 1.6f) else tarmacPenalty
-        val mu = surfaceMu(bumpMul, speed) * surface.gripMul *
+        val envMul = surface.gripMul *
             pavingGrip.coerceIn(0.5f, 1.1f) * winterMul
+        val frontMu = axleSurfaceMu(ComponentSlot.TIRE_FRONT, bumpMul, speed) * envMul
+        val rearMu = axleSurfaceMu(ComponentSlot.TIRE_REAR, bumpMul, speed) * envMul
         // Weight transfer: plyn odľahčí predok / naloží zadek (RWD grip).
         val fwd = driveLayout == DriveLayout.FWD
         val transferMul = if (fwd) GameConfig.FWD_TRANSFER_MUL else 1f
-        val transfer = (throttle - brake) * GameConfig.WEIGHT_TRANSFER * transferMul
+        // Cúvanie nesmie ísť ako brzdový dive – vyložený zadok na hrbolci
+        // RWD auto na mieste nechalo. Statické rozloženie + obe nápravy.
+        val transfer = if (reverseRequested) {
+            0f
+        } else {
+            (throttle - rearwardInput) * GameConfig.WEIGHT_TRANSFER * transferMul
+        }
         // Stúpanie tlačí váhu dozadu – RWD ide do kopca lepšie, FWD horšie,
         // ale nie tak, aby sa s FWD nedalo vyjsť nič.
         val slopeMul = if (fwd) GameConfig.FWD_SLOPE_MUL else 1f
-        val slopeShift = (sinT * GameConfig.SLOPE_TRANSFER * slopeMul).coerceIn(-0.20f, 0.20f)
+        val slopeShift = if (reverseRequested) {
+            (sinT * GameConfig.SLOPE_TRANSFER * slopeMul * 0.35f).coerceIn(-0.08f, 0.08f)
+        } else {
+            (sinT * GameConfig.SLOPE_TRANSFER * slopeMul).coerceIn(-0.20f, 0.20f)
+        }
         val staticRear = rearWeightBias
         val rearShare = (staticRear + transfer + slopeShift).coerceIn(0.22f, 0.82f)
         val frontShare = 1f - rearShare
         // Koľko normálovej sily môže prenášať ťah podľa pohonu.
-        val driveNormal = if (!grounded) {
+        val maxDriveF = if (!grounded) {
             0f
+        } else if (reverseRequested) {
+            (frontMu * totalN * frontShare + rearMu * totalN * rearShare) *
+                GameConfig.REVERSE_DRIVE_GRIP
         } else {
             when (driveLayout) {
-                DriveLayout.AWD -> totalN * 0.95f
-                DriveLayout.FWD -> totalN * frontShare
-                DriveLayout.RWD -> totalN * rearShare
+                DriveLayout.AWD ->
+                    (frontMu * totalN * frontShare + rearMu * totalN * rearShare) * 0.95f
+                DriveLayout.FWD -> frontMu * totalN * frontShare
+                DriveLayout.RWD -> rearMu * totalN * rearShare
             }
         }
-        val brakeNormal = if (grounded) totalN else 0f
-        val maxDriveF = mu * driveNormal
-        val maxBrakeF = mu * brakeNormal * brakeMul.coerceIn(0.4f, 1.4f)
+        val maxBrakeF = if (grounded) {
+            (frontMu * frontN + rearMu * rearN) * brakeMul.coerceIn(0.4f, 1.4f)
+        } else 0f
+        val rimBlend = drivenRimBlend()
+        val overdrive = MathX.lerp(
+            GameConfig.GRIP_OVERDRIVE, GameConfig.RIM_GRIP_OVERDRIVE, rimBlend
+        )
+        val tractionSlack = MathX.lerp(
+            GameConfig.TRACTION_SLACK, GameConfig.RIM_TRACTION_SLACK, rimBlend
+        )
+        val slipSpin = MathX.lerp(
+            GameConfig.SLIP_SPIN_BONUS, GameConfig.RIM_SLIP_SPIN_BONUS, rimBlend
+        )
 
         // Široký rozsah dovolí, aby bol rozdiel medzi základným motorom a
         // najsilnejšou verziou cítiť aj po rozbehu, nielen pri štarte.
@@ -1260,16 +1432,22 @@ class Car {
             // sa sila násobila aktuálnou hmotnosťou a náklad by bol zadarmo.
             driveDemand = GameConfig.ACCEL * powerFactor * throttle * launch * referenceMass * ease
         }
-        if (brake > 0.05f && throttle < 0.05f && speed <= GameConfig.STOP_SPEED * 1.2f && grounded) {
+        if (reverseRequested) {
             reversing = true
-            driveDemand = -GameConfig.REVERSE_ACCEL * brake * brakeMul * referenceMass
+            val reversePower = powerFactor.coerceIn(0.65f, 1.35f)
+            val reverseLaunch = 1f + 0.22f * (1f - (kotlin.math.abs(speed) / 6f).coerceIn(0f, 1f))
+            val demand = GameConfig.REVERSE_ACCEL * brake * reversePower * reverseLaunch * referenceMass
+            // Meter the reverse gear on firm ground. Poor tyres still limit
+            // acceleration, while mud, ice and sand can genuinely spin them.
+            val firmRoad = surface == RoadSurface.ASPHALT && pavingGrip >= 0.9f && !winter
+            driveDemand = -if (firmRoad) minOf(demand, maxDriveF * 0.96f) else demand
         } else if (brake > 0.05f && brake >= throttle) {
             brakeDemand = GameConfig.BRAKE * brake * mass
         }
 
         // Gravitácia pozdĺž trate + odpor
         val gradeForce = -mass * g * sinT
-        val rollDrag = surface.rollDrag *
+        val rollDrag = (surface.rollDrag + tireInjuryDrag) *
             (0.35f + 0.65f * (kotlin.math.abs(speed) / GameConfig.MAX_SPEED).coerceIn(0f, 1f))
         val drag = -kotlin.math.sign(speed) * (
             (GameConfig.COAST_DRAG + rollDrag) * mass *
@@ -1294,10 +1472,10 @@ class Car {
         } else if (reversing) {
             val f = driveDemand.coerceIn(-maxDriveF, maxDriveF)
             longForce += f
-            wheelSpeed = MathX.damp(wheelSpeed, speed, GameConfig.WHEEL_RESP, dt)
-            slipTarget = if (maxDriveF < 0.01f) throttle else
-                ((kotlin.math.abs(driveDemand) - maxDriveF) / (kotlin.math.abs(driveDemand) + 1f))
-                    .coerceIn(0f, 1f)
+            val ratio = if (maxDriveF < 0.01f) 99f else kotlin.math.abs(driveDemand) / maxDriveF
+            slipTarget = ((ratio - tractionSlack) / 2.2f).coerceIn(0f, 1f)
+            wheelSpeed = MathX.damp(wheelSpeed,
+                speed - slipTarget * slipSpin, GameConfig.WHEEL_RESP, dt)
         } else if (brakeDemand > 0.05f) {
             val brakeF = brakeDemand.coerceAtMost(maxBrakeF)
             if (speed > 0f) longForce -= brakeF
@@ -1316,14 +1494,14 @@ class Car {
             // úplný – zlomok prebytku sa na cestu dostane. Tvrdý orez robil
             // z motora kulisu: nad hranicou gripu boli slabé aj silné motory rovnaké.
             val traction = if (driveDemand <= maxDriveF) driveDemand
-            else maxDriveF + (driveDemand - maxDriveF) * GameConfig.GRIP_OVERDRIVE
+            else maxDriveF + (driveDemand - maxDriveF) * overdrive
             longForce += traction
             // Preklz meriame pomerom „koľko ťahu vs. koľko gumy unesú“.
             // Do TRACTION_SLACK sa auto ešte chytí (vodič dávkuje plyn),
             // nad tým sa začne pretáčať – a na bahne to príde skôr než na asfalte.
             val ratio = if (maxDriveF < 0.01f) 99f else driveDemand / maxDriveF
-            slipTarget = ((ratio - GameConfig.TRACTION_SLACK) / 2.2f).coerceIn(0f, 1f)
-            val spin = speed + slipTarget * GameConfig.SLIP_SPIN_BONUS
+            slipTarget = ((ratio - tractionSlack) / 2.2f).coerceIn(0f, 1f)
+            val spin = speed + slipTarget * slipSpin
             wheelSpeed = MathX.damp(wheelSpeed, spin, GameConfig.WHEEL_RESP, dt)
         } else {
             wheelSpeed = MathX.damp(wheelSpeed, speed, GameConfig.WHEEL_RESP, dt)
@@ -1337,8 +1515,12 @@ class Car {
         // Poškodená guma a reťaze kladú rastúci odpor, ale rýchlosť nikdy tvrdo
         // neorežú. Z kopca sa tak dá prirodzene zrýchliť bez viditeľného snapu.
         val equipmentSpeed = when {
-            hasBlownTyre && hasChains -> minOf(GameConfig.BLOWN_TYRE_MAX_SPEED, GameConfig.CHAINS_MAX_SPEED)
-            hasBlownTyre -> GameConfig.BLOWN_TYRE_MAX_SPEED
+            hasShreddedTyre && hasChains ->
+                minOf(GameConfig.BLOWN_TYRE_MAX_SPEED, GameConfig.CHAINS_MAX_SPEED)
+            hasShreddedTyre -> GameConfig.BLOWN_TYRE_MAX_SPEED
+            hasPuncturedTyre && hasChains ->
+                minOf(GameConfig.BLOWN_TYRE_MAX_SPEED * 1.65f, GameConfig.CHAINS_MAX_SPEED)
+            hasPuncturedTyre -> GameConfig.BLOWN_TYRE_MAX_SPEED * 1.65f
             hasChains -> GameConfig.CHAINS_MAX_SPEED
             else -> Float.POSITIVE_INFINITY
         }
@@ -1368,7 +1550,7 @@ class Car {
                 DriveLayout.FWD -> rolling
             }
             fun spin(prev: Float, surfaceSpeed: Float, slot: ComponentSlot): Float {
-                val r = SedanSpec.wheelRadius * wheelScale(slot)
+                val r = SedanSpec.wheelRadius * wheelContactScale(slot)
                 if (r < 0.01f) return prev
                 val deg = Math.toDegrees((surfaceSpeed * dt / r).toDouble()).toFloat()
                 return (prev + deg) % 360f
@@ -1407,6 +1589,9 @@ private val ESSENTIAL_SLOTS = listOf(
     ComponentSlot.BATTERY,
     ComponentSlot.STARTER
 )
+
+/** Disk voči vonkajšiemu polomeru nafúknutej gumy – kresba aj pokles pri SHREDDED. */
+const val WHEEL_HUB_FRAC = 0.61f
 
 enum class EndCause {
     OUT_OF_FUEL, ENGINE_DESTROYED, OVERHEAT, BATTERY_DEAD

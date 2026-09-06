@@ -13,6 +13,7 @@ import sk.kubis.endlessdrive.domain.model.ItemStack
 import sk.kubis.endlessdrive.domain.model.FuelKind
 import sk.kubis.endlessdrive.game.GameEngine
 import sk.kubis.endlessdrive.game.car.MountedPart
+import sk.kubis.endlessdrive.game.car.TireInjury
 import sk.kubis.endlessdrive.game.save.RunCodec
 
 class RunSaveTest {
@@ -49,6 +50,12 @@ class RunSaveTest {
             ComponentSlot.DOOR_FRONT,
             ItemStack(ItemCatalog.DOOR_FRONT.id, paintIndex = 3)
         )
+        engine.car.mount(
+            ComponentSlot.HEADLIGHT,
+            ItemStack(ItemCatalog.HEADLIGHT.id)
+        )
+        // Starší save mohol svetlometu priradiť lak ako dverám.
+        engine.car.parts[ComponentSlot.HEADLIGHT]?.paintIndex = 2
         engine.segment.buildings.first().apply {
             pumpFuelL = 4.5f
             pumpDieselL = 7.25f
@@ -74,6 +81,7 @@ class RunSaveTest {
         assertEquals(engine.car.fuelDieselFraction, restored.car.fuelDieselFraction, 0.001f)
         assertEquals(engine.car.bodyPaintIndex, restored.car.bodyPaintIndex)
         assertEquals(3, restored.car.parts[ComponentSlot.DOOR_FRONT]?.paintIndex)
+        assertEquals(-1, restored.car.parts[ComponentSlot.HEADLIGHT]?.paintIndex)
         assertEquals(engine.car.x, restored.car.x, 0.01f)
         assertEquals(engine.car.parts.size, restored.car.parts.size)
         assertEquals(-1, restored.car.parts[ComponentSlot.ROOF_RACK]?.paintIndex)
@@ -92,6 +100,16 @@ class RunSaveTest {
             restored.segment.heightAtWorld(restored.car.x),
             0.001f
         )
+    }
+
+    @Test
+    fun tyreInjurySurvivesRoundTrip() {
+        val engine = playedRun(91L)
+        engine.car.parts[ComponentSlot.TIRE_FRONT]!!.injury = TireInjury.PUNCTURED
+        engine.car.parts[ComponentSlot.TIRE_REAR]!!.injury = TireInjury.SHREDDED
+        val restored = GameEngine.restore(RunCodec.decode(RunCodec.encode(engine.snapshot()))!!, 0f)
+        assertEquals(TireInjury.PUNCTURED, restored.car.tireInjury(ComponentSlot.TIRE_FRONT))
+        assertEquals(TireInjury.SHREDDED, restored.car.tireInjury(ComponentSlot.TIRE_REAR))
     }
 
     @Test

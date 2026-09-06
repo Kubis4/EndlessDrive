@@ -56,6 +56,8 @@ data class ItemDef(
     /** Úložné upgrady sú trvalá kapacita, nie mechanické diely na opotrebenie. */
     val hasDurability: Boolean get() = extraSlots <= 0
 
+    val isPunctureKit: Boolean get() = id == "puncture_kit"
+
     /** Sloty, do ktorých sa dá namontovať (1 alebo 2 pre pneumatiky). */
     fun mountTargets(): List<ComponentSlot> = when {
         axleTire -> TIRE_SLOTS
@@ -80,6 +82,14 @@ object ItemCatalog {
     val OIL_BOTTLE = ItemDef(
         id = "oil", name = "Engine oil", rarity = ItemRarity.COMMON,
         weight = 2f, fluid = FluidType.OIL, fluidAmount = 2f, baseValue = 12
+    )
+    /**
+     * Záplata na defekt: spľasnutú gumu nafúkne, opotrebenie nerieši.
+     * Roztrhnutú (ráfik) ňou nespravíš — treba novú pneumatiku.
+     */
+    val PUNCTURE_KIT = ItemDef(
+        id = "puncture_kit", name = "Puncture kit", rarity = ItemRarity.COMMON,
+        weight = 1f, baseValue = 16
     )
     /**
      * Voda: núdzové riešenie do chladiča. Doplní objem, ale zriedi čistotu
@@ -269,6 +279,11 @@ object ItemCatalog {
         extraSlots = 5, extraWeight = 40f, dragAdd = 0.35f, baseValue = 60
     )
 
+    /** Optional visual expedition kit, mounted and saved like any other roof rack. */
+    val EXPEDITION_RACK = ROOF_RACK.copy(
+        id = "roof_rack_expedition", name = "Expedition kit", weight = 19f, baseValue = 95
+    )
+
     val DOOR_FRONT = ItemDef(
         id = "door_front", name = "Front door", rarity = ItemRarity.COMMON,
         weight = 12f, mountsTo = ComponentSlot.DOOR_FRONT, reliability = 1f, baseValue = 22
@@ -313,11 +328,18 @@ object ItemCatalog {
         id = "taillight", name = "Tail light", rarity = ItemRarity.COMMON,
         weight = 3f, mountsTo = ComponentSlot.TAILLIGHT, reliability = 1f, baseValue = 22
     )
+    /**
+     * Hromádka šrotu. Pri zdvihnutí ide rovno do scrapu, nie do batoha.
+     */
+    val SCRAP_PILE = ItemDef(
+        id = "scrap_pile", name = "Scrap", rarity = ItemRarity.COMMON,
+        weight = 2f, baseValue = 12
+    )
 
     val ALL = listOf(
-        FUEL_CAN, DIESEL_CAN, OIL_BOTTLE, COOLANT_BOTTLE, WATER,
+        FUEL_CAN, DIESEL_CAN, OIL_BOTTLE, PUNCTURE_KIT, COOLANT_BOTTLE, WATER,
         TIRE_POOR, TIRE, TIRE_SPORT, TIRE_OFFROAD, TIRE_WINTER, SNOW_CHAINS,
-        BACKPACK, BOOT_CRATE, ROOF_RACK,
+        BACKPACK, BOOT_CRATE, ROOF_RACK, EXPEDITION_RACK,
         BATTERY, BATTERY_GOOD,
         ENGINE_A, ENGINE_B, ENGINE_C, ENGINE_D, ENGINE_E,
         RADIATOR, RADIATOR_GOOD, RADIATOR_HD,
@@ -327,7 +349,8 @@ object ItemCatalog {
         SUSPENSION, SUSPENSION_LOW, SUSPENSION_GOOD, SUSPENSION_LIFT,
         DRIVE_RWD, DRIVE_FWD, DRIVE_AWD,
         DOOR_FRONT, DOOR_REAR, HOOD, FRONT_BUMPER, REAR_BUMPER,
-        TRUNK_LID, HEADLIGHT, TAILLIGHT, SEAT_FRONT, SEAT_REAR
+        TRUNK_LID, HEADLIGHT, TAILLIGHT, SEAT_FRONT, SEAT_REAR,
+        SCRAP_PILE
     )
 
     fun byId(id: String): ItemDef? = ALL.find { it.id == id }
@@ -352,10 +375,24 @@ data class ItemStack(
     /** Podiel dieselu v palive, ktoré zostalo vo vymontovanej nádrži. */
     var heldDieselFraction: Float = 0f,
     /** Farba konkrétneho nájdeného plechu; -1 = starý/nefarbený predmet. */
-    var paintIndex: Int = -1
+    var paintIndex: Int = -1,
+    /**
+     * Elektrické SoC vymontovanej batérie. -1 = nový/loot kus – pri montáži
+     * sa nabije na zdravie. 0 je platná prázdna batéria, nie „nezadané“.
+     */
+    var heldCharge: Float = -1f
 ) {
     val def: ItemDef get() = ItemCatalog.byId(defId) ?: ItemCatalog.FUEL_CAN
     val grade: FluidGrade get() = FluidGrade.of(purity)
+
+    /**
+     * SoC, ktoré má dostať auto pri montáži tejto batérie. Loot/nový kus
+     * (heldCharge < 0) ide nabitý na zdravie; vymontovaný si drží zostatok.
+     */
+    fun chargeOnMount(): Float {
+        val cap = health.coerceIn(0f, 1f)
+        return if (heldCharge >= 0f) heldCharge.coerceIn(0f, cap) else cap
+    }
 
     /**
      * Koľko kvapaliny v nádobe naozaj je.

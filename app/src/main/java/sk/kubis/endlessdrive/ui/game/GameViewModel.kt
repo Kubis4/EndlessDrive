@@ -17,6 +17,7 @@ import sk.kubis.endlessdrive.domain.model.ComponentSlot
 import sk.kubis.endlessdrive.domain.model.FluidType
 import sk.kubis.endlessdrive.domain.model.FuelKind
 import sk.kubis.endlessdrive.domain.model.GamePhase
+import sk.kubis.endlessdrive.domain.model.ThrottleMode
 import sk.kubis.endlessdrive.domain.repository.PlayerRepository
 import sk.kubis.endlessdrive.game.GameEngine
 import sk.kubis.endlessdrive.game.save.RunCodec
@@ -34,6 +35,9 @@ class GameViewModel(
      */
     var debugOptions: DebugOptions = DebugOptions.OFF
 
+    /** Schéma plynu z nastavení – mení sa hneď, aj uprostred jazdy. */
+    var throttleMode: ThrottleMode = ThrottleMode.BINARY
+
     private var engine: GameEngine by mutableStateOf(
         GameEngine(Random.nextLong(), bestDistanceKm)
     )
@@ -42,12 +46,16 @@ class GameViewModel(
     private var hudTimer = 0f
     private var pausedByLifecycle = false
     private var pausedByUser = false
+    /** CAR / PACK – herný čas aj odber batérie stoja. */
+    private var garageOpen = false
     private var bagRevision = 0
 
     // Kĺzavý priemer snímkovej frekvencie pre HUD.
     private var fpsAccum = 0f
     private var fpsFrames = 0
     private var fps = 0
+    /** Pri státí sa scéna šetrí, ale slnko musí ísť ďalej – nie skok s minútou HUD. */
+    private var idleCelestialAge = 0f
 
     /** Invalidácia Canvasu – čítať len vnútri Canvas. */
     var frame by mutableIntStateOf(0)
@@ -58,6 +66,7 @@ class GameViewModel(
 
     private var gasPressed = false
     private var brakePressed = false
+    private var throttleHeld = 0f
     private var throttle = 0f
     private var brake = 0f
 
@@ -103,7 +112,12 @@ class GameViewModel(
     }
 
     fun onGasChanged(pressed: Boolean) {
-        gasPressed = pressed
+        onThrottle(if (pressed) 1f else 0f)
+    }
+
+    fun onThrottle(amount: Float) {
+        throttleHeld = amount.coerceIn(0f, 1f)
+        gasPressed = throttleHeld > 0.02f
     }
 
     fun onBrakeChanged(pressed: Boolean) {
@@ -114,6 +128,7 @@ class GameViewModel(
         pausedByLifecycle = true
         gasPressed = false
         brakePressed = false
+        throttleHeld = 0f
         throttle = 0f
         brake = 0f
         engine.throttleInput = 0f
@@ -133,6 +148,7 @@ class GameViewModel(
         if (value) {
             gasPressed = false
             brakePressed = false
+            throttleHeld = 0f
             throttle = 0f
             brake = 0f
             engine.throttleInput = 0f
@@ -141,9 +157,18 @@ class GameViewModel(
         publishUi(force = true)
     }
 
+    /**
+     * Panel CAR alebo PACK. Svetlá nesmú v jednom otvorení vybiť SoC –
+     * odber ide len kým beží herný čas (jazda / státie vo svete).
+     */
+    fun setGarageOpen(open: Boolean) {
+        garageOpen = open
+        engine.timeHeldByMenu = open
+    }
+
     fun onFrame(dt: Float, screenHeightPx: Float) {
         trackFps(dt)
-        if (pausedByLifecycle || pausedByUser) {
+        if (pausedByLifecycle || pausedByUser || garageOpen) {
             frame++
             return
         }
@@ -156,7 +181,12 @@ class GameViewModel(
             return
         }
 
-        throttle = MathX.damp(throttle, if (gasPressed) 1f else 0f, 12f, dt)
+        throttle = MathX.damp(
+            throttle,
+            throttleHeld,
+            if (throttleMode == ThrottleMode.SLIDE) 18f else 12f,
+            dt
+        )
         brake = MathX.damp(brake, if (brakePressed) 1f else 0f, 14f, dt)
 
         val driving = engine.phase == GamePhase.DRIVING
@@ -169,7 +199,10 @@ class GameViewModel(
         val moving = driving || engine.car.speed > 0.05f ||
             engine.phase == GamePhase.JUNCTION ||
             engine.phase == GamePhase.GAME_OVER
-        if (moving || frame == 0) {
+        idleCelestialAge += dt
+        val idleCelestial = !moving && idleCelestialAge >= 1f / 12f
+        if (moving || idleCelestial) idleCelestialAge = 0f
+        if (moving || frame == 0 || idleCelestial) {
             frame++
         }
         publishUi(dt)
@@ -240,6 +273,8 @@ class GameViewModel(
             engineRunning = e.car.engineRunning,
             headlightsOn = e.headlightsOn,
             highBeamsOn = e.highBeamsOn,
+            hasExpeditionKit = e.hasExpeditionKit,
+            roofLightsOn = e.roofLightsOn,
             isNight = e.isNight,
             clock = e.clock,
             hasNearbyBuilding = e.buildingNear() != null,
@@ -260,8 +295,37 @@ class GameViewModel(
             fittedSuspension = e.car.fittedHudLabel(ComponentSlot.SUSPENSION),
             parts = partStatuses(e),
             wearWarning = e.car.wearCause?.takeIf { e.car.wearRate > 0.0008f }?.warning,
-            bagRevision = bagRevision
+            bagRevision = bagRevision,
+            partsRevision = partsRevision(e),
+            frontTireInjury = e.car.tireInjury(ComponentSlot.TIRE_FRONT),
+            rearTireInjury = e.car.tireInjury(ComponentSlot.TIRE_REAR),
+            frontTireHealth = e.car.parts[ComponentSlot.TIRE_FRONT]?.health ?: 0f,
+            rearTireHealth = e.car.parts[ComponentSlot.TIRE_REAR]?.health ?: 0f
         )
+    }
+
+    /** Stabilný kľúč pre Compose – nie referencia na mutovaný MountedPart. */
+    private fun partsRevision(e: GameEngine): Int {
+        var h = 17
+        h = 31 * h + e.scrap
+        h = 31 * h + e.punctureKitCount()
+        h = 31 * h + if (e.car.engineRunning) 1 else 0
+        h = 31 * h + e.phase.ordinal
+        h = 31 * h + e.car.overallHealth.toRawBits()
+        for (slot in ComponentSlot.entries) {
+            val part = e.car.parts[slot]
+            h = 31 * h + slot.ordinal
+            if (part == null) {
+                h = 31 * h + 13
+                continue
+            }
+            h = 31 * h + part.defId.hashCode()
+            h = 31 * h + part.health.toRawBits()
+            h = 31 * h + part.injury.ordinal
+            h = 31 * h + part.condition.ordinal
+            h = 31 * h + part.paintIndex
+        }
+        return h
     }
 
     /**
@@ -321,6 +385,7 @@ class GameViewModel(
     fun stop() {
         gasPressed = false
         brakePressed = false
+        throttleHeld = 0f
         throttle = 0f
         brake = 0f
         engine.requestStop()
@@ -389,11 +454,18 @@ class GameViewModel(
     }
 
     fun repairWithScrap(slot: ComponentSlot) {
-        if (engine.repairWithScrap(slot)) bumpBag() else bump()
+        engine.repairWithScrap(slot)
+        bumpBag()
+    }
+
+    fun repairPuncture(slot: ComponentSlot) {
+        engine.repairPuncture(slot)
+        bumpBag()
     }
 
     fun upgradeWithScrap(slot: ComponentSlot) {
-        if (engine.upgradeWithScrap(slot)) bumpBag() else bump()
+        engine.upgradeWithScrap(slot)
+        bumpBag()
     }
 
     fun drainFluid(fluid: FluidType, litres: Float? = null) {
@@ -418,6 +490,11 @@ class GameViewModel(
 
     fun restUntilDawn() {
         engine.restUntilDawn()
+        bump()
+    }
+
+    fun toggleRoofLights() {
+        engine.toggleRoofLights()
         bump()
     }
 
@@ -449,6 +526,7 @@ class GameViewModel(
     fun chooseBranch(id: Int) {
         gasPressed = false
         brakePressed = false
+        throttleHeld = 0f
         throttle = 0f
         brake = 0f
         engine.chooseBranch(id)
@@ -487,12 +565,15 @@ class GameViewModel(
         recorded = false
         gasPressed = false
         brakePressed = false
+        throttleHeld = 0f
         throttle = 0f
         brake = 0f
         pausedByLifecycle = false
         pausedByUser = false
+        garageOpen = false
         engine = GameEngine(Random.nextLong(), bestKm, debugOptions)
         hudTimer = 0f
+        idleCelestialAge = 0f
         bump()
     }
 

@@ -81,3 +81,45 @@ dependencies {
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
+
+// Merger zahodí android:tag="". Po merge preto vložím literál "", aby
+// PackageParser videl prázdny tag (AppOps), nie @string referenciu.
+fun rewriteEmptyAttributionTag(file: File) {
+    if (!file.isFile || file.name != "AndroidManifest.xml") return
+    val original = file.readText()
+    val updated = original.replace(
+        """android:tag="@string/empty_attribution_tag"""",
+        """android:tag="""""
+    )
+    if (updated != original) file.writeText(updated)
+}
+
+fun rewriteEmptyAttributionTagTree(root: File) {
+    if (!root.exists()) return
+    if (root.isFile) {
+        rewriteEmptyAttributionTag(root)
+        return
+    }
+    root.walkTopDown().forEach { rewriteEmptyAttributionTag(it) }
+}
+
+fun rewriteMergedAttributionManifests() {
+    val intermediates = layout.buildDirectory.dir("intermediates").get().asFile
+    listOf("merged_manifest", "merged_manifests", "packaged_manifests").forEach { dir ->
+        rewriteEmptyAttributionTagTree(intermediates.resolve(dir))
+    }
+}
+
+tasks.configureEach {
+    val taskName = name
+    if (taskName.startsWith("process") && taskName.contains("Manifest")) {
+        doLast { rewriteMergedAttributionManifests() }
+    }
+}
+
+tasks.configureEach {
+    val taskName = name
+    if (taskName.startsWith("process") && taskName.endsWith("Resources") && !taskName.contains("Test")) {
+        doFirst { rewriteMergedAttributionManifests() }
+    }
+}

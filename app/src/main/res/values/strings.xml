@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@string/empty_attribution_tag,@string/audio_attribution_label">
     <string name="app_name">Endless Drive</string>
+    <!--
+         Nesmie byť self-closing: aapt2 vie prázdny <string /> skončiť ako @null,
+         a AppOps potom tag "" v manifeste nevidí.
+    -->
+    <string name="empty_attribution_tag" translatable="false"></string>
+    <string name="audio_attribution_label">Game audio</string>
 </resources>

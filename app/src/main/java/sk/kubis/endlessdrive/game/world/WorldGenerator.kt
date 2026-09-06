@@ -19,8 +19,8 @@ object WorldGenerator {
     private const val START_STYLE_SALT = 0x4D595DF4D0F33173L
 
     /**
-     * Bezpečný, ale nie zakaždým rovnaký začiatok. Zima, púšť a búrky ostávajú
-     * na neskôr; tutoriál môže začať na vidieku, v živom alebo mŕtvom lese.
+     * Bezpečný, ale nie zakaždým rovnaký začiatok. Sneh ostáva na neskôr;
+     * tutoriál môže začať na vidieku, v priemysle, na púšti aj v lese.
      */
     fun startingStyle(worldSeed: Long): BranchStyle = SeededRandom(
         worldSeed xor START_STYLE_SALT
@@ -28,6 +28,10 @@ object WorldGenerator {
         listOf(
             BranchStyle.SAFE_RURAL,
             BranchStyle.SAFE_RURAL,
+            BranchStyle.INDUSTRIAL,
+            BranchStyle.INDUSTRIAL,
+            BranchStyle.DESERT,
+            BranchStyle.SHORTCUT_RISK,
             BranchStyle.FOREST_ALIVE,
             BranchStyle.FOREST
         )
@@ -61,14 +65,19 @@ object WorldGenerator {
         val density = style.buildingDensity
         val roll = rng.nextFloat()
         val room = (length / GameConfig.BUILDING_MIN_SPACING).toInt().coerceAtLeast(1)
+        val minCount = when {
+            isTutorial -> 2
+            density >= 0.7f -> 3
+            density >= 0.45f -> 2
+            else -> 1
+        }
         val buildingCount = when {
             isTutorial -> 2
-            roll < 0.06f * (1.35f - density) -> 0
-            roll < 0.28f -> 1
-            roll < 0.55f -> 2
-            roll < 0.78f -> 3
-            roll < 0.92f -> 4
-            else -> 5
+            roll < 0.16f -> minCount
+            roll < 0.38f -> minCount + 1
+            roll < 0.64f -> minCount + 2
+            roll < 0.86f -> minCount + 3
+            else -> minCount + 4
         }.coerceAtMost(room)
         return SegmentPlan(
             seed = segmentSeed,
@@ -177,6 +186,7 @@ object WorldGenerator {
         } else {
             placeBuildings(rng, plan, segment, tripDistance)
         }
+        placeRoadsideWrecks(rng, plan, segment, tripDistance, isTutorial)
         return segment
     }
 
@@ -377,24 +387,36 @@ object WorldGenerator {
         repeat(count) {
             val gap = 70f + rng.nextFloat() * 190f
             val start = cursor + gap
-            val len = 7f + rng.nextFloat() * 18f
-            cursor = start + len
-            if (cursor > usableEnd) return
             val sec = segment.sectionAtLocal(start)?.feature
+            val standingAtStart = sec == RoadFeature.RAVINE || sec == RoadFeature.STRAIGHT
+            var surface = pickSurface(rng, plan.style, sec, plan.paving.winter, standingAtStart)
+            val len = surfacePatchLength(rng, surface)
+            val end = start + len
+            cursor = end
+            if (end > usableEnd) return
             // Most je holá lávka a na skoku by naplavenina bola len nefér.
-            // Testovať treba celú dĺžku, nie len začiatok: mláka dlhá 7–25 m
-            // začínala pred mostom a tiekla ďalej po mostovke.
-            if (spansFeature(segment, start, cursor, RoadFeature.BRIDGE)) return@repeat
-            if (spansFeature(segment, start, cursor, RoadFeature.CREST)) return@repeat
+            // Testovať treba celú dĺžku, nie len začiatok: dlhý nános môže
+            // začať pred mostom a pokračovať ďalej po mostovke.
+            if (spansFeature(segment, start, end, RoadFeature.BRIDGE)) return@repeat
+            if (spansFeature(segment, start, end, RoadFeature.CREST)) return@repeat
             // Voda musí byť v rovine po celej dĺžke – mláka, ktorej druhý
             // koniec vybieha do kopca, by stiekla.
             val standing = segment.sections
-                .filter { it.start < cursor && it.end > start }
+                .filter { it.start < end && it.end > start }
                 .all { it.feature == RoadFeature.RAVINE || it.feature == RoadFeature.STRAIGHT }
-            segment.patches += SurfacePatch(
-                pickSurface(rng, plan.style, sec, plan.paving.winter, standing), start, cursor
-            )
+            if (surface == RoadSurface.WATER && !standing) surface = RoadSurface.MUD
+            segment.patches += SurfacePatch(surface, start, end)
         }
+    }
+
+    /** Dlhé úseky sú čitateľné vopred a ich rozdiel v trakcii hráč aj pocíti. */
+    private fun surfacePatchLength(rng: SeededRandom, surface: RoadSurface): Float = when (surface) {
+        RoadSurface.SAND -> rng.nextFloat(36f, 74f)
+        RoadSurface.MUD -> rng.nextFloat(32f, 66f)
+        RoadSurface.ICE, RoadSurface.SLUSH -> rng.nextFloat(28f, 58f)
+        RoadSurface.GRAVEL -> rng.nextFloat(24f, 54f)
+        RoadSurface.WATER -> rng.nextFloat(32f, 48f)
+        RoadSurface.ASPHALT -> rng.nextFloat(24f, 48f)
     }
 
     /** Zasahuje úsek [from]–[to] niekde do sekcie s daným prvkom? */
@@ -495,6 +517,48 @@ object WorldGenerator {
     }
 
     /**
+     * Odstavené autá pri ceste. Je ich málo a nie v každom regióne – scrap
+     * pri nich má byť nález, nie istota.
+     */
+    private fun placeRoadsideWrecks(
+        rng: SeededRandom,
+        plan: SegmentPlan,
+        segment: RoadSegment,
+        tripDistance: Float,
+        isTutorial: Boolean
+    ) {
+        if (isTutorial) return
+        val count = when {
+            rng.chance(0.08f) -> 2
+            rng.chance(0.28f) -> 1
+            else -> 0
+        }
+        if (count <= 0) return
+        val usableEnd = plan.length - GameConfig.JUNCTION_ZONE - 40f
+        val minStart = GameConfig.BUILDING_MIN_GAP_FROM_START
+        if (usableEnd <= minStart + 20f) return
+        var cursor = minStart + rng.nextFloat() * 80f
+        repeat(count) {
+            val windowEnd = (usableEnd - (count - 1) * GameConfig.BUILDING_MIN_SPACING)
+                .coerceAtLeast(cursor + 1f)
+            val lx = flattestLocalX(segment, cursor, windowEnd)
+            if (lx.isNaN()) {
+                cursor = windowEnd
+                return@repeat
+            }
+            val occupied = segment.buildings.any {
+                kotlin.math.abs(it.localX - lx) < GameConfig.BUILDING_MIN_SPACING * 0.55f
+            }
+            if (!occupied) {
+                segment.buildings += makeBuilding(
+                    rng, BuildingType.WRECK, lx, tripDistance, plan.style
+                )
+            }
+            cursor = lx + GameConfig.BUILDING_MIN_SPACING
+        }
+    }
+
+    /**
      * Depo na každých [GameConfig.LANDMARK_SPACING] metrov. Je isté, má palivo
      * aj diely a dáva jazde rytmus – hráč má stále kam mieriť.
      */
@@ -569,6 +633,14 @@ object WorldGenerator {
                 purity = rng.nextFloat(0.9f, 1f)
             )
         )
+        depot.loot.add(
+            ItemStack(
+                defId = ItemCatalog.PUNCTURE_KIT.id,
+                condition = ComponentCondition.NEW,
+                health = 1f,
+                count = 1
+            )
+        )
         segment.buildings += depot
     }
 
@@ -623,70 +695,69 @@ object WorldGenerator {
     ): List<BranchChoice> {
         // Štart už používa zelenú kresbu živého lesa. Nasledujúci región preto
         // musí byť naozaj iný; RURAL -> FOREST_ALIVE vyzeralo aj po siedmich
-        // kilometroch ako jedno nezmenené pozadie.
+        // kilometroch ako jedno nezmenené pozadie. Živý a suchý les sa tiež
+        // nestriedajú naslepo – krátke regióny z toho spravili blikanie.
         val alpineReady = atDistance >= maxOf(
             BranchStyle.ALPINE.unlockDistance,
             GameConfig.SNOW_START_M
         )
-        // Prvý prechod ostáva zámerne čitateľný. Potom už nejde o pevný
-        // scenár les → pustatina → púšť: susedné oblasti sa miešajú zo
-        // zmysluplného poolu a rovnaký typ sa neopakuje hneď po sebe.
+        // Nie je to aktivita ani udalosť na ceste: jediné pokračovanie regiónu
+        // berie suseda zo zmysluplného poolu. Les ide do vidieka / priemyslu /
+        // pustatiny / púšte, nie do druhého variantu lesa.
         val next = if (tutorial) {
-            // Aj prvý prechod musí vizuálne niekam viesť; pri náhodnom štarte
-            // nesmie živý les pokračovať tým istým živým lesom.
             when (current) {
                 BranchStyle.SAFE_RURAL -> BranchStyle.FOREST
-                BranchStyle.FOREST_ALIVE -> BranchStyle.SAFE_RURAL
-                BranchStyle.FOREST -> BranchStyle.INDUSTRIAL
+                BranchStyle.FOREST, BranchStyle.FOREST_ALIVE -> BranchStyle.INDUSTRIAL
+                BranchStyle.INDUSTRIAL -> BranchStyle.SAFE_RURAL
+                BranchStyle.DESERT -> BranchStyle.INDUSTRIAL
+                BranchStyle.SHORTCUT_RISK -> BranchStyle.FOREST_ALIVE
                 else -> BranchStyle.SAFE_RURAL
             }
-        } else when (current) {
-            BranchStyle.SAFE_RURAL -> rng.pick(
-                listOf(BranchStyle.FOREST, BranchStyle.FOREST, BranchStyle.FOREST_ALIVE)
-            )
-            BranchStyle.FOREST_ALIVE -> rng.pick(
-                listOf(BranchStyle.FOREST, BranchStyle.SHORTCUT_RISK, BranchStyle.INDUSTRIAL)
-            )
-            BranchStyle.FOREST -> rng.pick(
-                listOf(
-                    BranchStyle.SHORTCUT_RISK, BranchStyle.SHORTCUT_RISK,
-                    BranchStyle.INDUSTRIAL, BranchStyle.DESERT, BranchStyle.FOREST_ALIVE
+        } else {
+            val pool = when (current) {
+                BranchStyle.SAFE_RURAL -> listOf(
+                    BranchStyle.FOREST, BranchStyle.FOREST,
+                    BranchStyle.INDUSTRIAL, BranchStyle.SHORTCUT_RISK
                 )
-            )
-            BranchStyle.SHORTCUT_RISK -> rng.pick(
-                listOf(
-                    BranchStyle.DESERT, BranchStyle.DESERT,
+                BranchStyle.FOREST_ALIVE -> listOf(
+                    BranchStyle.SHORTCUT_RISK, BranchStyle.SHORTCUT_RISK,
+                    BranchStyle.INDUSTRIAL, BranchStyle.DESERT
+                )
+                BranchStyle.FOREST -> listOf(
+                    BranchStyle.SHORTCUT_RISK, BranchStyle.SHORTCUT_RISK,
+                    BranchStyle.INDUSTRIAL, BranchStyle.DESERT, BranchStyle.SAFE_RURAL
+                )
+                BranchStyle.SHORTCUT_RISK -> listOf(
+                    BranchStyle.DESERT_DUSK, BranchStyle.DESERT_DUSK,
                     BranchStyle.INDUSTRIAL, BranchStyle.FOREST_ALIVE, BranchStyle.DUST_STORM
                 )
-            )
-            BranchStyle.DESERT -> rng.pick(
-                listOf(
+                BranchStyle.DESERT -> listOf(
                     BranchStyle.DESERT_DUSK, BranchStyle.DESERT_DUSK,
-                    BranchStyle.SANDSTORM, BranchStyle.SHORTCUT_RISK
+                    BranchStyle.SANDSTORM, BranchStyle.INDUSTRIAL
                 )
-            )
-            BranchStyle.SANDSTORM -> rng.pick(
-                listOf(BranchStyle.DESERT_DUSK, BranchStyle.DESERT_DUSK, BranchStyle.SHORTCUT_RISK)
-            )
-            BranchStyle.DESERT_DUSK -> if (alpineReady && rng.chance(0.42f)) {
-                BranchStyle.ALPINE
-            } else rng.pick(
-                listOf(BranchStyle.SHORTCUT_RISK, BranchStyle.INDUSTRIAL, BranchStyle.FOREST_ALIVE)
-            )
-            BranchStyle.ALPINE -> rng.pick(
-                listOf(BranchStyle.INDUSTRIAL, BranchStyle.FOREST, BranchStyle.SAFE_RURAL)
-            )
-            BranchStyle.INDUSTRIAL -> if (alpineReady && rng.chance(0.18f)) {
-                BranchStyle.ALPINE
-            } else rng.pick(
-                listOf(
+                BranchStyle.SANDSTORM -> listOf(
+                    BranchStyle.DESERT_DUSK, BranchStyle.DESERT_DUSK, BranchStyle.SHORTCUT_RISK
+                )
+                BranchStyle.DESERT_DUSK -> if (alpineReady && rng.chance(0.42f)) {
+                    listOf(BranchStyle.ALPINE)
+                } else listOf(
+                    BranchStyle.SHORTCUT_RISK, BranchStyle.INDUSTRIAL, BranchStyle.FOREST_ALIVE
+                )
+                BranchStyle.ALPINE -> listOf(
+                    BranchStyle.INDUSTRIAL, BranchStyle.FOREST, BranchStyle.SAFE_RURAL
+                )
+                BranchStyle.INDUSTRIAL -> if (alpineReady && rng.chance(0.18f)) {
+                    listOf(BranchStyle.ALPINE)
+                } else listOf(
                     BranchStyle.DUST_STORM, BranchStyle.SHORTCUT_RISK,
                     BranchStyle.FOREST_ALIVE, BranchStyle.DESERT
                 )
-            )
-            BranchStyle.DUST_STORM -> rng.pick(
-                listOf(BranchStyle.INDUSTRIAL, BranchStyle.DESERT_DUSK, BranchStyle.SHORTCUT_RISK)
-            )
+                BranchStyle.DUST_STORM -> listOf(
+                    BranchStyle.INDUSTRIAL, BranchStyle.DESERT_DUSK, BranchStyle.SHORTCUT_RISK
+                )
+            }
+            val distinct = pool.filter { !it.biome.sharesSceneryWith(current.biome) }
+            rng.pick(if (distinct.isEmpty()) pool else distinct)
         }
         val nextSeed = parentSeed xor (next.ordinal + 1L) * MIX xor atDistance.toRawBits().toLong()
         return listOf(BranchChoice(id = 0, plan = planSegment(nextSeed, next, atDistance)))
@@ -779,7 +850,11 @@ object WorldGenerator {
         // Skutočná poloha budovy posúva rotáciu lootov aj progres rarity;
         // všetky stavby v jednom segmente už nedostanú ten istý „kilometer“.
         val lootDistance = distance + localX
-        val loot = LootGenerator.generate(rng, type, lootDistance, style).toMutableList()
+        val loot = if (type == BuildingType.WRECK) {
+            wreckLoot(rng).toMutableList()
+        } else {
+            LootGenerator.generate(rng, type, lootDistance, style).toMutableList()
+        }
         // Vyschnutý stojan neznamená prázdnu stanicu – v sklade ostal kanister.
         // Zájsť na benzínku a odísť bez paliva je najhorší možný záver zastávky.
         if (type == BuildingType.GAS_STATION && pump <= 0.05f) {
@@ -811,6 +886,29 @@ object WorldGenerator {
             pumpFuelKind = pumpFuelKind,
             landmark = landmark
         )
+    }
+
+    /** Vrak pri ceste: občas scrap, zriedkavo poškodený diel, často prázdny. */
+    private fun wreckLoot(rng: SeededRandom): List<ItemStack> {
+        val loot = ArrayList<ItemStack>(2)
+        if (rng.chance(0.52f)) {
+            loot += ItemStack(
+                defId = ItemCatalog.SCRAP_PILE.id,
+                condition = ComponentCondition.NEW,
+                health = 1f,
+                count = 1 + rng.nextInt(3)
+            )
+        }
+        if (rng.chance(0.22f)) {
+            val part = rng.pick(
+                listOf(
+                    ItemCatalog.TIRE_POOR, ItemCatalog.BATTERY, ItemCatalog.ALTERNATOR,
+                    ItemCatalog.HOOD, ItemCatalog.DOOR_FRONT, ItemCatalog.STARTER
+                )
+            )
+            loot += ItemStack(part.id, ComponentCondition.DAMAGED, rng.nextFloat(0.28f, 0.62f))
+        }
+        return loot
     }
 
     /** Odstup budov od mosta vrátane nájazdu (m). */

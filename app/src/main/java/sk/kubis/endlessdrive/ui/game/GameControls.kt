@@ -42,6 +42,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import sk.kubis.endlessdrive.domain.model.ThrottleMode
+import sk.kubis.endlessdrive.domain.model.ThrottleSlide
 import sk.kubis.endlessdrive.ui.theme.GameColors
 
 /**
@@ -49,10 +51,11 @@ import sk.kubis.endlessdrive.ui.theme.GameColors
  */
 @Composable
 fun GameControls(
-    onGasChanged: (Boolean) -> Unit,
+    onThrottle: (Float) -> Unit,
     onBrakeChanged: (Boolean) -> Unit,
     onStop: () -> Unit,
     buildingNearby: Boolean = false,
+    throttleMode: ThrottleMode = ThrottleMode.BINARY,
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 14.dp)) {
@@ -67,12 +70,19 @@ fun GameControls(
                 wide = true,
                 onPressChanged = onBrakeChanged
             )
-            PedalButton(
-                tint = Color(0xFF7CB86A),
-                label = "Throttle",
-                wide = false,
-                onPressChanged = onGasChanged
-            )
+            if (throttleMode == ThrottleMode.SLIDE) {
+                ThrottleSlidePedal(
+                    tint = Color(0xFF7CB86A),
+                    onThrottle = onThrottle
+                )
+            } else {
+                PedalButton(
+                    tint = Color(0xFF7CB86A),
+                    label = "Throttle",
+                    wide = false,
+                    onPressChanged = { pressed -> onThrottle(if (pressed) 1f else 0f) }
+                )
+            }
         }
         // Ručná brzda patrí k pedálom. Sedí tesne vľavo od plynu a jej stred
         // je vo výške stredu pedála, takže neprekrýva auto ani dashboard.
@@ -85,7 +95,6 @@ fun GameControls(
         )
     }
 }
-
 /** Kompaktná kontrolka/tlačidlo ručnej brzdy podľa reálneho symbolu (P). */
 @Composable
 private fun ParkingButton(
@@ -116,42 +125,11 @@ private fun ParkingButton(
             .padding(top = 5.dp, bottom = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Canvas(Modifier.size(44.dp)) {
-            val c = center
-            val stroke = size.minDimension * 0.075f
-            val ringRadius = size.minDimension * 0.27f
-            // Stredný kruh.
-            val iconTint = tint.copy(alpha = if (buildingNearby) 0.95f else 0.78f)
-            drawCircle(iconTint, ringRadius, c, style = Stroke(stroke, cap = StrokeCap.Round))
-            // Zátvorky symbolu parkovacej brzdy.
-            drawArc(
-                iconTint, 112f, 136f, false,
-                topLeft = Offset(size.width * 0.04f, size.height * 0.08f),
-                size = Size(size.width * 0.52f, size.height * 0.84f),
-                style = Stroke(stroke, cap = StrokeCap.Round)
-            )
-            drawArc(
-                iconTint, -68f, 136f, false,
-                topLeft = Offset(size.width * 0.44f, size.height * 0.08f),
-                size = Size(size.width * 0.52f, size.height * 0.84f),
-                style = Stroke(stroke, cap = StrokeCap.Round)
-            )
-            // P bez závislosti od fontu.
-            val stemX = size.width * 0.44f
-            drawLine(
-                iconTint,
-                Offset(stemX, size.height * 0.35f),
-                Offset(stemX, size.height * 0.66f),
-                stroke,
-                StrokeCap.Round
-            )
-            drawArc(
-                iconTint, -90f, 180f, false,
-                topLeft = Offset(stemX - stroke * 0.2f, size.height * 0.34f),
-                size = Size(size.width * 0.19f, size.height * 0.18f),
-                style = Stroke(stroke, cap = StrokeCap.Round)
-            )
-        }
+        AutomotiveIconView(
+            AutomotiveIcon.PARK,
+            tint.copy(alpha = if (buildingNearby) 0.95f else 0.78f),
+            Modifier.size(44.dp)
+        )
         Text(
             if (buildingNearby) "SEARCH" else "PARK",
             color = tint.copy(alpha = if (buildingNearby) 0.95f else 0.72f),
@@ -248,6 +226,82 @@ private fun PedalButton(
                     cap = StrokeCap.Round
                 )
             }
+        }
+    }
+}
+
+/**
+ * Zvislý plyn: prst odspodu nahor perie ťah. Uvoľnenie = 0.
+ */
+@Composable
+private fun ThrottleSlidePedal(
+    tint: Color,
+    onThrottle: (Float) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var amount by remember { mutableStateOf(0f) }
+    val fill by animateFloatAsState(amount, label = "throttleSlide")
+    val throttleCallback by rememberUpdatedState(onThrottle)
+
+    Box(
+        modifier = modifier
+            .width(72.dp)
+            .height(196.dp)
+            .background(
+                Brush.verticalGradient(
+                    listOf(tint.copy(alpha = 0.10f), Color(0xD91B1816))
+                ),
+                RoundedCornerShape(22.dp)
+            )
+            .border(2.dp, tint.copy(alpha = if (amount > 0.04f) 0.9f else 0.40f), RoundedCornerShape(22.dp))
+            .semantics { contentDescription = "Throttle slide" }
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val top = 0f
+                    val bottom = size.height.toFloat()
+                    fun emit(y: Float) {
+                        val next = ThrottleSlide.amount(y, top, bottom)
+                        amount = next
+                        throttleCallback(next)
+                    }
+                    emit(down.position.y)
+                    do {
+                        val event = awaitPointerEvent()
+                        event.changes.firstOrNull()?.let { emit(it.position.y) }
+                    } while (event.changes.any { it.pressed })
+                    amount = 0f
+                    throttleCallback(0f)
+                }
+            },
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Canvas(Modifier.fillMaxSize().padding(10.dp)) {
+            val w = size.width
+            val h = size.height
+            val trackLeft = w * 0.32f
+            val trackW = w * 0.36f
+            drawRoundRect(
+                Color(0xFF1E1B18),
+                topLeft = Offset(trackLeft, 0f),
+                size = Size(trackW, h),
+                cornerRadius = CornerRadius(w * 0.12f)
+            )
+            val fillH = h * fill.coerceIn(0f, 1f)
+            if (fillH > 1f) {
+                drawRoundRect(
+                    tint.copy(alpha = 0.85f),
+                    topLeft = Offset(trackLeft, h - fillH),
+                    size = Size(trackW, fillH),
+                    cornerRadius = CornerRadius(w * 0.12f)
+                )
+            }
+            val knobY = h - fillH
+            drawCircle(
+                tint.copy(alpha = if (amount > 0.04f) 0.95f else 0.55f),
+                radius = w * 0.28f,
+                center = Offset(w * 0.5f, knobY.coerceIn(w * 0.28f, h - w * 0.28f))
+            )
         }
     }
 }

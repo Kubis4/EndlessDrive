@@ -1,5 +1,8 @@
 package sk.kubis.endlessdrive.ui.theme
 
+import androidx.annotation.DrawableRes
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,16 +17,24 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -34,19 +45,19 @@ import androidx.compose.ui.unit.sp
  * Všetko na jednom mieste – obrazovky už nemiešajú vlastné hex hodnoty.
  */
 object GameColors {
-    val panel = Color(0xFF1B1712)
-    val panelHigh = Color(0xFF272019)
-    val panelSoft = Color(0xFF141210)
-    val outline = Color(0xFF3D362C)
-    val text = Color(0xFFEDE4D4)
-    val textDim = Color(0xFF9C9182)
-    val accent = Color(0xFFD2AE63)
+    val panel = Color(0xFF182126)
+    val panelHigh = Color(0xFF253239)
+    val panelSoft = Color(0xFF10171B)
+    val outline = Color(0xFF46565E)
+    val text = Color(0xFFF3F0E8)
+    val textDim = Color(0xFFB1BDC1)
+    val accent = Color(0xFFE9BA68)
     val ok = Color(0xFF7CB86A)
     val warn = Color(0xFFE0A33C)
     val danger = Color(0xFFD9584A)
     val info = Color(0xFF7FA8CC)
     val scrim = Color(0xE60D0B09)
-    val hudBg = Color(0xB30C0A08)
+    val hudBg = Color(0xDE10191F)
 }
 
 /** Farba podľa stavu 0..1 (palivo, stav dielu…). */
@@ -73,28 +84,34 @@ fun GameButton(
     modifier: Modifier = Modifier,
     style: BtnStyle = BtnStyle.Secondary,
     enabled: Boolean = true,
-    compact: Boolean = false
+    compact: Boolean = false,
+    @DrawableRes iconRes: Int? = null,
+    iconOnly: Boolean = false,
 ) {
     val bg = when (style) {
-        BtnStyle.Primary -> listOf(Color(0xFF66884A), Color(0xFF405A31))
-        BtnStyle.Secondary -> listOf(Color(0xFF342B22), GameColors.panelHigh)
+        BtnStyle.Primary -> listOf(Color(0xFFF0CD87), GameColors.accent)
+        BtnStyle.Secondary -> listOf(GameColors.panelHigh, GameColors.panel)
         BtnStyle.Danger -> listOf(Color(0xFF68372F), Color(0xFF44231F))
         BtnStyle.Ghost -> listOf(Color.Transparent, Color.Transparent)
     }
     val fg = when (style) {
-        BtnStyle.Primary -> Color(0xFFF2FFE8)
+        BtnStyle.Primary -> Color(0xFF202019)
         BtnStyle.Danger -> Color(0xFFF0A9A0)
         else -> GameColors.text
     }
     val edge = when (style) {
-        BtnStyle.Primary -> Color(0xFF8FAE70)
+        BtnStyle.Primary -> Color(0xFFFFDDA0)
         BtnStyle.Secondary -> GameColors.outline
         BtnStyle.Danger -> Color(0xFF895047)
         BtnStyle.Ghost -> GameColors.outline
     }
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(12.dp)
+    val iconSize = if (compact) 20.dp else 26.dp
     Box(
         modifier
+            .heightIn(min = if (compact) 40.dp else 48.dp)
+            .then(if (iconOnly && iconRes != null) Modifier.widthIn(min = if (compact) 36.dp else 48.dp) else Modifier)
+            .clip(shape)
             .background(
                 Brush.verticalGradient(
                     if (enabled) bg else bg.map { it.copy(alpha = 0.38f) }
@@ -106,21 +123,72 @@ fun GameButton(
                 color = if (enabled) edge else edge.copy(alpha = 0.35f),
                 shape = shape
             )
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(
-                horizontal = if (compact) 10.dp else 16.dp,
-                vertical = if (compact) 7.dp else 11.dp
+                horizontal = if (iconOnly && iconRes != null) {
+                    if (compact) 7.dp else 10.dp
+                } else if (compact) 10.dp else 16.dp,
+                vertical = if (compact) 8.dp else 11.dp
             ),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text,
-            color = if (enabled) fg else fg.copy(alpha = 0.45f),
-            fontSize = if (compact) 12.sp else 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 0.6.sp,
-            maxLines = 1
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            if (iconRes != null) {
+                Image(
+                    painter = painterResource(iconRes),
+                    contentDescription = if (iconOnly) text else null,
+                    modifier = Modifier.size(iconSize),
+                    contentScale = ContentScale.Fit,
+                    alpha = if (enabled) 1f else 0.45f
+                )
+            }
+            if (!iconOnly || iconRes == null) {
+                Text(
+                    text,
+                    color = if (enabled) fg else fg.copy(alpha = 0.45f),
+                    fontSize = if (compact) 12.sp else 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.6.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+/** Zatvorenie panelu – vektorové X, nie znak z fontu. */
+@Composable
+fun CloseIconButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .size(44.dp)
+            .background(GameColors.panelHigh.copy(alpha = 0.92f), RoundedCornerShape(10.dp))
+            .border(1.dp, GameColors.outline, RoundedCornerShape(10.dp))
+            .clickable(onClickLabel = "Close", onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(Modifier.size(16.dp)) {
+            val s = size.minDimension
+            val stroke = s * 0.12f
+            drawLine(
+                GameColors.text,
+                Offset(s * 0.12f, s * 0.12f),
+                Offset(s * 0.88f, s * 0.88f),
+                stroke,
+                StrokeCap.Round
+            )
+            drawLine(
+                GameColors.text,
+                Offset(s * 0.88f, s * 0.12f),
+                Offset(s * 0.12f, s * 0.88f),
+                stroke,
+                StrokeCap.Round
+            )
+        }
     }
 }
 
@@ -287,7 +355,7 @@ fun GamePanel(
                 header?.invoke()
                 if (onClose != null) {
                     Spacer(Modifier.width(Space.s))
-                    IconToggleButton("✕", active = false, onClick = onClose, label = "Close")
+                    CloseIconButton(onClick = onClose)
                 }
             }
             // Vlasová linka pod hlavičkou – oddelí ju od obsahu bez ďalšej krabice.
