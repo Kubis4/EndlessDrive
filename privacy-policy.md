@@ -26,4 +26,4 @@ We may update this Privacy Policy if the game’s data practices change. The lat
 
 ## Contact
 
-For privacy questions, contact: **kubis4@users.noreply.github.com**
+For privacy questions, contact: **kubisdev1@gmail.com*
