@@ -14,6 +14,14 @@ import sk.kubis.endlessdrive.game.save.RunCodec
 import sk.kubis.endlessdrive.game.world.WorldBuilding
 
 class JourneyTest {
+    @Test fun journeyUsesLongUnevenGoalsAndEndsAtSafeHaven() {
+        assertTrue(Journey.goals.size >= 7)
+        assertEquals(3, Journey.completedGoals(20_000f))
+        assertEquals(7, Journey.completedGoals(Journey.FINAL_DISTANCE_M))
+        assertEquals(35f, Journey.nextGoal(3)!!.distanceKm, 0.001f)
+        assertEquals(100f, Journey.goals.last().distanceKm, 0.001f)
+    }
+
     @Test fun rewardsOnlyNewKilometres() {
         assertEquals(0, Journey.rewardBetween(0f, 999.9f))
         assertEquals(3, Journey.rewardBetween(999.9f, 1000f))

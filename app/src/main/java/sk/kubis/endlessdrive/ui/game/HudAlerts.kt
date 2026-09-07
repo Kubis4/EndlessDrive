@@ -38,15 +38,14 @@ internal fun composeHudAlerts(ui: GameUiState): HudAlertView {
         claim(chip.text)
     }
 
-    val events = mutableListOf<Pair<String, Int>>()
-    for (event in ui.events) {
-        if (taken(event.first)) continue
-        events += event
-        claim(event.first)
-    }
-
-    val message = ui.message.takeIf { it.isNotBlank() && !taken(it) }
-    return HudAlertView(block = block, message = message, events = events, chips = chips.take(4))
+    // Timed events are represented by their gameplay effects and audio only.
+    // The top HUD is reserved for red, actionable failures.
+    return HudAlertView(
+        block = block,
+        message = null,
+        events = emptyList(),
+        chips = chips.filter { it.tone == HudTone.DANGER }.take(4)
+    )
 }
 
 internal fun tireWarningLabel(front: TireInjury, rear: TireInjury): String? {

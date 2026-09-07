@@ -48,10 +48,10 @@ fun EndlessDriveRoot(container: AppContainer) {
     // ViewModel visí na aktivite, nie na obrazovke hry – návrat do menu
     // teda jazdu nezahodí a dá sa v nej pokračovať.
     val vm: GameViewModel = viewModel(
-        factory = remember { GameViewModel.factory(container.playerRepository, profile.bestDistanceKm) }
+        factory = remember { GameViewModel.factory(container.playerRepository, profile) }
     )
-    LaunchedEffect(profile.bestDistanceKm) {
-        vm.updateBestDistance(profile.bestDistanceKm)
+    LaunchedEffect(profile) {
+        vm.updateProfile(profile)
     }
 
     val debug by container.playerRepository.debugOptions.collectAsState(initial = DebugOptions.OFF)
@@ -109,6 +109,7 @@ fun EndlessDriveRoot(container: AppContainer) {
                 audioSettings = audioSettings,
                 throttleMode = throttleMode,
                 showFps = showFps,
+                rewardedAds = container.rewardedAds,
                 onToggleFps = { showFps = !showFps; context.getSharedPreferences("display", 0).edit().putBoolean("fps", showFps).apply() },
                 onExitToMenu = {
                     nav.popBackStack(Routes.MENU, inclusive = false)

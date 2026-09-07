@@ -7,13 +7,23 @@ import sk.kubis.endlessdrive.domain.model.ThrottleMode
 data class PlayerProfile(
     val bestDistanceKm: Float = 0f,
     val totalRuns: Int = 0,
-    val totalDistanceKm: Float = 0f
+    val totalDistanceKm: Float = 0f,
+    /** Šrot prenesený medzi jazdami – používa sa na dlhodobé ciele. */
+    val bankedScrap: Int = 0,
+    /** Počet obnovených rádiových relé v meta-progrese. */
+    val relayNodes: Int = 0
 )
 
 interface PlayerRepository {
     val profile: Flow<PlayerProfile>
     suspend fun current(): PlayerProfile
     suspend fun recordRun(distanceKm: Float)
+
+    /** Uloží šrot z ukončenej jazdy do dlhodobého skladu. */
+    suspend fun bankScrap(amount: Int) = Unit
+
+    /** Meta-progres je high-water mark, nikdy sa neznižuje. */
+    suspend fun recordRelayProgress(relayNodes: Int) = Unit
 
     /** Rozohraná jazda ako text z RunCodec-u; null = žiadna. */
     suspend fun loadRun(): String?

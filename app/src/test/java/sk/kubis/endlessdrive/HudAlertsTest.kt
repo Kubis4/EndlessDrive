@@ -46,7 +46,8 @@ class HudAlertsTest {
         val alerts = composeHudAlerts(ui)
         assertNull(alerts.block)
         assertNull(alerts.message)
-        assertEquals(listOf("NO CHARGE" to 40), alerts.events)
+        assertTrue(alerts.events.isEmpty())
+        assertNull(alerts.message)
     }
 
     @Test
@@ -97,10 +98,7 @@ class HudAlertsTest {
             fuelL = 6f
         )
         val alerts = composeHudAlerts(ui)
-        assertEquals(
-            listOf("SNOW · NO CHAINS", "LOW FUEL"),
-            alerts.chips.map { it.text }
-        )
+        assertEquals(listOf("SNOW · NO CHAINS"), alerts.chips.map { it.text })
     }
 
     @Test

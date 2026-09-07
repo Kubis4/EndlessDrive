@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -50,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import sk.kubis.endlessdrive.domain.repository.PlayerProfile
+import sk.kubis.endlessdrive.game.Journey
 import sk.kubis.endlessdrive.ui.theme.BtnStyle
 import sk.kubis.endlessdrive.ui.theme.GameButton
 import sk.kubis.endlessdrive.ui.theme.GameColors
@@ -90,6 +92,8 @@ fun MenuScreen(
                 if (compact) Text(String.format("PERSONAL BEST  ·  %.1f KM", profile.bestDistanceKm),
                     color = GameColors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 else ProfileStats(profile)
+                Spacer(Modifier.height(12.dp))
+                MetaProgress(profile)
             }
             Column(
                 Modifier.width(cardWidth)
@@ -314,6 +318,36 @@ private fun ProfileStat(label: String, value: String) {
             letterSpacing = 0.7.sp
         )
         Text(value, color = GameColors.text, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun MetaProgress(profile: PlayerProfile, modifier: Modifier = Modifier) {
+    val totalGoals = Journey.goals.size
+    Column(
+        modifier
+            .fillMaxWidth()
+            .background(Color(0xAA111A1D), RoundedCornerShape(10.dp))
+            .border(1.dp, GameColors.accent.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Text("RADIO NETWORK", color = GameColors.accent, fontSize = 10.sp,
+            fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        Spacer(Modifier.height(4.dp))
+        Text("Restore the relay network across the expedition.", color = GameColors.textDim, fontSize = 12.sp)
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("RELAYS  ${profile.relayNodes}/$totalGoals", color = GameColors.text, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text("BANKED SCRAP  ${profile.bankedScrap}", color = GameColors.text, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(5.dp))
+        Box(Modifier.fillMaxWidth().height(4.dp).background(GameColors.panelHigh, RoundedCornerShape(2.dp))) {
+            Box(
+                Modifier.fillMaxWidth((profile.relayNodes / totalGoals.toFloat()).coerceIn(0f, 1f))
+                    .fillMaxHeight()
+                    .background(GameColors.accent, RoundedCornerShape(2.dp))
+            )
+        }
     }
 }
 

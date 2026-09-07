@@ -31,6 +31,6 @@ class BackdropLayoutTest {
         val height = 1000f
         val horizon = height * 0.56f
         assertEquals(horizon, BackdropLayout.celestialClipBottom(horizon, height, false), 0.01f)
-        assertEquals(height * 0.27f, BackdropLayout.celestialClipBottom(horizon, height, true), 0.01f)
+        assertEquals(horizon, BackdropLayout.celestialClipBottom(horizon, height, true), 0.01f)
     }
 }

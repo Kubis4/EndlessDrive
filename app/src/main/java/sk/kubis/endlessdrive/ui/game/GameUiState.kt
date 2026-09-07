@@ -53,6 +53,12 @@ data class GameUiState(
     val distanceKm: Float = 0f,
     /** Materiál zo zošrotovaných predmetov; viditeľný stále pri vzdialenosti. */
     val scrap: Int = 0,
+    /** Šrot uložený po ukončených jazdách. */
+    val bankedScrap: Int = 0,
+    /** x2 odmena už bola v tejto jazde odomknutá. */
+    val scrapDoubled: Boolean = false,
+    /** Trvalý postup obnovy rádiovej siete. */
+    val relayNodes: Int = 0,
     val overallHealth: Float = 0f,
     val batteryCharge: Float = 0f,
     /** Výkon alternátora a maximum, na ktorom pri ňom vie batéria zostať. */

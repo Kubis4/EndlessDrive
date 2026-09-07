@@ -1,10 +1,37 @@
 package sk.kubis.endlessdrive.game
 
-/** Progress is derived from the saved high-water distance, so reversing or loading
- * cannot award the same milestone twice. No additional save format is needed. */
+data class JourneyGoal(
+    val distanceKm: Float,
+    val title: String,
+    val description: String
+)
+
+/**
+ * The long-term route. The goals are deliberately uneven: early relays give
+ * quick feedback, while the final safe haven remains a real expedition.
+ * Progress is derived from the saved high-water distance, so reversing or
+ * loading cannot award the same milestone twice.
+ */
 object Journey {
     const val LEG_METERS = 1000f
+    const val FINAL_DISTANCE_M = 100_000f
+
+    val goals = listOf(
+        JourneyGoal(5f, "FIRST RELAY", "A signal is back on the air."),
+        JourneyGoal(10f, "SECOND RELAY", "The route reaches beyond the first snow line."),
+        JourneyGoal(20f, "THIRD RELAY", "Long empty stretches become part of the plan."),
+        JourneyGoal(35f, "FOURTH RELAY", "The old network starts to wake up."),
+        JourneyGoal(50f, "FIFTH RELAY", "Halfway to the safe haven."),
+        JourneyGoal(75f, "SIXTH RELAY", "Only a hardened expedition can keep going."),
+        JourneyGoal(100f, "SAFE HAVEN", "Restore the final relay and finish the journey.")
+    )
+
     fun completedLegs(distanceM: Float): Int = (distanceM.coerceAtLeast(0f) / LEG_METERS).toInt()
+
+    fun completedGoals(distanceM: Float): Int = goals.count { distanceM >= it.distanceKm * LEG_METERS }
+
+    fun nextGoal(completed: Int): JourneyGoal? = goals.getOrNull(completed.coerceAtLeast(0))
+
     fun rewardBetween(beforeM: Float, afterM: Float): Int =
         (completedLegs(afterM) - completedLegs(beforeM)).coerceAtLeast(0) * 3
 }

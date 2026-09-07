@@ -350,6 +350,7 @@ enum class EndReason(val message: String) {
     ENGINE_DESTROYED("Engine destroyed"),
     OVERHEAT("Engine overheated"),
     BATTERY_DEAD("The battery is dead"),
+    ARRIVED("Reached the safe haven"),
     MANUAL("Run over")
 }
 

@@ -43,6 +43,20 @@ class SceneryPainter(
     /** Farba lúky z kresby biómu – koruny a tráva sa k nej priblížia. */
     private var landTint = Color.White
     private var landTintAmount = 0f
+    private var propBiome = BiomeType.RURAL
+    private var propSeed = 0
+
+    private fun propColor(base: Color, day: Float): Color {
+        val tint = when {
+            propBiome.arid -> if (propBiome == BiomeType.DESERT_DUSK) Color(0xFF9C777C) else Color(0xFFB49A70)
+            propBiome == BiomeType.ALPINE -> Color(0xFF9EAFB4)
+            propBiome == BiomeType.INDUSTRIAL -> Color(0xFF6F7775)
+            propBiome == BiomeType.FOREST_ALIVE -> Color(0xFF657254)
+            propBiome == BiomeType.FOREST -> Color(0xFF756D59)
+            else -> Color(0xFF8E846B)
+        }
+        return land(lerp(base, tint, 0.42f), day)
+    }
     private val wreckFilters = arrayOfNulls<ColorFilter>(WRECK_PAINT.size)
     private val wreckFilterArgb = IntArray(WRECK_PAINT.size) { Int.MIN_VALUE }
 
@@ -161,6 +175,8 @@ class SceneryPainter(
             if (occupiedAt(wx)) continue
             val blend = biomeAt(wx)
             val biome = if (MathX.hash01(cell, BIOME_FRONT_SALT) < blend.amount) blend.to else blend.from
+            propBiome = biome
+            propSeed = cell
             val d = 0.02f + MathX.hash01(cell, 733) * 0.22f
             val fx = depth.atX(depth.frontX(wx), d)
             val fy = depth.atY(depth.frontY(heightAt(wx)), d)
@@ -193,10 +209,14 @@ class SceneryPainter(
         if (px < -120f || px > size.width + 120f) return
         val s = depth.ppm * (1f - depth.perspectiveT(d)) * (0.8f + scaleRnd * 0.55f)
         val groundDeg = slopeAt(wx, heightAt)
+        propBiome = biome
+        propSeed = cell
         fun planted(block: DrawScope.() -> Unit) {
             rotate(degrees = groundDeg, pivot = Offset(px, py), block)
         }
 
+        scale(scaleX = 0.78f + MathX.hash01(cell, 8101) * 0.35f,
+            scaleY = 0.82f + MathX.hash01(cell, 8111) * 0.30f, pivot = Offset(px, py)) {
         when (biome) {
             BiomeType.RURAL -> when {
                 kind < 0.42f -> broadTree(px, py, s, day)
@@ -274,6 +294,7 @@ class SceneryPainter(
                 else -> planted { logPile(px, py, s, day) }
             }
         }
+        }
     }
 
     // --- Jednotlivé kulisy -------------------------------------------------
@@ -326,6 +347,18 @@ class SceneryPainter(
             drawCircle(color, radius, center)
             canopyPath.addOval(Rect(center.x - radius, center.y - radius,
                 center.x + radius, center.y + radius))
+            // Broken leaf clusters carry the painted backdrop's irregular silhouette.
+            for (i in 0 until 18) {
+                val angle = i * 2.39996f
+                val reach = radius * (0.45f + MathX.hash01(propSeed + i, 8311) * 0.52f)
+                val cx = center.x + kotlin.math.cos(angle) * reach
+                val cy = center.y + kotlin.math.sin(angle) * reach * 0.85f
+                val r = radius * (0.13f + MathX.hash01(propSeed + i, 8329) * 0.16f)
+                val leaf = lerp(color, if (cy < center.y) land(Color(0xFFADC36B), day) else dark,
+                    0.25f + MathX.hash01(propSeed + i, 8353) * 0.22f)
+                drawOval(leaf, Offset(cx - r, cy - r * 0.5f), Size(r * 2f, r))
+                canopyPath.addOval(Rect(cx - r, cy - r * 0.5f, cx + r, cy + r * 0.5f))
+            }
         }
         foliage(dark, s * 0.74f, Offset(x + s * 0.06f, y - h * 0.66f))
         foliage(dark, s * 0.50f, Offset(x - s * 0.52f, y - h * 0.50f))
@@ -360,13 +393,22 @@ class SceneryPainter(
             val tierH = h * (0.30f - t * 0.09f)
             // Spodná, tmavšia polovica poschodia.
             val dark = land(lerp(Color(0xFF23412A), Color(0xFF33583A), t), day)
-            val lit = land(lerp(Color(0xFF396540), Color(0xFF548C4E), t), day)
+            val lit = if (propBiome == BiomeType.ALPINE) shade(Color(0xFFCDDCDD), day)
+                else land(lerp(Color(0xFF396540), Color(0xFF548C4E), t), day)
             propPath.reset()
             propPath.moveTo(x - w, cy)
-            // Previs na koncoch – vetvy nie sú rovná čiara.
-            propPath.lineTo(x - w * 0.45f, cy - tierH * 0.14f)
+            // Staggered tips break the triangular outline into drooping branches.
+            for (j in 1..5) {
+                val f = j / 6f
+                propPath.lineTo(x - w * (1f - f) - w * 0.07f, cy - tierH * f * 0.82f)
+                propPath.lineTo(x - w * (1f - f) + w * 0.07f, cy - tierH * f)
+            }
             propPath.lineTo(x, cy - tierH)
-            propPath.lineTo(x + w * 0.45f, cy - tierH * 0.14f)
+            for (j in 5 downTo 1) {
+                val f = j / 6f
+                propPath.lineTo(x + w * (1f - f) - w * 0.07f, cy - tierH * f)
+                propPath.lineTo(x + w * (1f - f) + w * 0.07f, cy - tierH * f * 0.82f)
+            }
             propPath.lineTo(x + w, cy)
             propPath.close()
             drawPath(propPath, dark)
@@ -377,6 +419,14 @@ class SceneryPainter(
             propPath.lineTo(x + w * 0.28f, cy - tierH * 0.34f)
             propPath.close()
             drawPath(propPath, lit)
+            for (j in 0 until 9) {
+                val f = MathX.hash01(propSeed + j + i * 19, 8377)
+                val yy = cy - tierH * (0.12f + f * 0.68f)
+                val half = w * (1f - f) * 0.65f
+                val xx = x + (MathX.hash01(propSeed + j, 8387) - 0.5f) * half
+                drawLine(lit.copy(alpha = 0.7f), Offset(xx - half * 0.32f, yy + tierH * 0.06f),
+                    Offset(xx + half * 0.24f, yy), (s * 0.035f).coerceAtLeast(0.7f), StrokeCap.Round)
+            }
         }
         materials.shape(this, canopyPath, MaterialKind.NEEDLES, x - s, y - h,
             s * 3.2f, 0.90f * (0.1f + day * 0.9f))
@@ -397,6 +447,12 @@ class SceneryPainter(
         drawCircle(c, s * 0.42f, Offset(x, y - s * 0.30f))
         drawCircle(c, s * 0.32f, Offset(x - s * 0.35f, y - s * 0.18f))
         drawCircle(c, s * 0.30f, Offset(x + s * 0.33f, y - s * 0.20f))
+        for (i in 0 until 22) {
+            val xx = x + (MathX.hash01(propSeed + i, 8419) - 0.5f) * s * 1.10f
+            val yy = y - s * (0.12f + MathX.hash01(propSeed + i, 8423) * 0.44f)
+            drawOval(lerp(c, land(Color(0xFFA9AE70), day), 0.22f + (i % 3) * 0.12f),
+                Offset(xx - s * 0.09f, yy), Size(s * 0.18f, s * 0.10f))
+        }
         canopyPath.reset()
         canopyPath.addOval(Rect(x - s * 0.42f, y - s * 0.72f, x + s * 0.42f, y + s * 0.12f))
         canopyPath.addOval(Rect(x - s * 0.67f, y - s * 0.50f, x - s * 0.03f, y + s * 0.14f))
@@ -433,23 +489,30 @@ class SceneryPainter(
     }
 
     private fun DrawScope.stone(x: Float, y: Float, s: Float, day: Float) {
-        drawOval(
-            shade(Color(0xFF7A7568), day),
-            topLeft = Offset(x - s, y - s * 0.85f),
-            size = Size(s * 2f, s * 1.0f)
-        )
-        drawOval(
-            shade(Color(0xFF938D7E), day),
-            topLeft = Offset(x - s * 0.7f, y - s * 0.85f),
-            size = Size(s * 1.1f, s * 0.55f)
-        )
+        val peak = 0.65f + MathX.hash01(propSeed, 8209) * 0.40f
         propPath.reset()
-        propPath.addOval(Rect(x - s, y - s * 0.85f, x + s, y + s * 0.15f))
+        propPath.moveTo(x - s, y)
+        propPath.lineTo(x - s * 0.72f, y - s * 0.58f)
+        propPath.lineTo(x - s * 0.18f, y - s * peak)
+        propPath.lineTo(x + s * 0.60f, y - s * peak * 0.79f)
+        propPath.lineTo(x + s, y - s * 0.12f)
+        propPath.lineTo(x + s * 0.53f, y + s * 0.08f)
+        propPath.close()
+        drawPath(propPath, propColor(Color(0xFF7A7568), day))
         materials.shape(this, propPath, MaterialKind.STONE, x, y, s * 6f, 0.8f * day)
+        propPath.reset()
+        propPath.moveTo(x - s * 0.72f, y - s * 0.58f)
+        propPath.lineTo(x - s * 0.18f, y - s * peak)
+        propPath.lineTo(x + s * 0.60f, y - s * peak * 0.79f)
+        propPath.lineTo(x + s * 0.12f, y - s * 0.40f)
+        propPath.close()
+        drawPath(propPath, if (propBiome == BiomeType.ALPINE) shade(Color(0xFFDBE5E4), day)
+            else propColor(Color(0xFFB4A990), day))
+        materials.shape(this, propPath, MaterialKind.STONE, x, y, s * 3f, 0.6f * day)
     }
 
     private fun DrawScope.fence(x: Float, y: Float, s: Float, day: Float) {
-        val c = shade(Color(0xFF7A6448), day)
+        val c = propColor(Color(0xFF7A6448), day)
         val h = s * 0.85f
         for (i in 0 until 4) {
             val px = x + i * s * 0.75f
@@ -463,8 +526,11 @@ class SceneryPainter(
         groundShadow(x, y, s, day, 1.5f)
         val w = s * 2.4f
         val h = s * 1.1f
-        val body = shade(Color(0xFF7A5A3E), day)
+        val body = propColor(WRECK_PAINT[(MathX.hash01(propSeed, 8231) * WRECK_PAINT.size).toInt().coerceAtMost(WRECK_PAINT.lastIndex)], day)
         drawRect(body, topLeft = Offset(x - w * 0.5f, y - h), size = Size(w, h))
+        propPath.reset()
+        propPath.addRect(Rect(x - w * 0.5f, y - h, x + w * 0.5f, y))
+        materials.shape(this, propPath, MaterialKind.METAL, x - w * 0.5f, y - h, s * 1.5f, day)
         drawRect(
             shade(Color(0xFF5E4630), day),
             topLeft = Offset(x - w * 0.5f, y - h),
@@ -473,6 +539,10 @@ class SceneryPainter(
         for (i in 1 until 5) {
             val px = x - w * 0.5f + w * i / 5f
             drawLine(shade(Color(0xFF6A4E36), day), Offset(px, y - h), Offset(px, y), strokeWidth = s * 0.05f)
+        }
+        for (dx in floatArrayOf(0.30f, 0.40f)) {
+            drawLine(propColor(Color(0xFFC0B9A7), day), Offset(x + w * dx, y - h * 0.85f),
+                Offset(x + w * dx, y - h * 0.12f), s * 0.035f)
         }
     }
 
@@ -741,6 +811,12 @@ class SceneryPainter(
         drawLine(c, Offset(x - s * 0.45f, y - h * 0.55f), Offset(x - s * 0.45f, y - h * 0.86f), strokeWidth = s * 0.18f, cap = StrokeCap.Round)
         drawLine(c, Offset(x, y - h * 0.40f), Offset(x + s * 0.38f, y - h * 0.40f), strokeWidth = s * 0.16f, cap = StrokeCap.Round)
         drawLine(c, Offset(x + s * 0.38f, y - h * 0.40f), Offset(x + s * 0.38f, y - h * 0.66f), strokeWidth = s * 0.16f, cap = StrokeCap.Round)
+        drawLine(land(Color(0xFF8D9C65), day), Offset(x - s * 0.065f, y - s * 0.10f),
+            Offset(x - s * 0.065f, y - h + s * 0.14f), s * 0.035f, StrokeCap.Round)
+        for (i in 1..9) {
+            val yy = y - h * i / 10f
+            drawLine(land(Color(0xFFB4AB7B), day), Offset(x + s * 0.10f, yy), Offset(x + s * 0.19f, yy - s * 0.035f), s * 0.018f)
+        }
     }
 
     /** Zrovnané klády pri lesnej ceste – stopa po ťažbe. */

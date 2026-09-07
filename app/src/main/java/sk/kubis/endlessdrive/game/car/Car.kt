@@ -1213,7 +1213,9 @@ class Car {
         winter: Boolean = false,
         /** Lokálny sklon presne pod nápravou; null zachová kompatibilitu testov. */
         rearGroundSlope: Float? = null,
-        frontGroundSlope: Float? = null
+        frontGroundSlope: Float? = null,
+        /** Zrýchlenie vetra pozdĺž cesty; + = zadný vietor, - = protivietor. */
+        windAcceleration: Float = 0f
     ) {
         val wb = SedanSpec.wheelOffsetX
         val wheelbase = (wb * 2f).coerceAtLeast(0.5f)
@@ -1455,7 +1457,12 @@ class Car {
                 GameConfig.AERO_DRAG * (1f + extraDrag) * speed * speed * referenceMass
             )
 
-        var longForce = gradeForce + drag
+        // Vietor mení rýchlosť len vtedy, keď sa auto už hýbe. Neštartuje ani
+        // nepretáča stojace auto; pri cúvaní pôsobí opačne proti smeru pohybu.
+        val windForce = if (kotlin.math.abs(speed) > 0.2f) {
+            windAcceleration.coerceIn(-1.2f, 1.2f) * kotlin.math.sign(speed) * mass
+        } else 0f
+        var longForce = gradeForce + drag + windForce
         var slipTarget = 0f
         wheelsLocked = false
 

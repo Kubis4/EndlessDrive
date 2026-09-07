@@ -115,6 +115,19 @@ class GameRenderer(private val assets: GameAssets) {
     private var headlightNoseX = 0f
     private var headlightTailX = 0f
 
+    // Častice majú nemenné semienka; v render loope tak ostáva iba pohyb.
+    private val rainSeedX = FloatArray(RAIN_DROPS) { i -> MathX.hash01(i, 17) }
+    private val rainSeedY = FloatArray(RAIN_DROPS) { i -> MathX.hash01(i, 41) }
+    private val snowSeedX = FloatArray(SNOW_FLAKES) { i -> MathX.hash01(i, 29) }
+    private val snowSeedY = FloatArray(SNOW_FLAKES) { i -> MathX.hash01(i, 53) }
+    private val dustSeed = FloatArray(DUST_SHEETS) { i -> MathX.hash01(i, 211) }
+    private val dustSeedY = FloatArray(DUST_SHEETS) { i -> MathX.hash01(i, 307) }
+    private val sandSeedX = FloatArray(SAND_GRAINS) { i -> MathX.hash01(i, 61) }
+    private val sandSeedY = FloatArray(SAND_GRAINS) { i -> MathX.hash01(i, 97) }
+    private val windSeed = FloatArray(TAILWIND_STREAKS) { i -> MathX.hash01(i, 137) }
+    private val windSeedY = FloatArray(TAILWIND_STREAKS) { i -> MathX.hash01(i, 263) }
+    private val windSeedAngle = FloatArray(TAILWIND_STREAKS) { i -> MathX.hash01(i, 419) }
+
     fun DrawScope.draw(engine: GameEngine) {
         if (lastEngine !== engine) {
             lastEngine = engine
@@ -137,7 +150,10 @@ class GameRenderer(private val assets: GameAssets) {
         val biome = environment.dominant
         // Horizont je nad vozovkou, nie prilepený na ňu – mesa/les zaberú
         // viac záberu. Mid/near prekryjú švík; farba zeme je poistka.
-        val horizonY = size.height * 0.56f
+        // Pozadie má mať viac priestoru nad lokálnym profilom cesty. Samotná
+        // cesta sa stále premieta z terénu; nižšie kopce preto nezdvihnú ani
+        // nespustia vzdialený horizont a apron medzi nimi zostane prirodzený.
+        val horizonY = size.height * BACKDROP_HORIZON
 
         // Terén zbierame pred pozadím pre apron, ale samotné vzdialené kulisy
         // ostávajú v screen-space. Keď ich spodok sledoval medián kopcov, celý
@@ -257,8 +273,8 @@ class GameRenderer(private val assets: GameAssets) {
             )
             val col = shade(Color(0xFFBFD4E0), day).copy(alpha = 0.5f)
             for (i in 0 until RAIN_DROPS) {
-                val seedX = MathX.hash01(i, 17)
-                val seedY = MathX.hash01(i, 41)
+                val seedX = rainSeedX[i]
+                val seedY = rainSeedY[i]
                 val speed = 900f + seedY * 700f
                 val x = ((seedX * w) - (t * RAIN_DRIFT) % w + w) % w
                 val y = ((seedY * h) + (t * speed) % h) % h
@@ -275,8 +291,8 @@ class GameRenderer(private val assets: GameAssets) {
         if (snowing) {
             val col = Color(0xFFEFF6FA).copy(alpha = 0.85f)
             for (i in 0 until SNOW_FLAKES) {
-                val seedX = MathX.hash01(i, 29)
-                val seedY = MathX.hash01(i, 53)
+                val seedX = snowSeedX[i]
+                val seedY = snowSeedY[i]
                 val fall = 60f + seedY * 90f
                 // Vločky sa hompáľajú – bez toho vyzerá sneh ako dážď.
                 val sway = MathX.approxSin(t * (0.7f + seedX) + i.toFloat()) * w * 0.02f
@@ -313,10 +329,10 @@ class GameRenderer(private val assets: GameAssets) {
 
         // Vlny prachu – široké pruhy, ktoré preletia obrazom a dajú búrke pohyb.
         for (i in 0 until DUST_SHEETS) {
-            val seed = MathX.hash01(i, 211)
+            val seed = dustSeed[i]
             val speed = 260f + seed * 420f
             val x = w - ((t * speed + seed * w * 2.2f) % (w * 1.8f))
-            val y = h * (0.10f + MathX.hash01(i, 307) * 0.72f)
+            val y = h * (0.10f + dustSeedY[i] * 0.72f)
             val bandH = h * (0.06f + seed * 0.10f)
             drawOval(
                 tone.copy(alpha = 0.10f + seed * 0.09f),
@@ -329,8 +345,8 @@ class GameRenderer(private val assets: GameAssets) {
         val speedT = (abs(engine.car.speed) / GameConfig.MAX_SPEED).coerceIn(0f, 1f)
         val grain = shade(Color(0xFFE6C88E), day)
         for (i in 0 until SAND_GRAINS) {
-            val seedX = MathX.hash01(i, 61)
-            val seedY = MathX.hash01(i, 97)
+            val seedX = sandSeedX[i]
+            val seedY = sandSeedY[i]
             val speed = 900f + seedY * 1400f + speedT * 900f
             val x = ((seedX * w) - (t * speed) % (w * 1.2f) + w * 1.2f) % (w * 1.2f)
             val y = ((seedY * h) + MathX.approxSin(t * (0.6f + seedX) + i.toFloat()) * h * 0.02f + h) % h
@@ -476,24 +492,33 @@ class GameRenderer(private val assets: GameAssets) {
         }
     }
 
-    /**
-     * Zadný vietor: šmuhy a lístie letiace dopredu rýchlejšie než svet.
-     * Bez toho bol TAILWIND len štítok v HUD, ktorý sa nedal vidieť.
-     */
+    /** Vietor dostane smer podľa aktívnej udalosti; šmuhy ukážu aj protivietor. */
     private fun DrawScope.drawTailwind(engine: GameEngine, day: Float) {
-        if (!engine.hasEvent(RoadEvent.TAILWIND)) return
+        val tailwind = engine.hasEvent(RoadEvent.TAILWIND)
+        val headwind = engine.hasEvent(RoadEvent.HEADWIND)
+        if (!tailwind && !headwind) return
         val t = engine.elapsed
         val w = size.width
         val h = size.height
         val col = shade(Color(0xFFE8F0E4), day)
         val leaf = shade(Color(0xFFB08A4A), day)
+        val direction = when {
+            tailwind && !headwind -> 1f
+            headwind && !tailwind -> -1f
+            else -> 0f
+        }
 
         for (i in 0 until TAILWIND_STREAKS) {
-            val seed = MathX.hash01(i, 137)
-            val seedY = MathX.hash01(i, 263)
-            val seedA = MathX.hash01(i, 419)
+            val seed = windSeed[i]
+            val seedY = windSeedY[i]
+            val seedA = windSeedAngle[i]
             val speed = 700f + seed * 900f
-            val x = ((seedY * w) + (t * speed) % (w * 1.4f)) % (w * 1.4f) - w * 0.2f
+            val travel = (t * speed) % (w * 1.4f)
+            val x = if (direction > 0f) {
+                (seedY * w + travel) % (w * 1.4f) - w * 0.2f
+            } else {
+                (seedY * w - travel) % (w * 1.4f) + w * 0.2f
+            }
             // Vietor je turbulentný: každá šmuha má vlastný sklon a v čase sa
             // vlní. Rovnobežné vodorovné čiary vyzerali ako hrebeň, nie vietor.
             val drift = MathX.approxSin(t * (0.8f + seedA) + i * 1.7f)
@@ -503,7 +528,7 @@ class GameRenderer(private val assets: GameAssets) {
             drawLine(
                 col.copy(alpha = 0.08f + seed * 0.18f),
                 Offset(x, y),
-                Offset(x + len, y + len * tilt),
+                Offset(x + direction * len, y + len * tilt),
                 strokeWidth = 1f + seed * 2f,
                 cap = StrokeCap.Round
             )
@@ -513,7 +538,7 @@ class GameRenderer(private val assets: GameAssets) {
                 val lw = w * 0.013f
                 drawOval(
                     leaf.copy(alpha = 0.55f),
-                    topLeft = Offset(x + len, y + len * tilt),
+                    topLeft = Offset(x + direction * len, y + len * tilt),
                     size = Size(lw, (lw * 0.55f * kotlin.math.abs(spin)).coerceAtLeast(1f))
                 )
             }
@@ -563,26 +588,22 @@ class GameRenderer(private val assets: GameAssets) {
         timeOfDay: Float
     ) {
         drawParallaxBackdrop(backdrop, horizonY, day, BackdropPass.SKY)
-        val celestialHorizon = horizonY
-        // Lesné far vrstvy majú nepriehľadnú oblohu, preto ich nemožno celé
-        // prekresliť ako alfa masku. Kotúč ukončíme na úrovni horných korún;
-        // spodná časť lesa sa následne prekreslí a vytvorí prirodzené zakrytie.
-        val forestArtwork = when (biome) {
-            BiomeType.FOREST, BiomeType.FOREST_ALIVE,
-            BiomeType.RURAL, BiomeType.ALPINE -> true
-            else -> false
-        }
+        // Hviezdy ostávajú za diaľkovou krajinou.
+        with(sky) { drawStarfield(day, cam.x, horizonY) }
+        // Slnko patrí za celú kreslenú krajinu. FAR, HORIZON aj LANDSCAPE ho
+        // musia prekryť; inak pri východe presvitá medzi stromami.
         val celestialClipBottom = BackdropLayout.celestialClipBottom(
             horizonY,
             size.height,
-            forestArtwork
+            forestArtwork = biome == BiomeType.FOREST ||
+                biome == BiomeType.FOREST_ALIVE ||
+                biome == BiomeType.RURAL ||
+                biome == BiomeType.ALPINE
         )
-        // Slnko ide vždy z herného času, aj keď predloha má namaľovaný kotúč –
-        // ten by sa inak posúval s dlaždicou a pri šve / inom bióme skočil.
         clipRect(0f, 0f, size.width, celestialClipBottom) {
-            with(sky) { drawCelestialOver(timeOfDay, day, celestialHorizon) }
+            with(sky) { drawCelestialOver(timeOfDay, day, horizonY) }
         }
-        with(sky) { drawStarfield(day, cam.x, horizonY) }
+        drawParallaxBackdrop(backdrop, horizonY, day, BackdropPass.FAR)
         drawParallaxBackdrop(backdrop, horizonY, day, BackdropPass.HORIZON)
         drawParallaxBackdrop(backdrop, horizonY, day, BackdropPass.LANDSCAPE)
     }
@@ -650,6 +671,8 @@ class GameRenderer(private val assets: GameAssets) {
                     topLeft = Offset(0f, farBase - 2f),
                     size = Size(size.width, (size.height - farBase + 2f).coerceAtLeast(0f))
                 )
+            }
+            BackdropPass.FAR -> {
                 val top = farBase - farHeight
                 val canvas = drawContext.canvas
                 canvas.saveLayer(Rect(0f, top, size.width, farBase + 1f), backdropSkyPaint)
@@ -663,11 +686,8 @@ class GameRenderer(private val assets: GameAssets) {
                     )
                     // Fade the artwork into a clean sky instead of stretching a scanline.
                     // Namaľované slnko v púšti/búrke zmizne s oblohou – kotúč kreslí DayCycle.
-                    val skyWash = if (backdrop.bakedSun) {
-                        maxOf(0.62f, backdrop.skyWash)
-                    } else {
-                        backdrop.skyWash
-                    }
+                    val skyWash = if (backdrop.bakedSun) maxOf(0.62f, backdrop.skyWash)
+                    else backdrop.skyWash
                     drawRect(
                         Brush.verticalGradient(listOf(Color.Transparent, Color.Black),
                             startY = top, endY = top + farHeight * skyWash),
@@ -675,12 +695,12 @@ class GameRenderer(private val assets: GameAssets) {
                         blendMode = BlendMode.DstIn
                     )
                 } finally { canvas.restore() }
-
             }
             BackdropPass.HORIZON -> {
                 // Spodok oblohy nesie vzdialené kopce. Po slnku ho kreslíme
                 // znova, aby východ aj západ zašli za krajinu, nie cez ňu.
                 val coverH = farHeight * backdrop.horizonCover
+                if (coverH <= 0f) return
                 val coverTop = farBase - coverH
                 clipRect(0f, coverTop, size.width, farBase + 6f) {
                     val canvas = drawContext.canvas
@@ -796,6 +816,7 @@ class GameRenderer(private val assets: GameAssets) {
         widthScale: Float = 1f,
         bottomInset: Float = 0f
     ) {
+        if (opacity <= 0.001f) return
         // Pomer PNG s explicitnou korekciou širokej generovanej kresby.
         // Celé pixely: dve kópie sa inak stretnú na zlomku pixelu a filter
         // naberie priehľadno za okrajom – na rovnej oblohe vlasová čiara.
@@ -2104,7 +2125,8 @@ class GameRenderer(private val assets: GameAssets) {
                 }
                 if (near === b) with(buildings) { drawSearchMarker(px, py, s, b.looted) }
             } else {
-                with(buildings) { drawBuilding(b, px, py, s, day, near === b, slopeDeg) }
+                with(buildings) { drawBuilding(b, px, py, s, day, near === b, slopeDeg,
+                    seg.biomeBlendAtWorld(wx).dominant, if (seg.paving.winter) 1f else 0f) }
             }
         }
     }
@@ -3371,13 +3393,15 @@ class GameRenderer(private val assets: GameAssets) {
         private val BACKDROP_K = floatArrayOf(BACKDROP_FAR_K, BACKDROP_MID_K, BACKDROP_NEAR_K)
         /** O koľko horizontu je spodok oblohy pod horizontom (schová sa za lúku). */
         private const val BACKDROP_SINK = 0.03f
+        /** Základná výška vzdialeného horizontu; lokálny profil cesty ju nemení. */
+        private const val BACKDROP_HORIZON = 0.52f
         /** Výška pásov nad lúkou ako podiel obrazovky – nie celá scéna. */
         private const val BACKDROP_FAR_HEIGHT = 0.44f
         private const val BACKDROP_MID_HEIGHT = 0.40f
         private const val BACKDROP_NEAR_HEIGHT = 0.38f
         /** Mid/near siahajú pod svoj kotviaci bod, aby prekryli far. */
         private const val BACKDROP_LAYER_OVERLAP = 0.03f
-        private enum class BackdropPass { SKY, HORIZON, LANDSCAPE }
+        private enum class BackdropPass { SKY, FAR, HORIZON, LANDSCAPE }
         /**
          * Vyrovná iba časť look-aheadu. Pri 0.90 projekčný stred počas prudkého
          * zrýchlenia predbehol vyhladenú kameru a auto na tablete ušlo doprava.

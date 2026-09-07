@@ -59,15 +59,6 @@ fun AlertColumn(ui: GameUiState, modifier: Modifier = Modifier) {
         alerts.block?.let { reason ->
             Banner(reason, GameColors.danger.copy(alpha = pulse), strong = true)
         }
-        alerts.message?.let { Banner(it, messageColor(it)) }
-        if (alerts.events.isNotEmpty()) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
-                verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                alerts.events.forEach { (label, secs) ->
-                    Chip("$label ${secs}s", GameColors.info)
-                }
-            }
-        }
         if (alerts.chips.isNotEmpty()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
                 verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -110,17 +101,6 @@ private fun HudTone.toColor(): Color = when (this) {
     HudTone.ACCENT -> GameColors.accent
     HudTone.OK -> GameColors.ok
     HudTone.INFO -> GameColors.info
-}
-
-private fun messageColor(message: String): Color {
-    val upper = message.uppercase()
-    return when {
-        upper.contains("MISSING") || upper.contains("DESTROY") || upper.contains("SEIZ") ||
-            upper.contains("RUIN") || upper.contains("CRITICAL") -> GameColors.danger
-        upper.contains("SLOW") || upper.contains("WATCH") || upper.contains("DUSK") ||
-            upper.contains("LOW") || upper.contains("WEAK") -> GameColors.warn
-        else -> GameColors.text
-    }
 }
 
 /**

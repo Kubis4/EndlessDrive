@@ -25,6 +25,8 @@ class DataStorePlayerRepository(context: Context) : PlayerRepository {
         val BEST = floatPreferencesKey("best_km")
         val RUNS = intPreferencesKey("total_runs")
         val TOTAL = floatPreferencesKey("total_km")
+        val BANKED_SCRAP = intPreferencesKey("banked_scrap")
+        val RELAY_NODES = intPreferencesKey("relay_nodes")
         val RUN = stringPreferencesKey("run_snapshot")
         val DBG_ALL = booleanPreferencesKey("debug_all_components")
         val DBG_UPGRADE = booleanPreferencesKey("debug_full_upgrades")
@@ -71,7 +73,9 @@ class DataStorePlayerRepository(context: Context) : PlayerRepository {
         PlayerProfile(
             bestDistanceKm = prefs[Keys.BEST] ?: 0f,
             totalRuns = prefs[Keys.RUNS] ?: 0,
-            totalDistanceKm = prefs[Keys.TOTAL] ?: 0f
+            totalDistanceKm = prefs[Keys.TOTAL] ?: 0f,
+            bankedScrap = prefs[Keys.BANKED_SCRAP] ?: 0,
+            relayNodes = prefs[Keys.RELAY_NODES] ?: 0
         )
     }.distinctUntilChanged()
 
@@ -84,6 +88,20 @@ class DataStorePlayerRepository(context: Context) : PlayerRepository {
             if (distanceKm > best) prefs[Keys.BEST] = distanceKm
             prefs[Keys.RUNS] = (prefs[Keys.RUNS] ?: 0) + 1
             prefs[Keys.TOTAL] = (prefs[Keys.TOTAL] ?: 0f) + distanceKm
+        }
+    }
+
+    override suspend fun bankScrap(amount: Int) {
+        if (amount <= 0) return
+        store.edit { prefs ->
+            prefs[Keys.BANKED_SCRAP] = (prefs[Keys.BANKED_SCRAP] ?: 0) + amount
+        }
+    }
+
+    override suspend fun recordRelayProgress(relayNodes: Int) {
+        store.edit { prefs ->
+            val current = prefs[Keys.RELAY_NODES] ?: 0
+            prefs[Keys.RELAY_NODES] = maxOf(current, relayNodes.coerceIn(0, 5))
         }
     }
 

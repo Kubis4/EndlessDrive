@@ -32,7 +32,8 @@ enum class RoadEvent(
     MUD("Mud — wheels digging in.", "MUD", 30f, 6f),
 
     // --- Šťastie ---
-    TAILWIND("Tailwind — using less fuel.", "TAILWIND", 40f, 6f, good = true),
+    HEADWIND("Headwind — slower and using more fuel.", "HEADWIND", 45f, 5f),
+    TAILWIND("Tailwind — faster and using less fuel.", "TAILWIND", 40f, 6f, good = true),
     CLEAR_ROAD("Smooth road — using less fuel.", "SMOOTH", 35f, 6f, good = true),
     ROADSIDE_STASH("Supplies ahead — stop to pick them up.", null, 0f, 8f, good = true),
     ABANDONED_WRECK("Wreck ahead — scrap and parts.", null, 0f, 7f, good = true);

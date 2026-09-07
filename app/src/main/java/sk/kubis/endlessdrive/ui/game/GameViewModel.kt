@@ -19,14 +19,17 @@ import sk.kubis.endlessdrive.domain.model.FuelKind
 import sk.kubis.endlessdrive.domain.model.GamePhase
 import sk.kubis.endlessdrive.domain.model.ThrottleMode
 import sk.kubis.endlessdrive.domain.repository.PlayerRepository
+import sk.kubis.endlessdrive.domain.repository.PlayerProfile
 import sk.kubis.endlessdrive.game.GameEngine
+import sk.kubis.endlessdrive.game.Journey
 import sk.kubis.endlessdrive.game.save.RunCodec
 import sk.kubis.endlessdrive.domain.model.DebugOptions
 import kotlin.random.Random
 
 class GameViewModel(
     private val playerRepository: PlayerRepository,
-    bestDistanceKm: Float
+    bestDistanceKm: Float,
+    initialProfile: PlayerProfile = PlayerProfile(bestDistanceKm = bestDistanceKm)
 ) : ViewModel() {
 
     /**
@@ -39,10 +42,14 @@ class GameViewModel(
     var throttleMode: ThrottleMode = ThrottleMode.BINARY
 
     private var engine: GameEngine by mutableStateOf(
-        GameEngine(Random.nextLong(), bestDistanceKm)
+        GameEngine(Random.nextLong(), bestDistanceKm, metaRelayNodes = initialProfile.relayNodes)
     )
     private var recorded = false
     private var bestKm = bestDistanceKm
+    private var bankedScrap = initialProfile.bankedScrap
+    private var relayNodes = initialProfile.relayNodes.coerceIn(0, META_RELAY_COUNT)
+    /** Odmena x2 sa iba pripraví; do skladu sa pripíše pri ukončení jazdy. */
+    private var scrapDoubled = false
     private var hudTimer = 0f
     private var pausedByLifecycle = false
     private var pausedByUser = false
@@ -85,7 +92,7 @@ class GameViewModel(
                 runCatching { playerRepository.clearRun() }
                 return@launch
             }
-            engine = GameEngine.restore(snap, bestKm)
+            engine = GameEngine.restore(snap, bestKm, relayNodes)
             recorded = false
             hasActiveRun = true
             publishUi(force = true)
@@ -109,6 +116,14 @@ class GameViewModel(
             bestKm = km
             publishUi(force = true)
         }
+    }
+
+    /** Profil môže prísť z DataStore až po vytvorení ViewModelu. */
+    fun updateProfile(profile: PlayerProfile) {
+        if (profile.bestDistanceKm > bestKm) bestKm = profile.bestDistanceKm
+        bankedScrap = maxOf(bankedScrap, profile.bankedScrap)
+        relayNodes = maxOf(relayNodes, profile.relayNodes).coerceAtMost(META_RELAY_COUNT)
+        publishUi(force = true)
     }
 
     fun onGasChanged(pressed: Boolean) {
@@ -175,7 +190,6 @@ class GameViewModel(
 
         if (engine.phase == GamePhase.GAME_OVER) {
             hasActiveRun = false
-            maybeRecord()
             frame++
             publishUi(dt, force = true)
             return
@@ -194,6 +208,7 @@ class GameViewModel(
         engine.brakeInput = if (driving) brake else 0f
         engine.setScreenHeight(screenHeightPx)
         engine.advance(dt)
+        checkRelayProgress()
 
         // V PREP/STOPPED netreba 60×/s prekresľovať ťažké Pathy – šetrí CPU/GPU a batériu.
         val moving = driving || engine.car.speed > 0.05f ||
@@ -266,6 +281,9 @@ class GameViewModel(
             speedKmh = e.car.speedKmh,
             distanceKm = e.distanceKm,
             scrap = e.scrap,
+            bankedScrap = bankedScrap,
+            scrapDoubled = scrapDoubled,
+            relayNodes = relayNodes,
             overallHealth = e.car.overallHealth,
             batteryCharge = e.car.batteryCharge,
             alternatorOutput = e.car.alternatorOutput,
@@ -400,6 +418,15 @@ class GameViewModel(
     fun enterBuilding() {
         engine.enterNearestBuilding()
         bump()
+    }
+
+    fun activateDepot() {
+        if (engine.activateDepot()) {
+            checkRelayProgress(forceNextDepot = true)
+            bump()
+        } else {
+            bump()
+        }
     }
 
     fun leaveBuilding() {
@@ -547,12 +574,44 @@ class GameViewModel(
         bump()
     }
 
+    /** Ukončí obrazovku jazdy a uloží jej štatistiky aj šrot. */
+    fun finalizeRun() {
+        hasActiveRun = false
+        maybeRecord()
+        bump()
+    }
+
+    /** Rewarded reklama pripraví dvojnásobný prevod šrotu do skladu. */
+    fun claimDoubleScrap(): Boolean {
+        if (engine.phase != GamePhase.GAME_OVER || scrapDoubled || engine.scrap <= 0) return false
+        scrapDoubled = true
+        bump()
+        return true
+    }
+
+    /** Jedna núdzová záchrana po poruche; jazda pokračuje z aktuálneho miesta. */
+    fun recoverFromAd(): Boolean {
+        if (engine.phase != GamePhase.GAME_OVER) return false
+        val recovered = engine.recoverFromRewardedAd()
+        if (recovered) {
+            recorded = false
+            hasActiveRun = true
+            bump()
+        }
+        return recovered
+    }
+
     private fun maybeRecord() {
         if (recorded) return
         recorded = true
         forgetRun()
         val distance = engine.distanceKm
         if (distance > bestKm) bestKm = distance
+        val reward = if (scrapDoubled) engine.scrap * 2 else engine.scrap
+        if (reward > 0) {
+            bankedScrap += reward
+            viewModelScope.launch { runCatching { playerRepository.bankScrap(reward) } }
+        }
         viewModelScope.launch {
             runCatching { playerRepository.recordRun(distance) }
         }
@@ -560,9 +619,11 @@ class GameViewModel(
 
     /** Nová jazda od nuly – nový vrak, nový svet. */
     fun retry() {
+        if (engine.phase == GamePhase.GAME_OVER) maybeRecord()
         hasActiveRun = false
         forgetRun()
         recorded = false
+        scrapDoubled = false
         gasPressed = false
         brakePressed = false
         throttleHeld = 0f
@@ -571,19 +632,37 @@ class GameViewModel(
         pausedByLifecycle = false
         pausedByUser = false
         garageOpen = false
-        engine = GameEngine(Random.nextLong(), bestKm, debugOptions)
+        engine = GameEngine(Random.nextLong(), bestKm, debugOptions, relayNodes)
         hudTimer = 0f
         idleCelestialAge = 0f
         bump()
     }
 
+    private fun checkRelayProgress(forceNextDepot: Boolean = false) {
+        val distanceReached = Journey.completedGoals(engine.distanceM)
+        val nextGoal = Journey.nextGoal(relayNodes)
+        val depotActivated = forceNextDepot && engine.activeBuilding?.landmark == true &&
+            nextGoal != null && engine.distanceKm >= nextGoal.distanceKm - DEPOT_GOAL_TOLERANCE_KM
+        val reached = if (depotActivated) relayNodes + 1 else distanceReached
+            .coerceIn(0, META_RELAY_COUNT)
+        if (reached <= relayNodes) return
+        relayNodes = reached
+        viewModelScope.launch {
+            runCatching { playerRepository.recordRelayProgress(reached) }
+        }
+        bump()
+    }
+
     companion object {
-        fun factory(repo: PlayerRepository, bestDistanceKm: Float) =
+        fun factory(repo: PlayerRepository, profile: PlayerProfile) =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    return GameViewModel(repo, bestDistanceKm) as T
+                    return GameViewModel(repo, profile.bestDistanceKm, profile) as T
                 }
             }
+
+        private const val DEPOT_GOAL_TOLERANCE_KM = 0.15f
+        private val META_RELAY_COUNT = Journey.goals.size
     }
 }

@@ -18,7 +18,7 @@ import java.util.Random
 
 enum class MaterialKind {
     ASPHALT, CRACKS, CONCRETE, DIRT, GRAVEL, SAND, SNOW, ICE, WATER,
-    GRASS, LEAVES, NEEDLES, BARK, STONE, PAPER;
+    GRASS, LEAVES, NEEDLES, BARK, STONE, PAPER, BRICK, PLANKS, METAL;
 
     companion object {
         fun paving(p: RoadPaving): MaterialKind = when (p) {
@@ -124,6 +124,45 @@ object MaterialTextures {
                     canvas.save(); canvas.translate(dx * SIZE.toFloat(), dy * SIZE.toFloat())
                     canvas.drawPath(path, paint); canvas.restore()
                 }
+            }
+        }
+        // Architectural tiles divide the full tile exactly, including staggered joints.
+        if (kind == MaterialKind.BRICK || kind == MaterialKind.PLANKS || kind == MaterialKind.METAL) {
+            paint.style = Paint.Style.FILL
+            val step = if (kind == MaterialKind.METAL) 16f else 32f
+            var row = 0
+            var y = 0f
+            while (y < SIZE) {
+                tone(false, 62)
+                if (kind == MaterialKind.METAL) {
+                    canvas.drawRect(y, 0f, y + 3f, SIZE.toFloat(), paint)
+                    tone(true, 50)
+                    canvas.drawRect(y + 3f, 0f, y + 5f, SIZE.toFloat(), paint)
+                } else {
+                    canvas.drawRect(0f, y, SIZE.toFloat(), y + 2f, paint)
+                    tone(true, 32)
+                    canvas.drawRect(0f, y + 2f, SIZE.toFloat(), y + 3f, paint)
+                    if (kind == MaterialKind.BRICK) {
+                        var x = if (row % 2 == 0) 0f else -32f
+                        while (x < SIZE) {
+                            tone(false, 55)
+                            canvas.drawRect(x, y, x + 2f, y + step, paint)
+                            tone(rng.nextBoolean(), 12 + rng.nextInt(22))
+                            canvas.drawRect(x + 3f, y + 4f, x + 63f, y + step - 1f, paint)
+                            x += 64f
+                        }
+                    } else {
+                        repeat(9) {
+                            val x = rng.nextFloat() * SIZE
+                            val gy = y + 5f + rng.nextFloat() * 23f
+                            tone(false, 24)
+                            paint.strokeWidth = 0.7f
+                            wrap(x, gy, 18f) { a, b -> canvas.drawLine(a - 16f, b, a + 16f, b + 1f, paint) }
+                        }
+                    }
+                }
+                row++
+                y += step
             }
         }
         return image

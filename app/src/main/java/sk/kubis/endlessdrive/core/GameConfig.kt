@@ -15,12 +15,12 @@ object GameConfig {
 
     // --- Segmenty / križovatky (dlhé cesty = veľké nádrže majú zmysel) ---
     /** Regióny sú dosť krátke, aby sa krajina striedala každých pár kilometrov. */
-    const val SEGMENT_LENGTH_MIN = 1600f
-    const val SEGMENT_LENGTH_MAX = 2400f
+    const val SEGMENT_LENGTH_MIN = 2800f
+    const val SEGMENT_LENGTH_MAX = 4600f
     const val TUTORIAL_SEGMENT_LENGTH = 1300f
     /** Plynulé prelínanie dvoch susedných regiónov. */
-    const val BIOME_TRANSITION_MIN = 380f
-    const val BIOME_TRANSITION_MAX = 720f
+    const val BIOME_TRANSITION_MIN = 700f
+    const val BIOME_TRANSITION_MAX = 1400f
     /** Prvá budova nie hneď za štartom. */
     const val BUILDING_MIN_GAP_FROM_START = 200f
     /** Väčší odstup – viac budov celkovo cez dlhšie segmenty, nie hustá osada. */
@@ -344,7 +344,7 @@ object GameConfig {
      * Pod cestou nie je čo ukazovať, len hnedý pás, kým hore je kreslené
      * pozadie. Preto ide cesta až do spodnej štvrtiny obrazovky.
      */
-    const val CAMERA_Y_BIAS = 3.10f
+     const val CAMERA_Y_BIAS = 3.75f
     /** Kde na šírke obrazovky sedí auto (0 = vľavo, 0.5 = stred). */
     const val CAR_SCREEN_X = 0.35f
     const val CAMERA_SPEED_ZOOM = 0.010f

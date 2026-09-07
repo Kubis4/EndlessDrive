@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "sk.kubis.endlessdrive"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "sk.kubis.endlessdrive"
@@ -75,6 +75,7 @@ dependencies {
 
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation("com.google.android.gms:play-services-ads:25.4.0")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

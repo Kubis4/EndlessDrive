@@ -1,5 +1,6 @@
 package sk.kubis.endlessdrive.ui.game
 
+import android.app.Activity
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -74,6 +75,7 @@ import sk.kubis.endlessdrive.game.car.TireInjury
 import sk.kubis.endlessdrive.domain.model.SedanSpec
 import sk.kubis.endlessdrive.domain.model.VehiclePaint
 import sk.kubis.endlessdrive.game.GameEngine
+import sk.kubis.endlessdrive.ads.RewardedAdManager
 import sk.kubis.endlessdrive.game.car.Car
 import sk.kubis.endlessdrive.game.car.MountedPart
 import sk.kubis.endlessdrive.ui.theme.BtnStyle
@@ -96,6 +98,7 @@ fun GameScreen(
     viewModel: GameViewModel,
     assets: GameAssets,
     onExitToMenu: () -> Unit,
+    rewardedAds: RewardedAdManager? = null,
     audioSettings: AudioSettings = AudioSettings(),
     throttleMode: ThrottleMode = ThrottleMode.BINARY,
     showFps: Boolean = false,
@@ -106,8 +109,12 @@ fun GameScreen(
     val renderer = remember(assets) { GameRenderer(assets) }
     val density = LocalDensity.current
     val context = LocalContext.current
+    val activity = context as? Activity
+    val adReadyState = rewardedAds?.isReady?.collectAsState()
+    val adReady = adReadyState?.value == true
     val audio = remember(context) { GameAudio(context) }
     LaunchedEffect(audio, audioSettings) { audio.settings = audioSettings }
+    LaunchedEffect(rewardedAds) { rewardedAds?.load() }
     val configuration = LocalConfiguration.current
     val compactLoot = configuration.screenWidthDp < 760 || configuration.screenHeightDp < 500
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
@@ -292,6 +299,7 @@ fun GameScreen(
                     bagRevision = ui.bagRevision,
                     onTake = { viewModel.takeLoot(it) },
                     onRefuel = { viewModel.refuelFromPump(it) },
+                    onActivateDepot = { viewModel.activateDepot() },
                     onClose = { viewModel.leaveBuilding() },
                     modifier = lootModifier
                 )
@@ -383,8 +391,20 @@ fun GameScreen(
                 Overlay(safeArea) {
                     GameOverPanel(
                         engine = engine,
+                        scrapDoubled = ui.scrapDoubled,
+                        adReady = adReady && activity != null,
+                        onDoubleScrap = {
+                            activity?.let { host ->
+                                rewardedAds?.show(host, onReward = { viewModel.claimDoubleScrap() })
+                            }
+                        },
+                        onRescue = {
+                            activity?.let { host ->
+                                rewardedAds?.show(host, onReward = { viewModel.recoverFromAd() })
+                            }
+                        },
                         onRetry = { viewModel.retry() },
-                        onMenu = onExitToMenu,
+                        onMenu = { viewModel.finalizeRun(); onExitToMenu() },
                         modifier = Modifier.align(Alignment.Center).width(420.dp)
                     )
                 }
@@ -978,6 +998,7 @@ private fun LootPanel(
     bagRevision: Int,
     onTake: (Int) -> Unit,
     onRefuel: (FuelKind) -> Unit,
+    onActivateDepot: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -992,6 +1013,31 @@ private fun LootPanel(
         modifier = modifier
     ) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            if (b.landmark) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(GameColors.accent.copy(alpha = 0.14f), RoundedCornerShape(10.dp))
+                        .border(1.dp, GameColors.accent.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
+                        .padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
+                    Text("RELAY CHECKPOINT", color = GameColors.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Activate this depot to mark your progress toward the restored radio network.",
+                        color = GameColors.textDim,
+                        fontSize = 12.sp
+                    )
+                    GameButton(
+                        "ACTIVATE RELAY",
+                        onActivateDepot,
+                        compact = true,
+                        style = BtnStyle.Primary,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+            }
             if (b.type == sk.kubis.endlessdrive.domain.model.BuildingType.GAS_STATION) {
                 Column(
                     Modifier
@@ -2066,12 +2112,20 @@ private fun PausePanel(
 @Composable
 private fun GameOverPanel(
     engine: GameEngine,
+    scrapDoubled: Boolean,
+    adReady: Boolean,
+    onDoubleScrap: () -> Unit,
+    onRescue: () -> Unit,
     onRetry: () -> Unit,
     onMenu: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     GamePanel(
-        title = "RUN OVER",
+        title = if (engine.endReason == sk.kubis.endlessdrive.domain.model.EndReason.ARRIVED) {
+            "JOURNEY COMPLETE"
+        } else {
+            "RUN OVER"
+        },
         subtitle = engine.endReason?.message,
         modifier = modifier,
         fillHeight = false
@@ -2102,6 +2156,30 @@ private fun GameOverPanel(
             buildings = engine.buildingsVisited,
             clock = engine.clock,
             showDistance = false
+        )
+        Spacer(Modifier.height(14.dp))
+        if (engine.endReason != sk.kubis.endlessdrive.domain.model.EndReason.MANUAL &&
+            engine.endReason != sk.kubis.endlessdrive.domain.model.EndReason.ARRIVED
+        ) {
+            GameButton(
+                "ROADSIDE ASSIST · WATCH AD",
+                onRescue,
+                style = BtnStyle.Secondary,
+                enabled = adReady,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(8.dp))
+        }
+        GameButton(
+            when {
+                scrapDoubled -> "SCRAP x2 READY"
+                engine.scrap > 0 -> "DOUBLE ${engine.scrap} SCRAP · WATCH AD"
+                else -> "NO SCRAP TO DOUBLE"
+            },
+            onDoubleScrap,
+            style = BtnStyle.Secondary,
+            enabled = adReady && engine.scrap > 0 && !scrapDoubled,
+            modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(16.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {

@@ -64,7 +64,9 @@ class GameEngine(
     val seed: Long,
     val bestDistanceKm: Float,
     /** Ladiace prepínače z nastavení – ovplyvňujú len výbavu na štarte. */
-    private val debugOptions: DebugOptions = DebugOptions.OFF
+    private val debugOptions: DebugOptions = DebugOptions.OFF,
+    /** Trvalý bonus z obnovenej rádiovej siete. */
+    private val metaRelayNodes: Int = 0
 ) {
     val car = Car()
     /** Batoh na chrbte – ide s hráčom do budovy. */
@@ -250,6 +252,24 @@ class GameEngine(
         }
         add(ItemCatalog.OIL_BOTTLE, purity = rng.nextFloat(0.70f, 0.92f))
         add(ItemCatalog.FUEL_CAN, purity = rng.nextFloat(0.72f, 0.95f))
+        // Obnovené relé zlepšujú ďalšie štarty, ale nikdy nepreskočia loot loop.
+        when {
+            metaRelayNodes >= 1 -> add(ItemCatalog.PUNCTURE_KIT)
+        }
+        when {
+            metaRelayNodes >= 2 -> add(ItemCatalog.COOLANT_BOTTLE, purity = 0.9f)
+        }
+        when {
+            metaRelayNodes >= 3 -> add(ItemCatalog.OIL_BOTTLE, purity = 0.9f)
+        }
+        when {
+            metaRelayNodes >= 4 -> add(ItemCatalog.FUEL_CAN, purity = 0.95f)
+        }
+        if (metaRelayNodes >= 5) {
+            inventory.add(
+                ItemStack(ItemCatalog.TIRE_POOR.id, ComponentCondition.USED, health = 0.78f)
+            )
+        }
         // Jedna náhradná vec do začiatku – nie vždy tá istá.
         val spare = rng.pick(
             listOf(
@@ -648,7 +668,8 @@ class GameEngine(
                 ?: segment.paving.gripMul,
             isWinter,
             rearGroundSlope = rearSlope,
-            frontGroundSlope = frontSlope
+            frontGroundSlope = frontSlope,
+            windAcceleration = eventWindAcceleration
         )
         // applyDrive posunie X až po výpočte pruženia. Preto kontakt ešte raz
         // vyriešime presne pod finálnou polohou auta; pri vysokej rýchlosti
@@ -690,6 +711,10 @@ class GameEngine(
         distanceM = maxReachedX.coerceAtLeast(0f)
         if (milestoneReward > 0) {
             scrap += milestoneReward
+        }
+        if (distanceM >= Journey.FINAL_DISTANCE_M) {
+            endRun(EndReason.ARRIVED)
+            return
         }
         warnAboutEngineWear(dt)
 
@@ -878,17 +903,21 @@ class GameEngine(
         }
     }
 
-    /** Násobiteľ plynu – misfire uberie výkon, palivo sa míňa ďalej. */
+    /** Násobiteľ plynu – misfire a protivietor uberú výkon. */
     private val eventThrottleMul: Float
-        get() = if (hasEvent(RoadEvent.MISFIRE)) 0.55f else 1f
+        get() = (if (hasEvent(RoadEvent.MISFIRE)) 0.55f else 1f) *
+            (if (hasEvent(RoadEvent.HEADWIND)) 0.92f else 1f)
 
-    /** Násobiteľ spotreby – vietor v chrbte a čistá cesta šetria. */
+    /** Násobiteľ spotreby – vietor mení cenu jazdy, čistá cesta šetrí. */
     private val eventDrainMul: Float
-        get() = when {
-            hasEvent(RoadEvent.TAILWIND) -> 0.6f
-            hasEvent(RoadEvent.CLEAR_ROAD) -> 0.8f
-            else -> 1f
-        }
+        get() = (if (hasEvent(RoadEvent.HEADWIND)) 1.22f else 1f) *
+            (if (hasEvent(RoadEvent.TAILWIND)) 0.72f else 1f) *
+            (if (hasEvent(RoadEvent.CLEAR_ROAD)) 0.8f else 1f)
+
+    /** Malá sila pozdĺž cesty; protivietor brzdí, zadný vietor pomáha. */
+    private val eventWindAcceleration: Float
+        get() = (if (hasEvent(RoadEvent.HEADWIND)) -0.65f else 0f) +
+            (if (hasEvent(RoadEvent.TAILWIND)) 0.55f else 0f)
 
     /** Extra hrboľatosť z počasia a prekážok – zhorší záber aj zrýchlenie. */
     private val eventBumpBonus: Float
@@ -904,7 +933,7 @@ class GameEngine(
         val rng = SeededRandom(
             seed xor distanceM.toRawBits().toLong() xor (elapsed * 1000f).toLong()
         )
-        val hardness = MathX.growth(distanceM, 6000f).coerceAtMost(2.2f)
+        val hardness = MathX.growth(distanceM, 40_000f).coerceAtMost(2.8f)
         val pool = RoadEvent.entries.filter { canHappen(it) && it != lastRoadEvent }
         if (pool.isEmpty()) return
 
@@ -958,7 +987,7 @@ class GameEngine(
         RoadEvent.BELT_SNAPPED -> car.hasPart(ComponentSlot.ALTERNATOR)
         RoadEvent.COOLANT_LEAK -> car.coolant > 1f
         RoadEvent.FUEL_LEAK -> car.fuel > 4f
-        RoadEvent.TAILWIND, RoadEvent.CLEAR_ROAD -> !inJunctionZone
+        RoadEvent.HEADWIND, RoadEvent.TAILWIND, RoadEvent.CLEAR_ROAD -> !inJunctionZone
         else -> true
     } && !hasEvent(e) && (e.good || e.chip == null ||
         events.count { !it.event.good } < 2)
@@ -999,7 +1028,9 @@ class GameEngine(
         }
         if (e != RoadEvent.FLAT_TYRE) emitSfx(e.toSfx())
         if (e.timed) events += ActiveEvent(e, e.duration)
-        message = customMessage ?: e.message
+        // Timed events are visible through their effect/icons, not a temporary
+        // banner that competes with the critical red warnings.
+        if (!e.timed) message = customMessage ?: e.message
     }
 
     /**
@@ -1095,7 +1126,7 @@ class GameEngine(
         RoadEvent.RAIN -> GameSfx.RAIN
         RoadEvent.DEBRIS -> GameSfx.DEBRIS
         RoadEvent.MUD -> GameSfx.MUD
-        RoadEvent.TAILWIND -> GameSfx.TAILWIND
+        RoadEvent.HEADWIND, RoadEvent.TAILWIND -> GameSfx.TAILWIND
         RoadEvent.CLEAR_ROAD -> GameSfx.CLEAR_ROAD
         RoadEvent.ROADSIDE_STASH, RoadEvent.ABANDONED_WRECK -> GameSfx.FIND
     }
@@ -1284,6 +1315,53 @@ class GameEngine(
         phase = GamePhase.EXPLORING
         if (visitedBuildingIds.add(b.id)) buildingsVisited++
         message = "Searching: ${b.type.displayName}"
+        return true
+    }
+
+    /** Depo je aj prvý uzol meta-cieľa: hráč ho môže ručne potvrdiť. */
+    fun activateDepot(): Boolean {
+        val b = activeBuilding
+        if (phase != GamePhase.EXPLORING || b == null || !b.landmark) {
+            message = "Enter a depot first"
+            return false
+        }
+        message = "Relay checkpoint recorded — keep driving to the next depot"
+        return true
+    }
+
+    /** Jednorazová núdzová pomoc z rewarded reklamy. */
+    fun recoverFromRewardedAd(): Boolean {
+        if (phase != GamePhase.GAME_OVER) return false
+        val reason = endReason ?: return false
+        val detail = when (reason) {
+            EndReason.OUT_OF_FUEL -> {
+                car.refill(FluidType.FUEL, 12f, 0.88f, car.requiredFuelKind)
+                "Roadside help delivered 12 L of fuel"
+            }
+            EndReason.ENGINE_DESTROYED -> {
+                car.repair(ComponentSlot.ENGINE, 0.25f)
+                "Roadside help patched the engine to 25 %"
+            }
+            EndReason.OVERHEAT -> {
+                car.repair(ComponentSlot.ENGINE, 0.20f)
+                car.temperature = 55f
+                "Roadside help cooled and patched the engine"
+            }
+            EndReason.BATTERY_DEAD -> {
+                car.batteryCharge = minOf(car.batteryHoldCapacity, 0.38f)
+                "Roadside help jump-started the battery"
+            }
+            EndReason.ARRIVED -> return false
+            EndReason.MANUAL -> return false
+        }
+        endReason = null
+        endDetail = ""
+        phase = GamePhase.STOPPED
+        prepStep = PrepStep.DONE
+        car.prepChecklistDone = true
+        car.stopEngine()
+        car.speed = 0f
+        message = detail
         return true
     }
 
@@ -2213,6 +2291,7 @@ class GameEngine(
                 car.wearCause?.let { "Cause: ${it.fatal}." } ?: ""
             EndReason.OUT_OF_FUEL -> "Out of fuel."
             EndReason.BATTERY_DEAD -> "Battery drained. Engine would not start."
+            EndReason.ARRIVED -> "The final relay is online. The route is complete."
             EndReason.MANUAL -> ""
         }
         car.stopEngine()
@@ -2411,8 +2490,8 @@ class GameEngine(
          * Postaví engine späť z uloženej jazdy. Terén aj úseky sa dopočítajú
          * zo seedu, budovy sa nahradia tým, čo v nich hráč nechal.
          */
-        fun restore(snap: RunSnapshot, bestDistanceKm: Float): GameEngine {
-            val engine = GameEngine(snap.seed, bestDistanceKm)
+        fun restore(snap: RunSnapshot, bestDistanceKm: Float, metaRelayNodes: Int = 0): GameEngine {
+            val engine = GameEngine(snap.seed, bestDistanceKm, metaRelayNodes = metaRelayNodes)
             engine.applySnapshot(snap)
             return engine
         }

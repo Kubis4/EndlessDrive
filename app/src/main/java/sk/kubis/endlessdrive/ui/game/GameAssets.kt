@@ -400,12 +400,12 @@ object BackdropCatalog {
         ),
         BiomeType.FOREST to BackdropSpec(
             R.drawable.bg_forest_far, R.drawable.bg_forest_mid, R.drawable.bg_forest_near,
-            landscapeLift = 0.05f,
+            horizonCover = 0f, landscapeLift = 0.05f,
             midHaze = 0.08f, nearHaze = 0.03f, hazeDay = Color(0xFF8A9488), midRise = 0.04f
         ),
         BiomeType.FOREST_ALIVE to BackdropSpec(
             forestAlive.first, forestAlive.second, forestAlive.third,
-            horizonCover = 0.34f, landscapeLift = 0.05f,
+            horizonCover = 0f, landscapeLift = 0.05f,
             midHaze = 0.07f, nearHaze = 0.03f, hazeDay = Color(0xFF8FA882), midRise = 0.045f
         ),
         BiomeType.INDUSTRIAL to BackdropSpec(
@@ -432,7 +432,7 @@ object BackdropCatalog {
         // Zachované pôvodné kreslené sady; príbuzné biómy odlišuje tónovanie.
         BiomeType.RURAL to BackdropSpec(
             forestAlive.first, forestAlive.second, forestAlive.third,
-            tint = Color(0xFFF4F0D5), landscapeLift = 0.05f,
+            tint = Color(0xFFF4F0D5), horizonCover = 0f, landscapeLift = 0.05f,
             midHaze = 0.08f, nearHaze = 0.04f, hazeDay = Color(0xFFB8C4A0), midRise = 0.04f
         ),
         BiomeType.WASTELAND to BackdropSpec(
@@ -442,7 +442,7 @@ object BackdropCatalog {
         ),
         BiomeType.ALPINE to BackdropSpec(
             forestAlive.first, forestAlive.second, forestAlive.third,
-            tint = Color(0xFF9BBED2), landscapeLift = 0.05f,
+            tint = Color(0xFF9BBED2), horizonCover = 0f, landscapeLift = 0.05f,
             midHaze = 0.08f, nearHaze = 0.04f, hazeDay = Color(0xFFA8C0C8), midRise = 0.04f
         )
     )

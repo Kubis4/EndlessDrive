@@ -349,10 +349,11 @@ class GameAudio(context: Context) {
     private fun updateAmbientLoops(engine: GameEngine, dt: Float) {
         // Noc nemá cvrčky / sovy / rádio – žiadne creepy loopy.
         val raining = engine.hasEvent(RoadEvent.RAIN)
-        val windy = engine.hasEvent(RoadEvent.TAILWIND)
+        val windy = engine.hasEvent(RoadEvent.TAILWIND) || engine.hasEvent(RoadEvent.HEADWIND)
+        val windStrength = if (engine.hasEvent(RoadEvent.HEADWIND)) 0.28f else 0.22f
 
         rainVol = MathX.damp(rainVol, if (raining) 0.18f else 0f, 2.5f, dt)
-        windVol = MathX.damp(windVol, if (windy) 0.22f else 0f, 2.5f, dt)
+        windVol = MathX.damp(windVol, if (windy) windStrength else 0f, 2.5f, dt)
 
         rainStream = applyLoop(rainStream, R.raw.sfx_rain, rainVol, 1f)
         windStream = applyLoop(windStream, R.raw.sfx_wind, windVol, 1f)

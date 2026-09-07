@@ -10,6 +10,8 @@
 .cxx
 local.properties
 .kotlin
+/.gradle-local
+/.android-local
 
 # Zbalené APK – build výstup, nie zdroj.
 /apk

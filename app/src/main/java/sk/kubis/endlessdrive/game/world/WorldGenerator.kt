@@ -13,6 +13,7 @@ import sk.kubis.endlessdrive.domain.model.RoadPaving
 import sk.kubis.endlessdrive.domain.model.RoadFeature
 import sk.kubis.endlessdrive.domain.model.RoadSurface
 import sk.kubis.endlessdrive.domain.model.VehiclePaint
+import sk.kubis.endlessdrive.game.Journey
 
 object WorldGenerator {
     private const val MIX = -0x61C8864680B583EBL
@@ -50,7 +51,7 @@ object WorldGenerator {
     ): SegmentPlan {
         val rng = SeededRandom(segmentSeed xor PLAN_SALT)
         // Bez stropu – úseky sa predlžujú aj hlboko v jazde.
-        val progress = MathX.growth(tripDistance, 9000f).coerceAtMost(1.2f)
+        val progress = MathX.growth(tripDistance, 30_000f).coerceAtMost(1.35f)
         // Regióny ostávajú čitateľné aj hlboko v jazde; nerastú na desiatky km.
         val lengthGrowth = 1f + progress * 0.25f
         val baseLen = if (isTutorial) {
@@ -62,7 +63,10 @@ object WorldGenerator {
         val features = planFeatures(rng, style, length, tripDistance, isTutorial)
 
         // Viac budov na dlhších úsekoch, ale s väčším odstupom (menej „husto“).
-        val density = style.buildingDensity
+        val density = (
+            style.buildingDensity *
+                (1f - MathX.growth(tripDistance, Journey.FINAL_DISTANCE_M) * 0.42f)
+            ).coerceAtLeast(0.18f)
         val roll = rng.nextFloat()
         val room = (length / GameConfig.BUILDING_MIN_SPACING).toInt().coerceAtLeast(1)
         val minCount = when {
@@ -104,7 +108,7 @@ object WorldGenerator {
         // Zima je odmena za dlhú jazdu – čím ďalej, tým väčšia šanca na sneh.
         // Na púšti a v piesočnej búrke nesneží, tam vládne piesok.
         if (!style.arid && tripDistance >= GameConfig.SNOW_START_M) {
-            val winterChance = (MathX.growth(tripDistance - GameConfig.SNOW_START_M, 9000f) * 0.55f)
+            val winterChance = (MathX.growth(tripDistance - GameConfig.SNOW_START_M, 30_000f) * 0.55f)
                 .coerceAtMost(0.62f)
             if (rng.nextFloat() < winterChance) {
                 return if (rng.chance(0.45f)) RoadPaving.PACKED_SNOW else RoadPaving.SNOW
@@ -228,7 +232,7 @@ object WorldGenerator {
         // Krátky nájazd, potom hneď členitý terén – nie kilometer roviny.
         out += RoadFeature.STRAIGHT
         var covered = GameConfig.FEATURE_MIN_LENGTH * 1.4f
-        val hardness = MathX.growth(tripDistance, 6000f).coerceAtMost(1.8f)
+        val hardness = MathX.growth(tripDistance, 35_000f).coerceAtMost(2.4f)
         // Skoré km: jemné kopce áno, ostré crest/ravine ešte zriedka.
         val earlySoft = (1f - (tripDistance / 2500f).coerceIn(0f, 1f))
 
@@ -314,17 +318,43 @@ object WorldGenerator {
             val f = plan.features[it]
             val bias = when (f) {
                 RoadFeature.CREST, RoadFeature.RAVINE -> rng.nextFloat(0.55f, 0.95f)
-                RoadFeature.BRIDGE -> rng.nextFloat(0.6f, 1.0f)
+                // Most je krátky prechod cez roklinu, nie samostatný región.
+                // Menšia váha drží jeho dĺžku pod kontrolou aj pri dlhších mapách.
+                RoadFeature.BRIDGE -> rng.nextFloat(0.32f, 0.58f)
                 RoadFeature.STRAIGHT -> rng.nextFloat(0.8f, 1.5f)
                 else -> rng.nextFloat(0.7f, 1.4f)
             }
             bias
         }
         val total = weights.sum()
+        val sectionLengths = FloatArray(n) { plan.length * (weights[it] / total) }
+        // Pri dlhšom segmente by sa aj nízka šanca mohla premeniť na most
+        // dlhý stovky metrov. Most má byť krátka prekážka s rampami, preto
+        // jeho prebytočnú dĺžku rozdelíme do susedných pevných úsekov.
+        var bridgeExcess = 0f
+        for (i in 0 until n) {
+            if (plan.features[i] == RoadFeature.BRIDGE && sectionLengths[i] > MAX_BRIDGE_LENGTH) {
+                bridgeExcess += sectionLengths[i] - MAX_BRIDGE_LENGTH
+                sectionLengths[i] = MAX_BRIDGE_LENGTH
+            }
+        }
+        if (bridgeExcess > 0f) {
+            val nonBridgeLength = sectionLengths.indices
+                .filter { plan.features[it] != RoadFeature.BRIDGE }
+                .sumOf { sectionLengths[it].toDouble() }
+                .toFloat()
+            if (nonBridgeLength > 0f) {
+                for (i in 0 until n) {
+                    if (plan.features[i] != RoadFeature.BRIDGE) {
+                        sectionLengths[i] += bridgeExcess * sectionLengths[i] / nonBridgeLength
+                    }
+                }
+            }
+        }
         val out = ArrayList<RoadSection>(n)
         var cursor = 0f
         for (i in 0 until n) {
-            val len = if (i == n - 1) plan.length - cursor else plan.length * (weights[i] / total)
+            val len = if (i == n - 1) plan.length - cursor else sectionLengths[i]
             val end = (cursor + len).coerceAtMost(plan.length)
             out += RoadSection(plan.features[i], cursor, end)
             cursor = end
@@ -381,7 +411,7 @@ object WorldGenerator {
         if (usableEnd <= cursor + 30f) return
 
         // Na začiatku hry sporadicky, neskôr bežná súčasť cesty.
-        val density = 0.4f + MathX.growth(tripDistance, 4000f) * 0.9f
+        val density = 0.4f + MathX.growth(tripDistance, 30_000f) * 1.1f
         val count = (plan.length / 260f * density).toInt().coerceIn(0, 6)
 
         repeat(count) {
@@ -546,6 +576,12 @@ object WorldGenerator {
                 cursor = windowEnd
                 return@repeat
             }
+            // Vrak musí stáť na pevnej zemi. Predtým sa roadside loot umiestnil
+            // aj do stredu mosta, kde potom auto vyzeralo ako dekorácia vo vzduchu.
+            if (spansFeature(segment, lx - 18f, lx + 18f, RoadFeature.BRIDGE)) {
+                cursor = lx + GameConfig.BUILDING_MIN_SPACING
+                return@repeat
+            }
             val occupied = segment.buildings.any {
                 kotlin.math.abs(it.localX - lx) < GameConfig.BUILDING_MIN_SPACING * 0.55f
             }
@@ -584,7 +620,8 @@ object WorldGenerator {
             landmark = true
         )
         // Depo nikdy nesklame: plný stojan a niekoľko poriadnych dielov.
-        val depotFuel = rng.nextFloat(GameConfig.PUMP_FUEL_MAX * 0.8f, GameConfig.PUMP_FUEL_MAX * 1.4f)
+        val longRouteSupply = 1f - MathX.growth(at, Journey.FINAL_DISTANCE_M) * 0.22f
+        val depotFuel = rng.nextFloat(GameConfig.PUMP_FUEL_MAX * 0.8f, GameConfig.PUMP_FUEL_MAX * 1.4f) * longRouteSupply
         depot.pumpFuelL = depotFuel * 0.55f
         depot.pumpDieselL = depotFuel * 0.45f
         depot.pumpPurity = rng.nextFloat(0.88f, 1f)
@@ -843,7 +880,7 @@ object WorldGenerator {
         // Čím ďalej, tým väčšia šanca, že stojan je vyčerpaný.
         val pump = if (type == BuildingType.GAS_STATION) {
             // Ďaleko od štartu je palivo čoraz vzácnejšie – dojazd sa stáva témou.
-            val drought = MathX.growth(distance, 6000f).coerceIn(0f, 0.78f)
+            val drought = MathX.growth(distance, 40_000f).coerceIn(0f, 0.68f)
             if (rng.chance(0.18f + drought)) 0f
             else rng.nextFloat(GameConfig.PUMP_FUEL_MIN, GameConfig.PUMP_FUEL_MAX)
         } else 0f
@@ -913,6 +950,7 @@ object WorldGenerator {
 
     /** Odstup budov od mosta vrátane nájazdu (m). */
     private const val BRIDGE_CLEARANCE = 12f
+    private const val MAX_BRIDGE_LENGTH = 72f
 
     private const val PLAN_SALT = 0x5EED_91A4L
     private const val SECTION_SALT = 0x53EC_7104L

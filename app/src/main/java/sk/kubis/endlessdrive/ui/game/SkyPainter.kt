@@ -16,6 +16,19 @@ import sk.kubis.endlessdrive.game.DayCycle
  * nesie v predlohe.
  */
 class SkyPainter {
+    // Pozície hviezd sú deterministické; počítať hash pre každú hviezdu v každom
+    // frame je zbytočná CPU práca. Samotný drift sa naďalej prepočítava lacno.
+    private val starX = FloatArray(STAR_COUNT)
+    private val starY = FloatArray(STAR_COUNT)
+    private val starTwinkle = FloatArray(STAR_COUNT)
+
+    init {
+        for (i in 0 until STAR_COUNT) {
+            starX[i] = MathX.hash01(i, 17)
+            starY[i] = MathX.hash01(i, 71)
+            starTwinkle[i] = MathX.hash01(i, 131)
+        }
+    }
 
     /**
      * Hviezdy nad kreslené pozadie – to má vlastnú oblohu, ale v noci by bez
@@ -30,9 +43,9 @@ class SkyPainter {
         if (alpha <= 0.01f) return
         val drift = (camX * 0.6f) % size.width
         for (i in 0 until STAR_COUNT) {
-            val hx = MathX.hash01(i, 17)
-            val hy = MathX.hash01(i, 71)
-            val tw = MathX.hash01(i, 131)
+            val hx = starX[i]
+            val hy = starY[i]
+            val tw = starTwinkle[i]
             var x = hx * size.width - drift
             if (x < 0f) x += size.width
             val y = hy * horizonY * 0.78f

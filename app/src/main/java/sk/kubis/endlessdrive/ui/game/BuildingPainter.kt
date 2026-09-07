@@ -10,6 +10,9 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
+import sk.kubis.endlessdrive.core.MathX
+import sk.kubis.endlessdrive.domain.model.BiomeType
 import sk.kubis.endlessdrive.domain.model.BuildingType
 import sk.kubis.endlessdrive.game.world.WorldBuilding
 
@@ -19,6 +22,31 @@ import sk.kubis.endlessdrive.game.world.WorldBuilding
  */
 class BuildingPainter {
     private val path = Path()
+    private val materials = MaterialPainter()
+    private var seed = 0
+    private var variant = 0
+    private var biome = BiomeType.RURAL
+    private var textureDay = 1f
+    private var wallKind = MaterialKind.BRICK
+    private var snow = 0f
+
+    private fun roll(salt: Int) = MathX.hash01(seed, salt)
+    private fun palette(base: Color): Color {
+        val local = when {
+            biome.arid -> Color(0xFFC3A27D)
+            biome == BiomeType.ALPINE -> Color(0xFF879A9D)
+            biome == BiomeType.INDUSTRIAL -> Color(0xFF747E7B)
+            biome == BiomeType.FOREST || biome == BiomeType.FOREST_ALIVE -> Color(0xFF788064)
+            else -> Color(0xFFB49A78)
+        }
+        val paint = when (variant) {
+            0 -> base
+            1 -> Color(0xFF9DACA0)
+            2 -> Color(0xFFB59B82)
+            else -> Color(0xFF8595A0)
+        }
+        return shade(lerp(paint, local, 0.32f), textureDay)
+    }
 
     fun DrawScope.drawBuilding(
         b: WorldBuilding,
@@ -27,8 +55,21 @@ class BuildingPainter {
         s: Float,
         day: Float,
         near: Boolean,
-        slopeDeg: Float = 0f
+        slopeDeg: Float = 0f,
+        environment: BiomeType = BiomeType.RURAL,
+        winterAmount: Float = 0f
     ) {
+        seed = (b.id xor (b.id ushr 32)).toInt()
+        variant = (roll(7103) * 4).toInt().coerceAtMost(3)
+        biome = environment
+        textureDay = day
+        snow = if (biome == BiomeType.ALPINE) 1f else winterAmount.coerceIn(0f, 1f)
+        wallKind = when {
+            biome.arid -> MaterialKind.CONCRETE
+            b.type == BuildingType.HOUSE && (variant % 2 == 0 || biome == BiomeType.ALPINE || biome == BiomeType.FOREST_ALIVE) -> MaterialKind.PLANKS
+            b.type != BuildingType.HOUSE && variant % 2 == 0 -> MaterialKind.METAL
+            else -> MaterialKind.BRICK
+        }
         val night = 1f - day
         val lit = night > 0.35f && !b.looted
         // Stojí na svahu ako vozovka – otočka okolo päty, nie celej oblohy.
@@ -39,15 +80,19 @@ class BuildingPainter {
                 topLeft = Offset(px - s * 2.2f, py - s * 0.12f),
                 size = Size(s * 4.4f, s * 0.34f)
             )
-            when (b.type) {
-                BuildingType.HOUSE -> house(px, py, s, day, lit)
-                BuildingType.GARAGE -> garage(px, py, s, day, lit)
-                BuildingType.GAS_STATION -> gasStation(
-                    px, py, s, day, lit, b.pumpFuelL > 0.05f || b.pumpDieselL > 0.05f
-                )
-                BuildingType.AUTO_SHOP -> autoShop(px, py, s, day, lit)
-                // Vrak kreslí SceneryPainter zo spritov – tu ostane len tieň a značka.
-                BuildingType.WRECK -> Unit
+            // Keep variations inside the original placement footprint; markers remain upright.
+            scale(scaleX = (if (roll(7193) < 0.5f) -1f else 1f) * (0.88f + roll(7207) * 0.12f),
+                scaleY = 0.88f + roll(7211) * 0.22f, pivot = Offset(px, py)) {
+                when (b.type) {
+                    BuildingType.HOUSE -> house(px, py, s, day, lit)
+                    BuildingType.GARAGE -> garage(px, py, s, day, lit)
+                    BuildingType.GAS_STATION -> gasStation(
+                        px, py, s, day, lit, b.pumpFuelL > 0.05f || b.pumpDieselL > 0.05f
+                    )
+                    BuildingType.AUTO_SHOP -> autoShop(px, py, s, day, lit)
+                    // Vrak kreslí SceneryPainter zo spritov – tu ostane len tieň a značka.
+                    BuildingType.WRECK -> Unit
+                }
             }
             if (b.landmark) depotFlag(px, py, s, day)
             if (near) drawSearchMarker(px, py, s, b.looted)
@@ -60,16 +105,22 @@ class BuildingPainter {
 
     private fun DrawScope.house(x: Float, y: Float, s: Float, day: Float, lit: Boolean) {
         val w = s * 3.0f
-        val h = s * 2.2f
+        val h = s * (if (variant == 3) 2.75f else 2.2f)
         val left = x - w * 0.5f
-        wall(left, y - h, w, h, shade(Color(0xFF9A7551), day))
+        wall(left, y - h, w, h, palette(Color(0xFF9A7551)))
+        val roofRise = s * (if (biome.arid) 0.40f else if (variant == 1) 0.65f else 0.95f)
         // Sedlová strecha.
         path.reset()
         path.moveTo(left - s * 0.28f, y - h)
-        path.lineTo(x, y - h - s * 0.95f)
+        path.lineTo(x, y - h - roofRise)
         path.lineTo(left + w + s * 0.28f, y - h)
         path.close()
         drawPath(path, shade(Color(0xFF6E4030), day))
+        materials.shape(this, path, MaterialKind.BRICK, left, y - h - roofRise, s * 1.6f, 0.75f * day)
+        if (snow > 0f) {
+            drawLine(shade(Color(0xFFE2EBEA), day).copy(alpha = snow), Offset(left - s * 0.28f, y - h), Offset(x, y - h - roofRise), s * 0.12f, StrokeCap.Round)
+            drawLine(shade(Color(0xFFE2EBEA), day).copy(alpha = snow), Offset(x, y - h - roofRise), Offset(left + w + s * 0.28f, y - h), s * 0.12f, StrokeCap.Round)
+        }
         // Odkvapová hrana a rady šindľov kopírujú sklon strechy.
         drawLine(
             shade(Color(0xFF3D2922), day),
@@ -79,7 +130,7 @@ class BuildingPainter {
         )
         for (i in 1..4) {
             val t = i / 5f
-            val yy = y - h - s * 0.95f * (1f - t)
+            val yy = y - h - roofRise * (1f - t)
             val half = (w * 0.5f + s * 0.28f) * t
             drawLine(
                 Color.Black.copy(alpha = 0.15f),
@@ -98,19 +149,17 @@ class BuildingPainter {
             topLeft = Offset(left + w * 0.68f - s * 0.05f, y - h - s * 0.91f),
             size = Size(s * 0.40f, s * 0.08f)
         )
-        // Drevené obloženie, podkrovné okno a parapety.
-        for (i in 1 until 8) {
-            val sx = left + w * i / 8f
-            drawLine(Color.Black.copy(alpha = 0.08f), Offset(sx, y - h), Offset(sx, y), 1f)
-        }
-        drawCircle(shade(Color(0xFF2B3138), day), s * 0.18f, Offset(x, y - h - s * 0.29f))
-        drawCircle(shade(Color(0xFFC2AA7D), day), s * 0.18f, Offset(x, y - h - s * 0.29f), style = Stroke((s * 0.05f).coerceAtLeast(1f)))
+        // Corner trim frames the textured facade.
+        drawRect(palette(Color(0xFFD1C5A6)), Offset(left, y - h), Size(s * 0.07f, h))
+        drawRect(palette(Color(0xFFD1C5A6)), Offset(left + w - s * 0.07f, y - h), Size(s * 0.07f, h))
+        drawCircle(shade(Color(0xFF2B3138), day), s * 0.13f, Offset(x, y - h - roofRise * 0.32f))
+        drawCircle(shade(Color(0xFFC2AA7D), day), s * 0.13f, Offset(x, y - h - roofRise * 0.32f), style = Stroke((s * 0.04f).coerceAtLeast(1f)))
         window(left + w * 0.16f, y - h * 0.78f, s * 0.52f, s * 0.44f, day, lit)
         window(left + w * 0.62f, y - h * 0.78f, s * 0.52f, s * 0.44f, day, lit)
         for (wx in floatArrayOf(left + w * 0.16f, left + w * 0.62f)) {
             drawRect(
                 shade(Color(0xFF6B4935), day),
-                topLeft = Offset(wx - s * 0.04f, y - h * 0.33f),
+                topLeft = Offset(wx - s * 0.04f, y - h * 0.78f + s * 0.44f),
                 size = Size(s * 0.60f, s * 0.07f)
             )
         }
@@ -133,13 +182,15 @@ class BuildingPainter {
         val w = s * 3.4f
         val h = s * 1.8f
         val left = x - w * 0.5f
-        wall(left, y - h, w, h, shade(Color(0xFF7C7C6C), day))
+        wall(left, y - h, w, h, palette(Color(0xFF7C7C6C)))
         drawRect(
             shade(Color(0xFF54544A), day),
             topLeft = Offset(left - s * 0.16f, y - h - s * 0.22f),
             size = Size(w + s * 0.32f, s * 0.24f)
         )
         // Trapézový bok strechy dá plochej hale hĺbku.
+        if (snow > 0f) drawLine(shade(Color(0xFFE2EBEA), day).copy(alpha = snow),
+            Offset(left - s * 0.16f, y - h - s * 0.22f), Offset(left + w + s * 0.16f, y - h - s * 0.22f), s * 0.12f, StrokeCap.Round)
         path.reset()
         path.moveTo(left + w, y - h)
         path.lineTo(left + w + s * 0.34f, y - h - s * 0.16f)
@@ -154,10 +205,11 @@ class BuildingPainter {
             drawCircle(Color.Black.copy(alpha = 0.25f), (s * 0.025f).coerceAtLeast(1f), Offset(sx, y - h * 0.12f))
         }
         // Rolovacia brána so segmentmi.
-        val gw = w * 0.60f
+        val gw = w * (if (variant == 1) 0.48f else 0.60f)
         val gh = h * 0.74f
         val gx = left + w * 0.20f
         drawRect(shade(Color(0xFF3D4148), day), topLeft = Offset(gx, y - gh), size = Size(gw, gh))
+        textureRect(gx, y - gh, gw, gh, MaterialKind.METAL, day)
         var yy = y - gh
         while (yy < y - s * 0.05f) {
             drawLine(
@@ -220,7 +272,7 @@ class BuildingPainter {
         val w = s * 2.4f
         val h = s * 1.9f
         val left = x - w * 0.5f - s * 0.9f
-        wall(left, y - h, w, h, shade(Color(0xFFB9AE95), day))
+        wall(left, y - h, w, h, palette(Color(0xFFB9AE95)))
         drawRect(
             shade(Color(0xFF8B6A4E), day),
             topLeft = Offset(left - s * 0.14f, y - h - s * 0.2f),
@@ -243,7 +295,7 @@ class BuildingPainter {
         val cx = x + s * 1.5f
         val canopyY = y - s * 2.5f
         drawRect(
-            shade(Color(0xFFC8503A), day),
+            palette(Color(0xFFC8503A)),
             topLeft = Offset(cx - s * 1.5f, canopyY),
             size = Size(s * 3.0f, s * 0.34f)
         )
@@ -268,6 +320,8 @@ class BuildingPainter {
             )
         }
         // Zapustené svetlá v spodnej hrane prístrešku.
+        if (snow > 0f) drawLine(shade(Color(0xFFE2EBEA), day).copy(alpha = snow),
+            Offset(cx - s * 1.5f, canopyY), Offset(cx + s * 1.5f, canopyY), s * 0.12f, StrokeCap.Round)
         for (dx in floatArrayOf(-0.85f, 0f, 0.85f)) {
             drawOval(
                 if (lit) Color(0xFFFFE7A6) else shade(Color(0xFF555047), day),
@@ -337,7 +391,7 @@ class BuildingPainter {
         val w = s * 3.8f
         val h = s * 2.3f
         val left = x - w * 0.5f
-        wall(left, y - h, w, h, shade(Color(0xFF6E7C89), day))
+        wall(left, y - h, w, h, palette(Color(0xFF6E7C89)))
         // Pílová strecha.
         path.reset()
         path.moveTo(left, y - h)
@@ -345,13 +399,25 @@ class BuildingPainter {
         var up = true
         while (sx < left + w) {
             val nx = (sx + w / 4f).coerceAtMost(left + w)
-            path.lineTo(nx, y - h - (if (up) s * 0.45f else 0f))
+            path.lineTo(nx, y - h - (if (variant == 1) s * 0.14f else if (up) s * 0.45f else 0f))
             up = !up
             sx = nx
         }
         path.lineTo(left + w, y - h)
         path.close()
         drawPath(path, shade(Color(0xFF47535E), day))
+        materials.shape(this, path, MaterialKind.METAL, left, y - h, s * 1.8f, day)
+        if (snow > 0f) {
+            var roofX = left
+            var roofY = y - h
+            for (i in 1..4) {
+                val nextX = left + w * i / 4f
+                val nextY = y - h - (if (variant == 1) s * 0.14f else if (i % 2 == 1) s * 0.45f else 0f)
+                drawLine(shade(Color(0xFFE2EBEA), day).copy(alpha = snow), Offset(roofX, roofY), Offset(nextX, nextY), s * 0.10f, StrokeCap.Round)
+                roofX = nextX
+                roofY = nextY
+            }
+        }
 
         // Strešné odvetranie a žľab po celej fasáde.
         for (i in 0..2) {
@@ -386,6 +452,7 @@ class BuildingPainter {
         val bw = w * 0.44f
         val bh = h * 0.72f
         drawRect(shade(Color(0xFF2E3840), day), topLeft = Offset(left + w * 0.08f, y - bh), size = Size(bw, bh))
+        textureRect(left + w * 0.08f, y - bh, bw, bh, MaterialKind.METAL, day)
         drawRect(
             shade(Color(0xFF9AA6B0), day),
             topLeft = Offset(left + w * 0.08f, y - bh),
@@ -445,6 +512,12 @@ class BuildingPainter {
      * pri zemi, vodorovné škáry muriva a náznak podmurovky. Ploché obdĺžniky
      * s dvoma pruhmi pôsobili ako papierová kulisa.
      */
+    private fun DrawScope.textureRect(x: Float, y: Float, w: Float, h: Float, kind: MaterialKind, alpha: Float) {
+        path.reset()
+        path.addRect(androidx.compose.ui.geometry.Rect(x, y, x + w, y + h))
+        materials.shape(this, path, kind, x - roll(7307) * w, y, w * 0.62f, alpha)
+    }
+
     private fun DrawScope.wall(left: Float, top: Float, w: Float, h: Float, base: Color) {
         drawRect(
             brush = Brush.horizontalGradient(
@@ -458,6 +531,17 @@ class BuildingPainter {
             topLeft = Offset(left, top),
             size = Size(w, h)
         )
+        textureRect(left, top, w, h, wallKind, 0.85f * (0.15f + textureDay * 0.85f))
+        // Seeded rain streaks / chipped paint remain attached to this facade when scrolling.
+        for (i in 0 until 12) {
+            val x = left + w * roll(7409 + i)
+            val length = h * (0.08f + roll(7507 + i) * 0.42f)
+            drawRect(base.copy(alpha = 0.18f), Offset(x, top + h * 0.06f), Size(w * 0.014f, length))
+            if (roll(7603 + i) > 0.55f) drawRect(lerp(base, Color(0xFF483D33), 0.45f).copy(alpha = 0.35f),
+                Offset(x, top + h * (0.65f + roll(7703 + i) * 0.25f)), Size(w * 0.035f, h * 0.025f))
+        }
+        if (snow > 0f) drawLine(shade(Color(0xFFE2EBEA), textureDay).copy(alpha = snow),
+            Offset(left, top), Offset(left + w, top), h * 0.045f, StrokeCap.Round)
         // Zašpinenie a vlhkosť pri zemi.
         drawRect(
             brush = Brush.verticalGradient(
@@ -469,16 +553,6 @@ class BuildingPainter {
             topLeft = Offset(left, top + h * 0.55f),
             size = Size(w, h * 0.45f)
         )
-        // Škáry muriva – riedke, len aby stena nebola hladká plocha.
-        val rows = (h / (w * 0.16f)).toInt().coerceIn(2, 7)
-        for (i in 1 until rows) {
-            val ly = top + h * i / rows
-            drawLine(
-                Color.Black.copy(alpha = 0.10f),
-                Offset(left, ly), Offset(left + w, ly),
-                strokeWidth = 1f
-            )
-        }
         // Podmurovka – tmavší pás, na ktorom dom stojí.
         drawRect(
             lerp(base, Color.Black, 0.42f),
@@ -490,6 +564,13 @@ class BuildingPainter {
     private fun DrawScope.window(x: Float, y: Float, w: Float, h: Float, day: Float, lit: Boolean) {
         val glass = if (lit) Color(0xFFFFD98A) else shade(Color(0xFF2B3138), day)
         drawRect(glass, topLeft = Offset(x, y), size = Size(w, h))
+        if (!lit) drawRect(Brush.linearGradient(listOf(shade(Color(0xFF869A9E), day).copy(alpha = 0.65f), Color.Transparent),
+            start = Offset(x, y), end = Offset(x + w, y + h)), Offset(x, y), Size(w, h))
+        if (variant == 1) {
+            for (dx in floatArrayOf(-w * 0.27f, w * 1.05f)) {
+                drawRect(palette(Color(0xFF52665C)), Offset(x + dx, y - h * 0.05f), Size(w * 0.22f, h * 1.1f))
+            }
+        }
         drawRect(
             shade(Color(0xFF3E3428), day),
             topLeft = Offset(x, y),
