@@ -55,7 +55,9 @@ fun SettingsScreen(
     throttleMode: ThrottleMode = ThrottleMode.BINARY,
     onThrottleModeChange: (ThrottleMode) -> Unit = {},
     showFps: Boolean = false,
-    onShowFpsChange: (Boolean) -> Unit = {}
+    onShowFpsChange: (Boolean) -> Unit = {},
+    showPrivacyOptions: Boolean = false,
+    onPrivacyOptions: () -> Unit = {}
 ) {
     Box(
         Modifier
@@ -116,6 +118,17 @@ fun SettingsScreen(
             AudioSlider("Road & weather", audioSettings.surfaces) { onAudioChange(audioSettings.copy(surfaces = it)) }
             AudioSlider("Tyre slip", audioSettings.tyres) { onAudioChange(audioSettings.copy(tyres = it)) }
             GameButton("RESET SOUND", { onAudioChange(AudioSettings()) }, compact = true)
+            if (showPrivacyOptions) {
+                Spacer(Modifier.height(18.dp))
+                Text("PRIVACY", color = GameColors.accent, fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                Text(
+                    "Change how rewarded advertising uses your data.",
+                    color = GameColors.textDim, fontSize = 13.sp
+                )
+                Spacer(Modifier.height(8.dp))
+                GameButton("AD PRIVACY OPTIONS", onPrivacyOptions, compact = true)
+            }
             Spacer(Modifier.height(24.dp))
 
             Text(

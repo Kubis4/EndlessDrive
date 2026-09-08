@@ -94,7 +94,7 @@ class BuildingPainter {
                     BuildingType.WRECK -> Unit
                 }
             }
-            if (b.landmark) depotFlag(px, py, s, day)
+            if (b.landmark) relayTower(px, py, s, day, b.relayRestored)
             if (near) drawSearchMarker(px, py, s, b.looted)
         }
     }
@@ -596,21 +596,32 @@ class BuildingPainter {
         drawCircle(shade(Color(0xFFCBB47A), day), w * 0.08f, Offset(x + w * 0.8f, y - h * 0.5f))
     }
 
-    /** Vlajka nad depom – vidno ju už z diaľky, dá jazde cieľ. */
-    private fun DrawScope.depotFlag(x: Float, y: Float, s: Float, day: Float) {
-        val mast = y - s * 5.2f
-        drawLine(
-            shade(Color(0xFFBFB6A4), day),
-            Offset(x - s * 2.2f, y),
-            Offset(x - s * 2.2f, mast),
-            strokeWidth = (s * 0.10f).coerceAtLeast(1.5f)
-        )
-        path.reset()
-        path.moveTo(x - s * 2.2f, mast)
-        path.lineTo(x - s * 0.7f, mast + s * 0.42f)
-        path.lineTo(x - s * 2.2f, mast + s * 0.84f)
-        path.close()
-        drawPath(path, shade(Color(0xFFD2AE63), day))
+    /** Samostatný rádiový stožiar nad relay stanicou. */
+    private fun DrawScope.relayTower(x: Float, y: Float, s: Float, day: Float, restored: Boolean) {
+        val mastX = x + s * 1.65f
+        val baseY = y - s * 0.05f
+        val topY = y - s * 8.2f
+        val metal = shade(Color(0xFF9FA6A3), day)
+        val darkMetal = shade(Color(0xFF4D5655), day)
+        val signal = if (restored) Color(0xFF63E3C6) else Color(0xFFFF6B55)
+
+        drawLine(metal, Offset(mastX, baseY), Offset(mastX, topY), (s * 0.12f).coerceAtLeast(1.5f))
+        drawLine(darkMetal, Offset(mastX - s * 0.72f, baseY), Offset(mastX, topY), (s * 0.08f).coerceAtLeast(1f))
+        drawLine(darkMetal, Offset(mastX + s * 0.72f, baseY), Offset(mastX, topY), (s * 0.08f).coerceAtLeast(1f))
+        var rungY = baseY - s * 0.9f
+        while (rungY > topY + s * 0.6f) {
+            val half = s * ((baseY - rungY) / (baseY - topY)).coerceIn(0.08f, 0.72f)
+            drawLine(darkMetal, Offset(mastX - half, rungY), Offset(mastX + half, rungY), (s * 0.07f).coerceAtLeast(1f))
+            rungY -= s * 0.95f
+        }
+        drawCircle(signal.copy(alpha = if (restored) 0.95f else 0.75f), s * 0.20f, Offset(mastX, topY))
+        drawCircle(signal.copy(alpha = 0.20f), s * 0.46f, Offset(mastX, topY))
+        // Small dish and control cabinet make the object read as a radio relay,
+        // not as a decorative flag attached to a fuel station.
+        drawLine(signal, Offset(mastX - s * 0.55f, topY + s * 1.25f), Offset(mastX + s * 0.35f, topY + s * 1.0f), (s * 0.11f).coerceAtLeast(1.5f))
+        drawCircle(darkMetal, s * 0.18f, Offset(mastX - s * 0.60f, topY + s * 1.28f))
+        drawRect(darkMetal, Offset(mastX - s * 0.48f, baseY - s * 0.9f), Size(s * 0.95f, s * 0.60f))
+        drawRect(signal.copy(alpha = 0.75f), Offset(mastX - s * 0.30f, baseY - s * 0.73f), Size(s * 0.18f, s * 0.14f))
     }
 
     /** Ukazovateľ nad budovou, keď je auto v dosahu. */

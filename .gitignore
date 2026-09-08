@@ -18,3 +18,8 @@ local.properties
 
 # Dočasné sťahovanie / spracovanie SFX.
 /_sfx_dl
+
+# Local build previews and files from the old non-Android prototype.
+/builds/
+/cad/
+/.codex_repair_all_icons.py

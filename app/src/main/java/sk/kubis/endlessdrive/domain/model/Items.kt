@@ -92,6 +92,14 @@ object ItemCatalog {
         weight = 1f, baseValue = 16
     )
     /**
+     * Elektronický modul z relay stanice. Nejde do auta – hráč ho nosí
+     * do ďalšieho uzla a pri obnove sa spotrebuje.
+     */
+    val RELAY_MODULE = ItemDef(
+        id = "relay_module", name = "Relay module", rarity = ItemRarity.RARE,
+        weight = 2f, baseValue = 38
+    )
+    /**
      * Voda: núdzové riešenie do chladiča. Doplní objem, ale zriedi čistotu
      * takmer na nulu – motor pôjde horúci.
      */
@@ -337,7 +345,7 @@ object ItemCatalog {
     )
 
     val ALL = listOf(
-        FUEL_CAN, DIESEL_CAN, OIL_BOTTLE, PUNCTURE_KIT, COOLANT_BOTTLE, WATER,
+        FUEL_CAN, DIESEL_CAN, OIL_BOTTLE, PUNCTURE_KIT, RELAY_MODULE, COOLANT_BOTTLE, WATER,
         TIRE_POOR, TIRE, TIRE_SPORT, TIRE_OFFROAD, TIRE_WINTER, SNOW_CHAINS,
         BACKPACK, BOOT_CRATE, ROOF_RACK, EXPEDITION_RACK,
         BATTERY, BATTERY_GOOD,

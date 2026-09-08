@@ -5,7 +5,10 @@ import sk.kubis.endlessdrive.domain.model.DebugOptions
 import sk.kubis.endlessdrive.domain.model.ThrottleMode
 
 data class PlayerProfile(
+    val nickname: String = "",
+    val countryCode: String = "SK",
     val bestDistanceKm: Float = 0f,
+    val bestTimeSeconds: Float = 0f,
     val totalRuns: Int = 0,
     val totalDistanceKm: Float = 0f,
     /** Šrot prenesený medzi jazdami – používa sa na dlhodobé ciele. */
@@ -18,6 +21,14 @@ interface PlayerRepository {
     val profile: Flow<PlayerProfile>
     suspend fun current(): PlayerProfile
     suspend fun recordRun(distanceKm: Float)
+
+    /** Zaznamená výsledok jazdy vrátane času použiteľného v rebríčku. */
+    suspend fun recordRunResult(distanceKm: Float, timeSeconds: Float) {
+        recordRun(distanceKm)
+    }
+
+    /** Lokálny profil hráča; cloud/Play Games väzba sa doplní neskôr. */
+    suspend fun savePlayerIdentity(nickname: String, countryCode: String) = Unit
 
     /** Uloží šrot z ukončenej jazdy do dlhodobého skladu. */
     suspend fun bankScrap(amount: Int) = Unit

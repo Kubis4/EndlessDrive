@@ -8,4 +8,23 @@
     -->
     <string name="empty_attribution_tag" translatable="false"></string>
     <string name="audio_attribution_label">Game audio</string>
+
+    <!-- Fill these from Play Console after creating Play Games Services. -->
+    <string name="game_services_project_id" translatable="false">255729417214</string>
+    <string name="leaderboard_distance_id" translatable="false">CgkI_vek1bgHEAIQAQ</string>
+    <string name="achievement_first_steps_id" translatable="false">CgkI_vek1bgHEAIQDA</string>
+    <string name="achievement_relay_runner_id" translatable="false">CgkI_vek1bgHEAIQBw</string>
+    <string name="achievement_snowline_id" translatable="false">CgkI_vek1bgHEAIQAg</string>
+    <string name="achievement_long_haul_id" translatable="false">CgkI_vek1bgHEAIQDw</string>
+    <string name="achievement_halfway_id" translatable="false">CgkI_vek1bgHEAIQEA</string>
+    <string name="achievement_safe_haven_id" translatable="false">CgkI_vek1bgHEAIQCw</string>
+    <string name="achievement_endless_500_id" translatable="false">CgkI_vek1bgHEAIQCQ</string>
+    <string name="achievement_relay_keeper_id" translatable="false">CgkI_vek1bgHEAIQDQ</string>
+    <string name="achievement_building_inspector_id" translatable="false">CgkI_vek1bgHEAIQCg</string>
+    <string name="achievement_topped_off_id" translatable="false">CgkI_vek1bgHEAIQBQ</string>
+    <string name="achievement_full_system_id" translatable="false">CgkI_vek1bgHEAIQAw</string>
+    <string name="achievement_bone_dry_id" translatable="false">CgkI_vek1bgHEAIQDg</string>
+    <string name="achievement_against_wind_id" translatable="false">CgkI_vek1bgHEAIQBA</string>
+    <string name="achievement_tailwind_id" translatable="false">CgkI_vek1bgHEAIQCA</string>
+    <string name="achievement_weathered_road_id" translatable="false">CgkI_vek1bgHEAIQBg</string>
 </resources>

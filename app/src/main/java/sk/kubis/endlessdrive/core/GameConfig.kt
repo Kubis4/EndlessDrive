@@ -260,9 +260,6 @@ object GameConfig {
      * nedajú vyjsť ani s najlepším autom – len s rozbehom.
      */
     const val TERRAIN_MAX_STEEP = 0.55f
-    /** Vzdialenosť medzi garantovanými depami (m). */
-    const val LANDMARK_SPACING = 5000f
-
     // --- Priebežné opotrebenie (za sekundu jazdy) ---
     /** Gumy: zodierajú sa rýchlosťou, preklzom a hrboľatosťou. */
     const val WEAR_TIRES = 0.00022f

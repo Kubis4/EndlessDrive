@@ -15,6 +15,7 @@ import sk.kubis.endlessdrive.domain.model.DebugOptions
 import sk.kubis.endlessdrive.domain.model.ThrottleMode
 import sk.kubis.endlessdrive.domain.repository.PlayerProfile
 import sk.kubis.endlessdrive.domain.repository.PlayerRepository
+import sk.kubis.endlessdrive.game.Journey
 
 private val Context.dataStore by preferencesDataStore("endless_drive")
 
@@ -23,6 +24,7 @@ class DataStorePlayerRepository(context: Context) : PlayerRepository {
 
     private object Keys {
         val BEST = floatPreferencesKey("best_km")
+        val BEST_TIME = floatPreferencesKey("best_time_seconds")
         val RUNS = intPreferencesKey("total_runs")
         val TOTAL = floatPreferencesKey("total_km")
         val BANKED_SCRAP = intPreferencesKey("banked_scrap")
@@ -35,6 +37,8 @@ class DataStorePlayerRepository(context: Context) : PlayerRepository {
         val DBG_TRACK = booleanPreferencesKey("debug_test_track")
         val DBG_REPAIR = booleanPreferencesKey("debug_repair_controls")
         val THROTTLE_MODE = stringPreferencesKey("throttle_mode")
+        val NICKNAME = stringPreferencesKey("player_nickname")
+        val COUNTRY_CODE = stringPreferencesKey("player_country_code")
     }
 
     override val debugOptions: Flow<DebugOptions> = store.data.map { prefs ->
@@ -71,7 +75,10 @@ class DataStorePlayerRepository(context: Context) : PlayerRepository {
 
     override val profile: Flow<PlayerProfile> = store.data.map { prefs ->
         PlayerProfile(
+            nickname = prefs[Keys.NICKNAME] ?: "",
+            countryCode = prefs[Keys.COUNTRY_CODE] ?: "SK",
             bestDistanceKm = prefs[Keys.BEST] ?: 0f,
+            bestTimeSeconds = prefs[Keys.BEST_TIME] ?: 0f,
             totalRuns = prefs[Keys.RUNS] ?: 0,
             totalDistanceKm = prefs[Keys.TOTAL] ?: 0f,
             bankedScrap = prefs[Keys.BANKED_SCRAP] ?: 0,
@@ -91,6 +98,25 @@ class DataStorePlayerRepository(context: Context) : PlayerRepository {
         }
     }
 
+    override suspend fun recordRunResult(distanceKm: Float, timeSeconds: Float) {
+        store.edit { prefs ->
+            val best = prefs[Keys.BEST] ?: 0f
+            if (distanceKm > best) {
+                prefs[Keys.BEST] = distanceKm
+                if (timeSeconds > 0f) prefs[Keys.BEST_TIME] = timeSeconds
+            }
+            prefs[Keys.RUNS] = (prefs[Keys.RUNS] ?: 0) + 1
+            prefs[Keys.TOTAL] = (prefs[Keys.TOTAL] ?: 0f) + distanceKm
+        }
+    }
+
+    override suspend fun savePlayerIdentity(nickname: String, countryCode: String) {
+        store.edit { prefs ->
+            prefs[Keys.NICKNAME] = nickname.trim().take(18)
+            prefs[Keys.COUNTRY_CODE] = countryCode.trim().uppercase().take(2)
+        }
+    }
+
     override suspend fun bankScrap(amount: Int) {
         if (amount <= 0) return
         store.edit { prefs ->
@@ -101,7 +127,7 @@ class DataStorePlayerRepository(context: Context) : PlayerRepository {
     override suspend fun recordRelayProgress(relayNodes: Int) {
         store.edit { prefs ->
             val current = prefs[Keys.RELAY_NODES] ?: 0
-            prefs[Keys.RELAY_NODES] = maxOf(current, relayNodes.coerceIn(0, 5))
+            prefs[Keys.RELAY_NODES] = maxOf(current, relayNodes.coerceIn(0, Journey.goals.size))
         }
     }
 

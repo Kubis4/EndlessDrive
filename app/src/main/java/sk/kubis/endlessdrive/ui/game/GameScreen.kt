@@ -69,12 +69,14 @@ import sk.kubis.endlessdrive.domain.model.FuelKind
 import sk.kubis.endlessdrive.domain.model.GamePhase
 import sk.kubis.endlessdrive.domain.model.AudioSettings
 import sk.kubis.endlessdrive.domain.model.ItemDef
+import sk.kubis.endlessdrive.domain.model.ItemCatalog
 import sk.kubis.endlessdrive.domain.model.ItemStack
 import sk.kubis.endlessdrive.domain.model.ThrottleMode
 import sk.kubis.endlessdrive.game.car.TireInjury
 import sk.kubis.endlessdrive.domain.model.SedanSpec
 import sk.kubis.endlessdrive.domain.model.VehiclePaint
 import sk.kubis.endlessdrive.game.GameEngine
+import sk.kubis.endlessdrive.game.Journey
 import sk.kubis.endlessdrive.ads.RewardedAdManager
 import sk.kubis.endlessdrive.game.car.Car
 import sk.kubis.endlessdrive.game.car.MountedPart
@@ -297,6 +299,7 @@ fun GameScreen(
                 LootPanel(
                     engine = engine,
                     bagRevision = ui.bagRevision,
+                    relayNodes = ui.relayNodes,
                     onTake = { viewModel.takeLoot(it) },
                     onRefuel = { viewModel.refuelFromPump(it) },
                     onActivateDepot = { viewModel.activateDepot() },
@@ -537,6 +540,7 @@ private fun InventoryPanel(
                     if (stack == null) return@forEachIndexed
                     val tyre = stack.def.axleTire
                     val kit = stack.def.isPunctureKit
+                    val relayModule = stack.def.id == ItemCatalog.RELAY_MODULE.id
                     ItemCard(
                         revision = bagRevision,
                         stack = stack,
@@ -546,9 +550,11 @@ private fun InventoryPanel(
                         primaryLabel = when {
                             stack.def.fluid != null -> "POUR IN"
                             kit -> "USE"
+                            relayModule -> "FOR RELAY"
                             else -> "FIT"
                         },
-                        onPrimary = { onUse(i, null) },
+                        onPrimary = { if (!relayModule) onUse(i, null) },
+                        primaryEnabled = !relayModule,
                         secondaryLabel = if (engine.bootReachable) "TO BOOT" else null,
                         onSecondary = if (engine.bootReachable) ({ onStow(i) }) else null,
                         onScrap = { onScrap(i) },
@@ -576,6 +582,7 @@ private fun InventoryPanel(
                     val mountable = stack.def.fluid != null ||
                         stack.def.mountTargets().isNotEmpty() ||
                         kit
+                    val relayModule = stack.def.id == ItemCatalog.RELAY_MODULE.id
                     ItemCard(
                         revision = bagRevision,
                         stack = stack,
@@ -585,9 +592,11 @@ private fun InventoryPanel(
                         primaryLabel = when {
                             stack.def.fluid != null -> "POUR IN"
                             kit -> "USE"
+                            relayModule -> "FOR RELAY"
                             else -> "FIT"
                         },
-                        onPrimary = { if (mountable) onUseFromBoot(i, null) },
+                        onPrimary = { if (mountable && !relayModule) onUseFromBoot(i, null) },
+                        primaryEnabled = mountable && !relayModule,
                         secondaryLabel = "TAKE",
                         onSecondary = { onTake(i) },
                         onScrap = { onScrapBoot(i) },
@@ -747,6 +756,7 @@ private fun ItemCard(
     mounted: MountedPart?,
     primaryLabel: String,
     onPrimary: () -> Unit,
+    primaryEnabled: Boolean = true,
     /**
      * Compose nevidí do [ItemStack] – po naliatí sa mení jeho obsah, nie
      * identita, takže bez tohto by nadpis ďalej ukazoval pôvodný objem.
@@ -856,7 +866,14 @@ private fun ItemCard(
                     GameButton("REAR", onFitRear, compact = true, style = BtnStyle.Primary, modifier = Modifier.weight(1f))
                     GameButton("FRONT", onFitFront, compact = true, style = BtnStyle.Primary, modifier = Modifier.weight(1f))
                 } else {
-                    GameButton(primaryLabel, onPrimary, compact = true, style = BtnStyle.Primary, modifier = Modifier.weight(1f))
+                    GameButton(
+                        primaryLabel,
+                        onPrimary,
+                        compact = true,
+                        style = BtnStyle.Primary,
+                        enabled = primaryEnabled,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
             if ((secondaryLabel != null && onSecondary != null) || onScrap != null) {
@@ -996,6 +1013,7 @@ private fun PaintedPartPreview(
 private fun LootPanel(
     engine: GameEngine,
     bagRevision: Int,
+    relayNodes: Int,
     onTake: (Int) -> Unit,
     onRefuel: (FuelKind) -> Unit,
     onActivateDepot: () -> Unit,
@@ -1005,9 +1023,13 @@ private fun LootPanel(
     val b = engine.activeBuilding ?: return
     @Suppress("UNUSED_VARIABLE")
     val rev = bagRevision
+    val relayAlreadyOnline = b.relayRestored || (b.relayIndex in 0 until relayNodes)
+    val isNextRelay = relayNodes < Journey.goals.size && (b.relayIndex < 0 || b.relayIndex == relayNodes)
+    val restoreCost = engine.relayRestoreCost(relayNodes)
+    val canRestore = !relayAlreadyOnline && isNextRelay && engine.relayActivationReady(relayNodes)
 
     GamePanel(
-        title = b.type.displayName.uppercase(),
+        title = if (b.landmark) "RELAY STATION" else b.type.displayName.uppercase(),
         subtitle = if (b.loot.isEmpty()) "Nothing left here." else "${b.loot.size} things to take",
         onClose = onClose,
         modifier = modifier
@@ -1022,19 +1044,31 @@ private fun LootPanel(
                         .padding(10.dp),
                     verticalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
-                    Text("RELAY CHECKPOINT", color = GameColors.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     Text(
-                        "Activate this depot to mark your progress toward the restored radio network.",
+                        if (relayAlreadyOnline) "RELAY RESTORED" else "RELAY CHECKPOINT",
+                        color = if (relayAlreadyOnline) GameColors.ok else GameColors.accent,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        when {
+                            relayAlreadyOnline -> "The signal is online. This station is already part of the restored network."
+                            !isNextRelay -> "Restore the previous relay before activating this checkpoint."
+                            else -> "Restore this relay with $restoreCost scrap and 1 relay module. You have ${engine.scrap} scrap and ${engine.relayModuleCount()} module(s)."
+                        },
                         color = GameColors.textDim,
                         fontSize = 12.sp
                     )
-                    GameButton(
-                        "ACTIVATE RELAY",
-                        onActivateDepot,
-                        compact = true,
-                        style = BtnStyle.Primary,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    if (!relayAlreadyOnline) {
+                        GameButton(
+                            if (isNextRelay) "RESTORE RELAY" else "RESTORE PREVIOUS RELAY FIRST",
+                            onActivateDepot,
+                            compact = true,
+                            style = BtnStyle.Primary,
+                            enabled = canRestore,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
                 Spacer(Modifier.height(8.dp))
             }

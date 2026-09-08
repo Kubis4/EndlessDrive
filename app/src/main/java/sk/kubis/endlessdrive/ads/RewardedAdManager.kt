@@ -16,23 +16,32 @@ import kotlinx.coroutines.flow.asStateFlow
  * Jedno miesto pre rewarded reklamy. Gameplay pozná iba „odmenu za reklamu“;
  * konkrétny reklamný účet sa dá neskôr vymeniť bez zásahu do herného enginu.
  *
- * Používa oficiálny testovací ad unit. Pred publikovaním ho treba nahradiť
- * vlastným ID v [AD_UNIT_ID].
+ * Používa produkčný rewarded ad unit vytvorený pre Endless Drive.
  */
 class RewardedAdManager(context: Context) {
     private val appContext = context.applicationContext
     private var rewardedAd: RewardedAd? = null
     private var showing = false
+    private var adsEnabled = false
 
     private val _isReady = MutableStateFlow(false)
     val isReady: StateFlow<Boolean> = _isReady.asStateFlow()
 
-    init {
+    /** Nastaví, či UMP dovolil žiadať reklamné odpovede. */
+    fun setAdRequestAllowed(allowed: Boolean) {
+        if (!allowed) {
+            adsEnabled = false
+            rewardedAd = null
+            _isReady.value = false
+            return
+        }
+        if (adsEnabled) return
+        adsEnabled = true
         load()
     }
 
     fun load() {
-        if (rewardedAd != null || showing) return
+        if (!adsEnabled || rewardedAd != null || showing) return
         RewardedAd.load(
             appContext,
             AD_UNIT_ID,
@@ -86,7 +95,6 @@ class RewardedAdManager(context: Context) {
     }
 
     companion object {
-        // Google test rewarded ad. Replace before a production release.
-        private const val AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917"
+        private const val AD_UNIT_ID = "ca-app-pub-9434007333228721/7126065526"
     }
 }

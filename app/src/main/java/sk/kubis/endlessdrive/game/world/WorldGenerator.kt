@@ -521,29 +521,29 @@ object WorldGenerator {
     ) {
         val usableEnd = plan.length - GameConfig.JUNCTION_ZONE - 30f
         val minStart = GameConfig.BUILDING_MIN_GAP_FROM_START
-        if (usableEnd <= minStart + 20f) return
-
-        var cursor = minStart
-        for (i in 0 until plan.buildingCount) {
-            val latest = usableEnd - (plan.buildingCount - 1 - i) * GameConfig.BUILDING_MIN_SPACING
-            if (cursor >= latest) return
-            val windowEnd = latest.coerceAtLeast(cursor + 1f)
-            val lx = flattestLocalX(segment, cursor, windowEnd)
-            if (lx.isNaN()) {
-                // Celé okno padlo na most – budovu preskočíme a posunieme sa ďalej.
-                cursor = windowEnd + GameConfig.BUILDING_MIN_SPACING
-                continue
+        if (usableEnd > minStart + 20f) {
+            var cursor = minStart
+            for (i in 0 until plan.buildingCount) {
+                val latest = usableEnd - (plan.buildingCount - 1 - i) * GameConfig.BUILDING_MIN_SPACING
+                if (cursor >= latest) break
+                val windowEnd = latest.coerceAtLeast(cursor + 1f)
+                val lx = flattestLocalX(segment, cursor, windowEnd)
+                if (lx.isNaN()) {
+                    // Celé okno padlo na most – budovu preskočíme a posunieme sa ďalej.
+                    cursor = windowEnd + GameConfig.BUILDING_MIN_SPACING
+                    continue
+                }
+                segment.buildings += makeBuilding(
+                    rng,
+                    weightedBuilding(rng, plan.style),
+                    lx,
+                    tripDistance,
+                    plan.style
+                )
+                cursor = lx + GameConfig.BUILDING_MIN_SPACING
             }
-            segment.buildings += makeBuilding(
-                rng,
-                weightedBuilding(rng, plan.style),
-                lx,
-                tripDistance,
-                plan.style
-            )
-            cursor = lx + GameConfig.BUILDING_MIN_SPACING
         }
-        placeLandmark(rng, plan, segment, tripDistance)
+        placeRelays(rng, plan, segment, tripDistance)
     }
 
     /**
@@ -595,90 +595,128 @@ object WorldGenerator {
     }
 
     /**
-     * Depo na každých [GameConfig.LANDMARK_SPACING] metrov. Je isté, má palivo
-     * aj diely a dáva jazde rytmus – hráč má stále kam mieriť.
+     * Skutočné relay checkpointy sedia priamo na meta-cieľoch Journey.
+     * Bežné čerpacie stanice ostávajú obyčajnými zastávkami; iba týchto sedem
+     * miest má stožiar, modul na opravu a trvalý progres.
      */
-    private fun placeLandmark(
+    private fun placeRelays(
         rng: SeededRandom,
         plan: SegmentPlan,
         segment: RoadSegment,
         tripDistance: Float
     ) {
-        val spacing = GameConfig.LANDMARK_SPACING
         val from = segment.worldOrigin
         val to = segment.worldOrigin + plan.length - GameConfig.JUNCTION_ZONE - 40f
-        val index = kotlin.math.floor(from / spacing).toInt() + 1
-        val at = index * spacing
-        if (at < from + GameConfig.BUILDING_MIN_GAP_FROM_START * 0.5f || at > to) return
+        if (to <= from) return
 
-        // Depo je garantované, tak mu okno rozšírime, kým nenájde miesto mimo mosta.
-        var localX = flattestLocalX(segment, at - from - 40f, at - from + 40f)
-        if (localX.isNaN()) localX = flattestLocalX(segment, at - from - 140f, at - from + 140f)
-        if (localX.isNaN()) return
-        val depot = makeBuilding(
-            rng, BuildingType.GAS_STATION, localX, tripDistance, plan.style,
-            landmark = true
-        )
-        // Depo nikdy nesklame: plný stojan a niekoľko poriadnych dielov.
-        val longRouteSupply = 1f - MathX.growth(at, Journey.FINAL_DISTANCE_M) * 0.22f
-        val depotFuel = rng.nextFloat(GameConfig.PUMP_FUEL_MAX * 0.8f, GameConfig.PUMP_FUEL_MAX * 1.4f) * longRouteSupply
-        depot.pumpFuelL = depotFuel * 0.55f
-        depot.pumpDieselL = depotFuel * 0.45f
-        depot.pumpPurity = rng.nextFloat(0.88f, 1f)
-        val tier3 = listOf(ItemCatalog.ENGINE_C, ItemCatalog.RADIATOR_HD, ItemCatalog.FUEL_TANK_LONG)
-        val solid = listOf(
-            ItemCatalog.TIRE, ItemCatalog.TIRE_OFFROAD, ItemCatalog.BATTERY_GOOD,
-            ItemCatalog.BRAKES_GOOD, ItemCatalog.RADIATOR_GOOD, ItemCatalog.SUSPENSION_GOOD,
-            ItemCatalog.ENGINE_B, ItemCatalog.FUEL_TANK_BIG, ItemCatalog.DRIVE_AWD
-        )
-        val depotIds = depot.loot.mapTo(HashSet()) { it.defId }
-        repeat(2 + rng.nextInt(2)) {
-            val available = solid.filter { it.id !in depotIds }
-            val def = rng.pick(if (available.isEmpty()) solid else available)
-            depotIds += def.id
-            depot.loot.add(ItemStack(def.id, ComponentCondition.USED, rng.nextFloat(0.6f, 0.92f)))
-        }
-        // Čím ďalej depo je, tým vyššia šanca na kus z tretieho stupňa.
-        val eliteChance = 0.18f + MathX.growth(at, 12000f) * 0.30f
-        if (rng.chance(eliteChance.coerceAtMost(0.75f))) {
-            val def = rng.pick(tier3)
-            depot.loot.add(ItemStack(def.id, ComponentCondition.USED, rng.nextFloat(0.65f, 0.95f)))
-        }
-        // Isté depá dávajú dlhým jazdám rytmus aj v obsahu: karoséria/interiér
-        // sa rotujú a po odomknutí zimy je v každom depe jedna príprava na sneh.
-        val depotIndex = (at / spacing).toInt()
-        val travelRotation = listOf(
-            ItemCatalog.SEAT_REAR, ItemCatalog.ROOF_RACK, ItemCatalog.BOOT_CRATE,
-            ItemCatalog.DOOR_FRONT, ItemCatalog.DOOR_REAR, ItemCatalog.TRUNK_LID, ItemCatalog.SUSPENSION_LIFT
-        )
-        val travel = travelRotation[depotIndex % travelRotation.size]
-        if (depot.loot.none { it.defId == travel.id }) {
-            depot.loot.add(ItemStack(travel.id, ComponentCondition.USED, rng.nextFloat(0.55f, 0.9f)))
-        }
-        if (at >= GameConfig.WINTER_GEAR_FROM_M) {
-            val winter = if (depotIndex % 2 == 0) ItemCatalog.SNOW_CHAINS else ItemCatalog.TIRE_WINTER
-            if (depot.loot.none { it.defId == winter.id }) {
-                depot.loot.add(ItemStack(winter.id, ComponentCondition.USED, rng.nextFloat(0.58f, 0.92f)))
+        Journey.goals.forEachIndexed { relayIndex, goal ->
+            val at = goal.distanceKm * 1000f
+            if (at <= from + 0.5f || at > to) return@forEachIndexed
+
+            val localX = relayLocalX(segment, at - from, to - from)
+            if (localX.isNaN()) return@forEachIndexed
+            val depot = makeBuilding(
+                rng, BuildingType.GAS_STATION, localX, tripDistance, plan.style,
+                landmark = true,
+                relayIndex = relayIndex
+            )
+            // A relay is a useful resupply point, but restoration needs an
+            // actual module and increasing scrap investment.
+            val longRouteSupply = 1f - MathX.growth(at, Journey.FINAL_DISTANCE_M) * 0.22f
+            val depotFuel = rng.nextFloat(GameConfig.PUMP_FUEL_MAX * 0.8f, GameConfig.PUMP_FUEL_MAX * 1.4f) * longRouteSupply
+            depot.pumpFuelL = depotFuel * 0.55f
+            depot.pumpDieselL = depotFuel * 0.45f
+            depot.pumpPurity = rng.nextFloat(0.88f, 1f)
+            val tier3 = listOf(ItemCatalog.ENGINE_C, ItemCatalog.RADIATOR_HD, ItemCatalog.FUEL_TANK_LONG)
+            val solid = listOf(
+                ItemCatalog.TIRE, ItemCatalog.TIRE_OFFROAD, ItemCatalog.BATTERY_GOOD,
+                ItemCatalog.BRAKES_GOOD, ItemCatalog.RADIATOR_GOOD, ItemCatalog.SUSPENSION_GOOD,
+                ItemCatalog.ENGINE_B, ItemCatalog.FUEL_TANK_BIG, ItemCatalog.DRIVE_AWD
+            )
+            val depotIds = depot.loot.mapTo(HashSet()) { it.defId }
+            repeat(2 + rng.nextInt(2)) {
+                val available = solid.filter { it.id !in depotIds }
+                val def = rng.pick(if (available.isEmpty()) solid else available)
+                depotIds += def.id
+                depot.loot.add(ItemStack(def.id, ComponentCondition.USED, rng.nextFloat(0.6f, 0.92f)))
             }
+            val eliteChance = 0.18f + MathX.growth(at, 12000f) * 0.30f
+            if (rng.chance(eliteChance.coerceAtMost(0.75f))) {
+                val def = rng.pick(tier3)
+                depot.loot.add(ItemStack(def.id, ComponentCondition.USED, rng.nextFloat(0.65f, 0.95f)))
+            }
+            // The route-specific utility item keeps relay loot valuable even
+            // when the player already has enough fuel and repair parts.
+            val travelRotation = listOf(
+                ItemCatalog.SEAT_REAR, ItemCatalog.ROOF_RACK, ItemCatalog.BOOT_CRATE,
+                ItemCatalog.DOOR_FRONT, ItemCatalog.DOOR_REAR, ItemCatalog.TRUNK_LID, ItemCatalog.SUSPENSION_LIFT
+            )
+            val travel = travelRotation[relayIndex % travelRotation.size]
+            if (depot.loot.none { it.defId == travel.id }) {
+                depot.loot.add(ItemStack(travel.id, ComponentCondition.USED, rng.nextFloat(0.55f, 0.9f)))
+            }
+            if (at >= GameConfig.WINTER_GEAR_FROM_M) {
+                val winter = if (relayIndex % 2 == 0) ItemCatalog.SNOW_CHAINS else ItemCatalog.TIRE_WINTER
+                if (depot.loot.none { it.defId == winter.id }) {
+                    depot.loot.add(ItemStack(winter.id, ComponentCondition.USED, rng.nextFloat(0.58f, 0.92f)))
+                }
+            }
+            depot.loot.add(
+                ItemStack(
+                    defId = ItemCatalog.OIL_BOTTLE.id,
+                    condition = ComponentCondition.NEW,
+                    health = 1f,
+                    count = 2,
+                    purity = rng.nextFloat(0.9f, 1f)
+                )
+            )
+            depot.loot.add(
+                ItemStack(
+                    defId = ItemCatalog.PUNCTURE_KIT.id,
+                    condition = ComponentCondition.NEW,
+                    health = 1f,
+                    count = 1
+                )
+            )
+            depot.loot.add(
+                ItemStack(
+                    defId = ItemCatalog.SCRAP_PILE.id,
+                    condition = ComponentCondition.NEW,
+                    health = 1f,
+                    count = Journey.relayRestoreCost(relayIndex)
+                )
+            )
+            depot.loot.add(
+                ItemStack(
+                    defId = ItemCatalog.RELAY_MODULE.id,
+                    condition = ComponentCondition.NEW,
+                    health = 1f,
+                    count = 1
+                )
+            )
+            segment.buildings += depot
         }
-        depot.loot.add(
-            ItemStack(
-                defId = ItemCatalog.OIL_BOTTLE.id,
-                condition = ComponentCondition.NEW,
-                health = 1f,
-                count = 2,
-                purity = rng.nextFloat(0.9f, 1f)
-            )
-        )
-        depot.loot.add(
-            ItemStack(
-                defId = ItemCatalog.PUNCTURE_KIT.id,
-                condition = ComponentCondition.NEW,
-                health = 1f,
-                count = 1
-            )
-        )
-        segment.buildings += depot
+    }
+
+    /**
+     * Hľadá miesto čo najbližšie k míľniku, ale nikdy na moste ani pod
+     * existujúcou budovou. Posledný široký priechod je poistka pri dlhom
+     * moste alebo veľmi členitom úseku.
+     */
+    private fun relayLocalX(segment: RoadSegment, targetLocal: Float, usableEnd: Float): Float {
+        val minStart = GameConfig.BUILDING_MIN_GAP_FROM_START
+        val windows = listOf(45f, 140f, 280f, usableEnd)
+        for (radius in windows) {
+            val from = if (radius == usableEnd) minStart else (targetLocal - radius).coerceAtLeast(minStart)
+            val to = if (radius == usableEnd) usableEnd else (targetLocal + radius).coerceAtMost(usableEnd)
+            val candidate = flattestLocalX(segment, from, to) { candidateX ->
+                segment.buildings.any {
+                    kotlin.math.abs(it.localX - candidateX) < GameConfig.BUILDING_MIN_SPACING * 0.55f
+                }
+            }
+            if (!candidate.isNaN()) return candidate
+        }
+        return Float.NaN
     }
 
     /**
@@ -698,7 +736,8 @@ object WorldGenerator {
         segment: RoadSegment,
         fromLocal: Float,
         toLocal: Float,
-        step: Float = 2.5f
+        step: Float = 2.5f,
+        blocked: (Float) -> Boolean = { false }
     ): Float {
         var bestX = Float.NaN
         var best = Float.MAX_VALUE
@@ -709,7 +748,7 @@ object WorldGenerator {
             val clear = listOf(-BRIDGE_CLEARANCE, 0f, BRIDGE_CLEARANCE).none { off ->
                 segment.sectionAtLocal(x + off)?.feature == RoadFeature.BRIDGE
             }
-            if (clear) {
+            if (clear && !blocked(x)) {
                 val s = kotlin.math.abs(segment.slopeAtLocal(x))
                 if (s < best) {
                     best = s
@@ -869,7 +908,8 @@ object WorldGenerator {
         localX: Float,
         distance: Float,
         style: BranchStyle,
-        landmark: Boolean = false
+        landmark: Boolean = false,
+        relayIndex: Int = -1
     ): WorldBuilding {
         val id = (type.ordinal.toLong() shl 32) xor localX.toRawBits().toLong() xor rng.nextLong()
         // Stojany nie sú univerzálne. Diesel je o niečo vzácnejší, ale dosť
@@ -921,7 +961,8 @@ object WorldGenerator {
             // Stojan býva slušný, ale po rokoch je v ňom aj kondenz.
             pumpPurity = rng.nextFloat(0.78f, 0.99f),
             pumpFuelKind = pumpFuelKind,
-            landmark = landmark
+            landmark = landmark,
+            relayIndex = relayIndex
         )
     }
 

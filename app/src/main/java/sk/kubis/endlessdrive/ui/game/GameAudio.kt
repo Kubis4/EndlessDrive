@@ -409,7 +409,8 @@ class GameAudio(context: Context) {
             GameSfx.DEBRIS -> play(R.raw.sfx_debris, 0.75f, 1f)
             GameSfx.TAILWIND, GameSfx.CLEAR_ROAD -> Unit
             GameSfx.FIND -> play(R.raw.sfx_find, 0.55f, 1f)
-            GameSfx.RADIO, GameSfx.ANIMAL, GameSfx.TRACKS -> Unit
+            GameSfx.RADIO -> play(R.raw.sfx_radio, 0.7f, 1f)
+            GameSfx.ANIMAL, GameSfx.TRACKS -> Unit
         }
     }
 

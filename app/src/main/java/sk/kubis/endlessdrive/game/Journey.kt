@@ -9,8 +9,8 @@ data class JourneyGoal(
 /**
  * The long-term route. The goals are deliberately uneven: early relays give
  * quick feedback, while the final safe haven remains a real expedition.
- * Progress is derived from the saved high-water distance, so reversing or
- * loading cannot award the same milestone twice.
+ * The route milestones define where the physical relay stations appear. The
+ * actual progress is recorded only after the player restores each station.
  */
 object Journey {
     const val LEG_METERS = 1000f
@@ -31,6 +31,10 @@ object Journey {
     fun completedGoals(distanceM: Float): Int = goals.count { distanceM >= it.distanceKm * LEG_METERS }
 
     fun nextGoal(completed: Int): JourneyGoal? = goals.getOrNull(completed.coerceAtLeast(0))
+
+    /** Cost rises with expedition depth but remains recoverable at each relay. */
+    fun relayRestoreCost(relayIndex: Int): Int =
+        (6 + relayIndex.coerceAtLeast(0) * 4).coerceAtMost(36)
 
     fun rewardBetween(beforeM: Float, afterM: Float): Int =
         (completedLegs(afterM) - completedLegs(beforeM)).coerceAtLeast(0) * 3

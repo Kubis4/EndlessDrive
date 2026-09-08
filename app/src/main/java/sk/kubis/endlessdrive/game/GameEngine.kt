@@ -175,6 +175,16 @@ class GameEngine(
         private set
     private val visitedBuildingIds = HashSet<Long>()
 
+    /** Milníky aktuálnej jazdy, ktoré sa nedajú spoľahlivo odvodiť z rekordu. */
+    private var fuelWasBelowFull = false
+    private var fullTankReached = false
+    private var fullUpgradeReached = false
+    private val seenEventKinds = linkedSetOf<RoadEvent>()
+
+    val hasReachedFullTank: Boolean get() = fullTankReached
+    val hasReachedFullUpgrade: Boolean get() = fullUpgradeReached
+    val eventKindsSeen: Set<RoadEvent> get() = seenEventKinds.toSet()
+
     val daylight: Float get() = DayCycle.daylight(timeOfDay)
     val isNight: Boolean get() = DayCycle.isNight(timeOfDay)
     val clock: String get() = DayCycle.clock(timeOfDay)
@@ -188,6 +198,9 @@ class GameEngine(
 
     var activeBuilding: WorldBuilding? = null
         private set
+
+    /** Trvalý meta-progres dostupný v tejto jazde; ovplyvní aj finálny cieľ. */
+    private var relayProgress = metaRelayNodes.coerceIn(0, Journey.goals.size)
 
     val junctionChoices: List<BranchChoice>
         get() = segment.choices
@@ -222,16 +235,35 @@ class GameEngine(
             terrain = terrain,
             isTutorial = true
         )
+        applyRelayProgress(segment)
         car.x = 4f
         car.setCargoLoad(inventory.totalWeight, boot.totalWeight)
         car.snapToGround(segment.heightAtWorld(car.x))
         maxReachedX = car.x
         camera.snapTo(car.x, car.y)
         stockStarterShed(startRng)
+        fuelWasBelowFull = car.fuelRatio < 0.95f
         // Prvý región pripravíme počas načítania jazdy, nie počas rýchlej jazdy.
         prepareContinuation()
         message = "Search the garage for missing parts, fuel, oil and coolant. Then start the engine."
     }
+
+    /** Aktualizuje stav achievementov po každej akcii aj po snímke jazdy. */
+    fun refreshAchievementFlags() {
+        if (car.fuelRatio < 0.95f) fuelWasBelowFull = true
+        if (fuelWasBelowFull && car.fuelRatio >= 0.995f) fullTankReached = true
+        if (isFullyUpgraded()) fullUpgradeReached = true
+    }
+
+    /** Všetky diely, ktoré majú v hre jednoznačný scrap upgrade, sú na maxime. */
+    fun isFullyUpgraded(): Boolean = listOf(
+        ComponentSlot.ENGINE,
+        ComponentSlot.BATTERY,
+        ComponentSlot.RADIATOR,
+        ComponentSlot.BRAKES,
+        ComponentSlot.FUEL_TANK,
+        ComponentSlot.DRIVETRAIN
+    ).all { slot -> car.parts[slot] != null && scrapUpgradeTarget(slot) == null }
 
     /**
      * Batoh na štarte. Nie je to výbava na cestu, ale to, čo si človek stihol
@@ -713,7 +745,13 @@ class GameEngine(
             scrap += milestoneReward
         }
         if (distanceM >= Journey.FINAL_DISTANCE_M) {
-            endRun(EndReason.ARRIVED)
+            if (relayProgress >= Journey.goals.size) {
+                endRun(EndReason.ARRIVED)
+            } else {
+                car.speed = 0f
+                phase = GamePhase.STOPPED
+                message = "The safe haven relay is still offline — restore it before finishing"
+            }
             return
         }
         warnAboutEngineWear(dt)
@@ -724,7 +762,8 @@ class GameEngine(
             val near = buildingNear()
             if (near != null && car.speed < GameConfig.STOP_SPEED * 2.5f) {
                 message = if (near.landmark) {
-                    "DEPOT — fuel and parts"
+                    if (near.relayRestored) "RELAY ONLINE — fuel and parts"
+                    else "RELAY STATION — fuel, parts and signal"
                 } else {
                     "${near.type.displayName} — stop and search it"
                 }
@@ -997,6 +1036,7 @@ class GameEngine(
         segment.bumpinessAtLocal(car.x - segment.worldOrigin)
 
     private fun trigger(e: RoadEvent, rng: SeededRandom) {
+        seenEventKinds += e
         var customMessage: String? = null
         when (e) {
             RoadEvent.FLAT_TYRE -> {
@@ -1222,6 +1262,7 @@ class GameEngine(
             terrain = terrain,
             isTutorial = false
         )
+        applyRelayProgress(segment)
         preparedContinuation = null
         pendingChoiceId = null
         rescueStashId = null
@@ -1249,6 +1290,7 @@ class GameEngine(
             terrain = terrain,
             isTutorial = false
         )
+        applyRelayProgress(preparedContinuation!!)
     }
 
     fun requestStop(): Boolean {
@@ -1318,15 +1360,96 @@ class GameEngine(
         return true
     }
 
-    /** Depo je aj prvý uzol meta-cieľa: hráč ho môže ručne potvrdiť. */
-    fun activateDepot(): Boolean {
+    /** Cena opravy rastie spolu s tým, ako hlboko je hráč na expedícii. */
+    fun relayRestoreCost(relayIndex: Int): Int =
+        Journey.relayRestoreCost(relayIndex)
+
+    fun relayModuleCount(): Int = countRelayModules(inventory) + countRelayModules(boot)
+
+    fun relayActivationReady(relayIndex: Int): Boolean {
+        val b = activeBuilding ?: return false
+        return relayIndex in Journey.goals.indices &&
+            phase == GamePhase.EXPLORING && b.landmark && !b.relayRestored &&
+            relayIndex == relayProgress &&
+            (b.relayIndex < 0 || b.relayIndex == relayIndex) &&
+            scrap >= relayRestoreCost(relayIndex) && relayModuleCount() > 0
+    }
+
+    /**
+     * Obnoví konkrétny uzol siete. Vzdialenosť iba určuje poradie cieľa;
+     * samotný progres vznikne až po fyzickom loote a aktivácii.
+     */
+    fun activateDepot(relayIndex: Int): Boolean {
         val b = activeBuilding
         if (phase != GamePhase.EXPLORING || b == null || !b.landmark) {
-            message = "Enter a depot first"
+            message = "Enter a relay station first"
             return false
         }
-        message = "Relay checkpoint recorded — keep driving to the next depot"
+        if (relayIndex !in Journey.goals.indices) {
+            message = "The radio network is fully restored"
+            return false
+        }
+        if (relayIndex != relayProgress) {
+            message = if (relayIndex < relayProgress) {
+                "This relay is already online"
+            } else {
+                "Restore the previous relay first"
+            }
+            return false
+        }
+        if (b.relayRestored || (b.relayIndex >= 0 && b.relayIndex < relayIndex)) {
+            message = "This relay is already online"
+            return false
+        }
+        if (b.relayIndex >= 0 && b.relayIndex != relayIndex) {
+            message = "Restore the previous relay first"
+            return false
+        }
+        val cost = relayRestoreCost(relayIndex)
+        if (scrap < cost) {
+            message = "Need $cost scrap — you have $scrap"
+            return false
+        }
+        if (relayModuleCount() <= 0) {
+            message = "Find a relay module before restoring this station"
+            return false
+        }
+
+        if (!consumeRelayModule()) return false
+        scrap -= cost
+        b.relayRestored = true
+        emitSfx(GameSfx.RADIO)
+        message = "Relay ${relayIndex + 1}/${Journey.goals.size} restored — signal back online"
         return true
+    }
+
+    private fun countRelayModules(source: Inventory): Int = source.slots.sumOf { stack ->
+        if (stack?.defId == ItemCatalog.RELAY_MODULE.id) stack.count.coerceAtLeast(1) else 0
+    }
+
+    private fun consumeRelayModule(): Boolean {
+        fun takeFrom(source: Inventory): Boolean {
+            val index = source.slots.indexOfFirst { it?.defId == ItemCatalog.RELAY_MODULE.id }
+            if (index < 0) return false
+            val stack = source.slots[index] ?: return false
+            stack.count--
+            if (stack.count <= 0) source.removeAt(index)
+            return true
+        }
+        return takeFrom(inventory) || takeFrom(boot)
+    }
+
+    /** Synchronizuje vizuálny stav známych uzlov s trvalým profilom hráča. */
+    fun setRelayProgress(relayNodes: Int) {
+        relayProgress = relayNodes.coerceIn(0, Journey.goals.size)
+        applyRelayProgress(segment)
+        preparedContinuation?.let(::applyRelayProgress)
+    }
+
+    private fun applyRelayProgress(target: RoadSegment) {
+        target.buildings
+            .filter { it.landmark && it.relayIndex in 0 until relayProgress }
+            .forEach { it.relayRestored = true }
     }
 
     /** Jednorazová núdzová pomoc z rewarded reklamy. */
@@ -2344,7 +2467,9 @@ class GameEngine(
                     pumpPurity = b.pumpPurity,
                     landmark = b.landmark,
                     loot = b.loot.map { it.toState() },
-                    pumpFuelKind = b.pumpFuelKind
+                    pumpFuelKind = b.pumpFuelKind,
+                    relayIndex = b.relayIndex,
+                    relayRestored = b.relayRestored
                 )
             },
             paving = segment.paving
@@ -2384,9 +2509,12 @@ class GameEngine(
                 pumpDieselL = b.pumpDieselL,
                 pumpPurity = b.pumpPurity,
                 pumpFuelKind = b.pumpFuelKind,
-                landmark = b.landmark
+                landmark = b.landmark,
+                relayIndex = b.relayIndex,
+                relayRestored = b.relayRestored
             )
         }
+        applyRelayProgress(segment)
 
         // Auto.
         car.parts.clear()

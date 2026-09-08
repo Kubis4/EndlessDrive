@@ -289,6 +289,8 @@ v `game/save/RunSnapshot.kt`, inak sa po obnove stratí.**
 ## Stack
 
 - Kotlin, Jetpack Compose, DataStore
+- Google Play Games Services (leaderboards and achievements)
+- Google AdMob rewarded ads with UMP consent handling
 - Vlastný herný engine (bez Box2D) – arcade jazda optimalizovaná pre mobil
 - Procedurálne kreslenie Canvas (žiadne bitmapové assety trate)
 
@@ -356,6 +358,13 @@ zablokuje obe.
 ./gradlew :app:assembleDebug
 ./gradlew :app:testDebugUnitTest
 ```
+
+## Privacy
+
+[Privacy Policy](https://github.com/Kubis4/EndlessDrive/blob/master/privacy-policy.md)
+
+Direct text URL for services that need a simple public policy page:
+https://raw.githubusercontent.com/Kubis4/EndlessDrive/master/privacy-policy.md
 
 ---
 

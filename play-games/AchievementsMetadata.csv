@@ -1,0 +1,15 @@
+First Sparks,Reach 1 km,False,,Hidden,5,1
+Relay Runner,Reach 5 km and locate the first relay,False,,Hidden,5,2
+Beyond the Snowline,Reach 10 km,False,,Hidden,10,3
+Long Haul,Reach 20 km,False,,Hidden,10,4
+Halfway to Safety,Reach 50 km,False,,Hidden,15,5
+Safe Haven,Reach 100 km and complete the expedition,False,,Hidden,20,6
+It Says Endless Huh?,Reach 500 km across your best runs,False,,Hidden,50,7
+Relay Keeper,Restore three relay nodes,False,,Hidden,15,8
+Building Inspector,Search 25 buildings in one run,False,,Hidden,15,9
+Topped Off,Fill the tank completely after running it low,False,,Hidden,10,10
+Full System,Max out the engine battery radiator brakes tank and drivetrain,False,,Hidden,40,11
+Bone Dry,Run out of fuel,False,,Hidden,5,12
+Against the Wind,Drive through a headwind,False,,Hidden,5,13
+Tailwind,Catch a tailwind,False,,Hidden,5,14
+Weathered Road,Encounter eight different road events in one run,False,,Hidden,25,15

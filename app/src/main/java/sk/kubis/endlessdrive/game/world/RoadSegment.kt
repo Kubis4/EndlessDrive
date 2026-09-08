@@ -25,8 +25,12 @@ data class WorldBuilding(
     var pumpPurity: Float = 1f,
     /** Druh paliva označený na stojane. */
     var pumpFuelKind: FuelKind = FuelKind.PETROL,
-    /** Depo na míľniku – vždy stojí za zastavenie. */
-    val landmark: Boolean = false
+    /** Relay checkpoint na míľniku – vždy stojí za zastavenie. */
+    val landmark: Boolean = false,
+    /** Poradie uzla v meta-cieli; -1 znamená starý/nespárovaný save. */
+    val relayIndex: Int = -1,
+    /** Stav opravy v aktuálnej jazde. */
+    var relayRestored: Boolean = false
 ) {
     val looted: Boolean get() = loot.isEmpty() && pumpFuelL <= 0.05f && pumpDieselL <= 0.05f
 }

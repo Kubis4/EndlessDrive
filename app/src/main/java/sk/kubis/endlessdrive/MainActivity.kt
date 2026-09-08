@@ -30,6 +30,9 @@ class MainActivity : ComponentActivity() {
         requestSixtyHertz()
 
         val container = (application as EndlessDriveApp).container
+        container.adConsent.gatherConsent(this) {
+            container.rewardedAds.setAdRequestAllowed(container.adConsent.canRequestAds())
+        }
         setContent {
             EndlessDriveTheme {
                 EndlessDriveRoot(container = container)

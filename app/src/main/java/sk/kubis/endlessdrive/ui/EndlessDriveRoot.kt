@@ -1,5 +1,6 @@
 package sk.kubis.endlessdrive.ui
 
+import android.app.Activity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -23,16 +24,21 @@ import sk.kubis.endlessdrive.ui.game.GameScreen
 import sk.kubis.endlessdrive.ui.game.GameViewModel
 import sk.kubis.endlessdrive.ui.menu.MenuScreen
 import sk.kubis.endlessdrive.ui.menu.SettingsScreen
+import sk.kubis.endlessdrive.ui.leaderboard.LeaderboardScreen
+import sk.kubis.endlessdrive.ui.leaderboard.PlayerProfileScreen
 
 object Routes {
     const val MENU = "menu"
     const val GAME = "game"
     const val SETTINGS = "settings"
+    const val PROFILE = "profile"
+    const val LEADERBOARD = "leaderboard"
 }
 
 @Composable
 fun EndlessDriveRoot(container: AppContainer) {
     val context = LocalContext.current
+    val activity = context as? Activity
     val audioPrefs = remember(context) { context.getSharedPreferences("audio", android.content.Context.MODE_PRIVATE) }
     var audioSettings by remember {
         mutableStateOf(AudioSettings(
@@ -50,37 +56,112 @@ fun EndlessDriveRoot(container: AppContainer) {
     val vm: GameViewModel = viewModel(
         factory = remember { GameViewModel.factory(container.playerRepository, profile) }
     )
+    val gameUi by vm.ui.collectAsState()
     LaunchedEffect(profile) {
         vm.updateProfile(profile)
     }
 
     val debug by container.playerRepository.debugOptions.collectAsState(initial = DebugOptions.OFF)
     val throttleMode by container.playerRepository.throttleMode.collectAsState(initial = ThrottleMode.BINARY)
+    val playGamesState by container.playGames.state.collectAsState()
+    val privacyOptionsRequired by container.adConsent.privacyOptionsRequired.collectAsState()
     // Nová jazda si prepínače prečíta z ViewModelu, takže sa musia doňho
     // dostať skôr, než ju hráč spustí.
     LaunchedEffect(debug) { vm.debugOptions = debug }
     LaunchedEffect(throttleMode) { vm.throttleMode = throttleMode }
     val scope = rememberCoroutineScope()
+    LaunchedEffect(activity, container.playGames) {
+        if (activity != null) container.playGames.connect(activity)
+    }
+    LaunchedEffect(
+        profile.bestDistanceKm,
+        profile.bestTimeSeconds,
+        gameUi.bestDistanceKm,
+        gameUi.relayNodes,
+        gameUi.buildingsVisited,
+        gameUi.fullTankReached,
+        gameUi.fullUpgradeReached,
+        gameUi.endReason,
+        gameUi.eventKindsSeen,
+        playGamesState.signedIn
+    ) {
+        if (activity != null && playGamesState.signedIn && profile.bestDistanceKm > 0f) {
+            container.playGames.submitBestDistance(
+                activity,
+                profile.bestDistanceKm,
+                profile.bestTimeSeconds,
+                profile.countryCode
+            )
+            container.playGames.unlockGameplayAchievements(
+                activity = activity,
+                distanceKm = maxOf(profile.bestDistanceKm, gameUi.bestDistanceKm),
+                relayNodes = gameUi.relayNodes,
+                buildingsVisited = gameUi.buildingsVisited,
+                fullTankReached = gameUi.fullTankReached,
+                fullUpgradeReached = gameUi.fullUpgradeReached,
+                endReason = gameUi.endReason,
+                eventKindsSeen = gameUi.eventKindsSeen
+            )
+        }
+    }
 
     NavHost(
         navController = nav,
         startDestination = Routes.MENU
     ) {
         composable(Routes.MENU) {
-            MenuScreen(
+            if (profile.nickname.isBlank()) {
+                PlayerProfileScreen(
+                    profile = profile,
+                    required = true,
+                    suggestedNickname = playGamesState.playerName,
+                    onSave = { nickname, country ->
+                        scope.launch { container.playerRepository.savePlayerIdentity(nickname, country) }
+                    }
+                )
+            } else {
+                MenuScreen(
+                    profile = profile,
+                    canContinue = vm.hasActiveRun,
+                    runDistanceKm = vm.game.distanceKm,
+                    runClock = vm.game.clock,
+                    onContinue = {
+                        nav.navigate(Routes.GAME) { launchSingleTop = true }
+                    },
+                    onNewRun = {
+                        vm.retry()
+                        nav.navigate(Routes.GAME) { launchSingleTop = true }
+                    },
+                    onSettings = { nav.navigate(Routes.SETTINGS) { launchSingleTop = true } },
+                    debugActive = debug.any,
+                    onLeaderboard = { nav.navigate(Routes.LEADERBOARD) { launchSingleTop = true } },
+                    onAchievements = {
+                        if (activity != null) container.playGames.showAchievements(activity)
+                    }
+                )
+            }
+        }
+        composable(Routes.PROFILE) {
+            PlayerProfileScreen(
                 profile = profile,
-                canContinue = vm.hasActiveRun,
-                runDistanceKm = vm.game.distanceKm,
-                runClock = vm.game.clock,
-                onContinue = {
-                    nav.navigate(Routes.GAME) { launchSingleTop = true }
+                required = false,
+                suggestedNickname = playGamesState.playerName,
+                onSave = { nickname, country ->
+                    scope.launch {
+                        container.playerRepository.savePlayerIdentity(nickname, country)
+                        nav.popBackStack()
+                    }
                 },
-                onNewRun = {
-                    vm.retry()
-                    nav.navigate(Routes.GAME) { launchSingleTop = true }
-                },
-                onSettings = { nav.navigate(Routes.SETTINGS) { launchSingleTop = true } },
-                debugActive = debug.any
+                onBack = { nav.popBackStack() }
+            )
+        }
+        composable(Routes.LEADERBOARD) {
+            LeaderboardScreen(
+                profile = profile,
+                playGames = container.playGames,
+                activity = activity,
+                onEditProfile = { nav.navigate(Routes.PROFILE) { launchSingleTop = true } },
+                onBack = { nav.popBackStack() }
             )
         }
         composable(Routes.SETTINGS) {
@@ -100,6 +181,14 @@ fun EndlessDriveRoot(container: AppContainer) {
                 onBack = { nav.popBackStack() }
                 ,showFps = showFps,
                 onShowFpsChange = { showFps = it; context.getSharedPreferences("display", 0).edit().putBoolean("fps", it).apply() }
+                ,showPrivacyOptions = privacyOptionsRequired
+                ,onPrivacyOptions = {
+                    if (activity != null) {
+                        container.adConsent.showPrivacyOptions(activity) {
+                            container.rewardedAds.setAdRequestAllowed(container.adConsent.canRequestAds())
+                        }
+                    }
+                }
             )
         }
         composable(Routes.GAME) {

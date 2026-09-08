@@ -115,7 +115,9 @@ data class BuildingState(
     val landmark: Boolean,
     val loot: List<StackState>,
     val pumpFuelKind: FuelKind = FuelKind.PETROL,
-    val pumpDieselL: Float = 0f
+    val pumpDieselL: Float = 0f,
+    val relayIndex: Int = -1,
+    val relayRestored: Boolean = false
 )
 
 /**
@@ -125,7 +127,7 @@ data class BuildingState(
 object RunCodec {
     // 4: kufor auta sa ukladá zvlášť od batoha. Staršie záznamy sa zahodia
     // a hra začne novú jazdu – rozdeliť jeden inventár na dva spätne nemá zmysel.
-    private const val VERSION = 6
+    private const val VERSION = 7
 
     /**
      * Najstaršia verzia, ktorú ešte vieme prečítať.
@@ -174,7 +176,7 @@ object RunCodec {
                 listOf(
                     b.id, b.type.name, b.localX, b.pumpFuelL, b.pumpPurity, b.landmark,
                     b.loot.joinToString(";", transform = ::encodeStack), b.pumpFuelKind.name,
-                    b.pumpDieselL
+                    b.pumpDieselL, b.relayIndex, b.relayRestored
                 ).joinToString("|")
             )
         }
@@ -250,7 +252,9 @@ object RunCodec {
                 loot = f.getOrNull(6).orEmpty().split(";").filter { it.isNotBlank() }.map(::decodeStack),
                 pumpFuelKind = legacyKind,
                 pumpDieselL = savedDiesel
-                    ?: if (legacyKind == FuelKind.DIESEL) f[3].toFloat() else 0f
+                    ?: if (legacyKind == FuelKind.DIESEL) f[3].toFloat() else 0f,
+                relayIndex = f.getOrNull(9)?.toIntOrNull() ?: -1,
+                relayRestored = f.getOrNull(10)?.toBoolean() ?: false
             )
         }
 

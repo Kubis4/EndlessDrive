@@ -122,7 +122,11 @@ class GameViewModel(
     fun updateProfile(profile: PlayerProfile) {
         if (profile.bestDistanceKm > bestKm) bestKm = profile.bestDistanceKm
         bankedScrap = maxOf(bankedScrap, profile.bankedScrap)
-        relayNodes = maxOf(relayNodes, profile.relayNodes).coerceAtMost(META_RELAY_COUNT)
+        val updatedRelayNodes = maxOf(relayNodes, profile.relayNodes).coerceAtMost(META_RELAY_COUNT)
+        if (updatedRelayNodes != relayNodes) {
+            relayNodes = updatedRelayNodes
+            engine.setRelayProgress(relayNodes)
+        }
         publishUi(force = true)
     }
 
@@ -208,7 +212,6 @@ class GameViewModel(
         engine.brakeInput = if (driving) brake else 0f
         engine.setScreenHeight(screenHeightPx)
         engine.advance(dt)
-        checkRelayProgress()
 
         // V PREP/STOPPED netreba 60×/s prekresľovať ťažké Pathy – šetrí CPU/GPU a batériu.
         val moving = driving || engine.car.speed > 0.05f ||
@@ -244,6 +247,7 @@ class GameViewModel(
     }
 
     private fun snapshotUi(): GameUiState {
+        engine.refreshAchievementFlags()
         val e = engine
         return GameUiState(
             phase = e.phase,
@@ -307,6 +311,9 @@ class GameViewModel(
             fuelBurnedL = e.fuelBurnedL,
             itemsLooted = e.itemsLooted,
             buildingsVisited = e.buildingsVisited,
+            fullTankReached = e.hasReachedFullTank,
+            fullUpgradeReached = e.hasReachedFullUpgrade,
+            eventKindsSeen = e.eventKindsSeen,
             fittedEngine = e.car.fittedHudLabel(ComponentSlot.ENGINE),
             fittedDrive = e.car.fittedHudLabel(ComponentSlot.DRIVETRAIN),
             fittedTires = "${e.car.fittedHudLabel(ComponentSlot.TIRE_FRONT)}/${e.car.fittedHudLabel(ComponentSlot.TIRE_REAR)}",
@@ -421,8 +428,13 @@ class GameViewModel(
     }
 
     fun activateDepot() {
-        if (engine.activateDepot()) {
-            checkRelayProgress(forceNextDepot = true)
+        if (engine.activateDepot(relayNodes)) {
+            relayNodes = (relayNodes + 1).coerceAtMost(META_RELAY_COUNT)
+            engine.setRelayProgress(relayNodes)
+            viewModelScope.launch {
+                runCatching { playerRepository.recordRelayProgress(relayNodes) }
+            }
+            persistRun()
             bump()
         } else {
             bump()
@@ -613,7 +625,7 @@ class GameViewModel(
             viewModelScope.launch { runCatching { playerRepository.bankScrap(reward) } }
         }
         viewModelScope.launch {
-            runCatching { playerRepository.recordRun(distance) }
+            runCatching { playerRepository.recordRunResult(distance, engine.elapsed) }
         }
     }
 
@@ -638,21 +650,6 @@ class GameViewModel(
         bump()
     }
 
-    private fun checkRelayProgress(forceNextDepot: Boolean = false) {
-        val distanceReached = Journey.completedGoals(engine.distanceM)
-        val nextGoal = Journey.nextGoal(relayNodes)
-        val depotActivated = forceNextDepot && engine.activeBuilding?.landmark == true &&
-            nextGoal != null && engine.distanceKm >= nextGoal.distanceKm - DEPOT_GOAL_TOLERANCE_KM
-        val reached = if (depotActivated) relayNodes + 1 else distanceReached
-            .coerceIn(0, META_RELAY_COUNT)
-        if (reached <= relayNodes) return
-        relayNodes = reached
-        viewModelScope.launch {
-            runCatching { playerRepository.recordRelayProgress(reached) }
-        }
-        bump()
-    }
-
     companion object {
         fun factory(repo: PlayerRepository, profile: PlayerProfile) =
             object : ViewModelProvider.Factory {
@@ -662,7 +659,6 @@ class GameViewModel(
                 }
             }
 
-        private const val DEPOT_GOAL_TOLERANCE_KM = 0.15f
         private val META_RELAY_COUNT = Journey.goals.size
     }
 }

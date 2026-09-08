@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import sk.kubis.endlessdrive.R
 import sk.kubis.endlessdrive.core.GameConfig
 import sk.kubis.endlessdrive.domain.model.GamePhase
+import sk.kubis.endlessdrive.game.Journey
 import sk.kubis.endlessdrive.game.car.TireInjury
 import sk.kubis.endlessdrive.ui.theme.BtnStyle
 import sk.kubis.endlessdrive.ui.theme.GameButton
@@ -285,6 +286,12 @@ fun TripBadge(ui: GameUiState, showFps: Boolean, modifier: Modifier = Modifier) 
                 )
             }
         }
+        Text(
+            "RELAY NETWORK  ${ui.relayNodes}/${Journey.goals.size}",
+            color = if (ui.relayNodes >= Journey.goals.size) GameColors.ok else GameColors.textDim,
+            fontSize = Type.label,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 

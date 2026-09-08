@@ -64,4 +64,36 @@ class JourneyTest {
         assertEquals(pack, game.inventory.usedSlots)
         assertTrue(game.activeBuilding!!.loot.isEmpty())
     }
+
+    @Test fun relayNeedsLootedModuleAndScrapAndPersistsItsRestoredState() {
+        val game = GameEngine(81L, 0f, DebugOptions(allComponents = true, fullFluids = true))
+        val relay = WorldBuilding(
+            id = 88L,
+            type = BuildingType.GAS_STATION,
+            localX = 4f,
+            loot = mutableListOf(
+                ItemStack(ItemCatalog.SCRAP_PILE.id, count = 12),
+                ItemStack(ItemCatalog.RELAY_MODULE.id)
+            ),
+            landmark = true,
+            relayIndex = 0
+        )
+        game.segment.buildings.clear()
+        game.segment.buildings += relay
+        game.car.x = game.segment.worldOrigin + 4f
+        game.car.speed = 0f
+
+        assertTrue(game.enterNearestBuilding())
+        assertTrue(game.takeLoot(0))
+        assertTrue(game.takeLoot(0))
+        assertTrue(game.relayActivationReady(0))
+        assertTrue(game.activateDepot(0))
+        assertTrue(relay.relayRestored)
+        assertEquals(6, game.scrap)
+        assertEquals(0, game.relayModuleCount())
+
+        val restored = GameEngine.restore(RunCodec.decode(RunCodec.encode(game.snapshot()))!!, 0f)
+        assertTrue(restored.segment.buildings.single().relayRestored)
+        assertEquals(0, restored.segment.buildings.single().relayIndex)
+    }
 }

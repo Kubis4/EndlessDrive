@@ -6,6 +6,7 @@ import sk.kubis.endlessdrive.domain.model.GamePhase
 import sk.kubis.endlessdrive.domain.model.ItemDef
 import sk.kubis.endlessdrive.domain.model.RoadFeature
 import sk.kubis.endlessdrive.domain.model.RoadSurface
+import sk.kubis.endlessdrive.game.event.RoadEvent
 import sk.kubis.endlessdrive.game.PrepStep
 import sk.kubis.endlessdrive.game.car.Car
 import sk.kubis.endlessdrive.game.car.TireInjury
@@ -86,6 +87,10 @@ data class GameUiState(
     val fuelBurnedL: Float = 0f,
     val itemsLooted: Int = 0,
     val buildingsVisited: Int = 0,
+    /** Splnené náročné podmienky aktuálnej jazdy pre Play Games. */
+    val fullTankReached: Boolean = false,
+    val fullUpgradeReached: Boolean = false,
+    val eventKindsSeen: Set<RoadEvent> = emptySet(),
     /** Krátke mená namontovaných dielov do HUD. */
     val fittedEngine: String = "—",
     val fittedDrive: String = "—",

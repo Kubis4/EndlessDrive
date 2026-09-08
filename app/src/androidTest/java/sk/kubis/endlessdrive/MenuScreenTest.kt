@@ -20,6 +20,7 @@ import sk.kubis.endlessdrive.domain.model.AudioSettings
 import sk.kubis.endlessdrive.domain.model.DebugOptions
 import sk.kubis.endlessdrive.domain.repository.PlayerProfile
 import sk.kubis.endlessdrive.ui.menu.MenuScreen
+import sk.kubis.endlessdrive.ui.menu.MENU_ROAD_LOOP_MS
 import sk.kubis.endlessdrive.ui.menu.SettingsScreen
 import sk.kubis.endlessdrive.ui.theme.EndlessDriveTheme
 
@@ -37,9 +38,9 @@ class MenuScreenTest {
         }
         compose.mainClock.advanceTimeBy(320)
         val first = compose.onRoot().captureToImage().asAndroidBitmap()
-        compose.mainClock.advanceTimeBy(800)
+        compose.mainClock.advanceTimeBy(3008)
         val moving = compose.onRoot().captureToImage().asAndroidBitmap()
-        compose.mainClock.advanceTimeBy(1600)
+        compose.mainClock.advanceTimeBy(MENU_ROAD_LOOP_MS.toLong() - 3008)
         val loop = compose.onRoot().captureToImage().asAndroidBitmap()
         var changed = 0; var loopChanged = 0
         for (y in first.height * 2 / 3 until first.height step 2) {
@@ -71,6 +72,7 @@ class MenuScreenTest {
         compose.mainClock.advanceTimeBy(300)
         compose.onNodeWithText("CONTINUE").assertIsDisplayed()
         compose.onNodeWithText("SETTINGS").assertIsDisplayed()
+        compose.onNodeWithText("LEADERBOARD").assertIsDisplayed()
         compose.onNodeWithText("NEW RUN").performClick()
         compose.mainClock.advanceTimeBy(100)
         assertEquals(0, replacements)
