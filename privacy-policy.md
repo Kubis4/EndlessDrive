@@ -2,7 +2,7 @@
 
 **Last updated: September 7, 2026**
 
-Endless Drive is an offline mobile game developed by Kubis4.
+Endless Drive is an offline mobile game developed by KubisDev.
 
 ## Information we collect
 
