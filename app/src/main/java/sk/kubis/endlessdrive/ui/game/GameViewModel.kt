@@ -112,6 +112,7 @@ class GameViewModel(
     }
 
     /** Rekord z profilu môže doraziť z DataStore až po vytvorení ViewModelu. */
+    @Synchronized
     fun updateBestDistance(km: Float) {
         if (km > bestKm) {
             bestKm = km
@@ -120,6 +121,7 @@ class GameViewModel(
     }
 
     /** Profil môže prísť z DataStore až po vytvorení ViewModelu. */
+    @Synchronized
     fun updateProfile(profile: PlayerProfile) {
         if (profile.bestDistanceKm > bestKm) bestKm = profile.bestDistanceKm
         bankedScrap = maxOf(bankedScrap, profile.bankedScrap)
@@ -131,19 +133,23 @@ class GameViewModel(
         publishUi(force = true)
     }
 
+    @Synchronized
     fun onGasChanged(pressed: Boolean) {
         onThrottle(if (pressed) 1f else 0f)
     }
 
+    @Synchronized
     fun onThrottle(amount: Float) {
         throttleHeld = amount.coerceIn(0f, 1f)
         gasPressed = throttleHeld > 0.02f
     }
 
+    @Synchronized
     fun onBrakeChanged(pressed: Boolean) {
         brakePressed = pressed
     }
 
+    @Synchronized
     fun onLifecyclePause() {
         pausedByLifecycle = true
         gasPressed = false
@@ -157,12 +163,14 @@ class GameViewModel(
         publishUi(force = true)
     }
 
+    @Synchronized
     fun onLifecycleResume() {
         pausedByLifecycle = false
         publishUi(force = true)
     }
 
     /** Ručná pauza – čas, spotreba aj batéria stoja. */
+    @Synchronized
     fun setPaused(value: Boolean) {
         pausedByUser = value
         if (value) {
@@ -181,11 +189,13 @@ class GameViewModel(
      * Panel CAR alebo PACK. Svetlá nesmú v jednom otvorení vybiť SoC –
      * odber ide len kým beží herný čas (jazda / státie vo svete).
      */
+    @Synchronized
     fun setGarageOpen(open: Boolean) {
         garageOpen = open
         engine.timeHeldByMenu = open
     }
 
+    @Synchronized
     fun onFrame(dt: Float, screenHeightPx: Float) {
         trackFps(dt)
         if (pausedByLifecycle || pausedByUser || garageOpen) {
@@ -416,6 +426,7 @@ class GameViewModel(
         publishUi(force = true)
     }
 
+    @Synchronized
     fun stop() {
         gasPressed = false
         brakePressed = false
@@ -426,16 +437,19 @@ class GameViewModel(
         bump()
     }
 
+    @Synchronized
     fun resume() {
         engine.resumeDriving()
         bump()
     }
 
+    @Synchronized
     fun enterBuilding() {
         engine.enterNearestBuilding()
         bump()
     }
 
+    @Synchronized
     fun activateDepot() {
         if (engine.activateDepot(relayNodes)) {
             relayNodes = (relayNodes + 1).coerceAtMost(META_RELAY_COUNT)
@@ -450,123 +464,149 @@ class GameViewModel(
         }
     }
 
+    @Synchronized
     fun leaveBuilding() {
         engine.leaveBuilding()
         bump()
     }
 
+    @Synchronized
     fun takeLoot(i: Int) {
         engine.takeLoot(i)
         bumpBag()
     }
 
+    @Synchronized
     fun takeAllLoot() {
         if (engine.takeAllLoot()) bumpBag() else bump()
     }
 
+    @Synchronized
     fun scrapAllLoot() {
         if (engine.scrapAllLoot()) bumpBag() else bump()
     }
 
+    @Synchronized
     fun discardItem(i: Int) {
         val ok = engine.discardInventoryItem(i)
         if (ok) bumpBag() else bump()
     }
 
+    @Synchronized
     fun discardBootItem(i: Int) {
         if (engine.discardBootItem(i)) bumpBag() else bump()
     }
 
+    @Synchronized
     fun scrapItem(i: Int) {
         if (engine.scrapInventoryItem(i)) bumpBag() else bump()
     }
 
+    @Synchronized
     fun scrapBootItem(i: Int) {
         if (engine.scrapBootItem(i)) bumpBag() else bump()
     }
 
+    @Synchronized
     fun stowInBoot(i: Int) {
         if (engine.stowInBoot(i)) bumpBag() else bump()
     }
 
+    @Synchronized
     fun takeFromBoot(i: Int) {
         if (engine.takeFromBoot(i)) bumpBag() else bump()
     }
 
+    @Synchronized
     fun useItem(i: Int, target: ComponentSlot? = null) {
         val ok = engine.useInventoryItem(i, target)
         if (ok) bumpBag() else bump()
     }
 
+    @Synchronized
     fun useBootItem(i: Int, target: ComponentSlot? = null) {
         val ok = engine.useBootItem(i, target)
         if (ok) bumpBag() else bump()
     }
 
+    @Synchronized
     fun repair(slot: ComponentSlot) {
         if (!debugOptions.repairControls) return
         engine.repairSlot(slot)
         bumpBag()
     }
 
+    @Synchronized
     fun repairWithScrap(slot: ComponentSlot) {
         engine.repairWithScrap(slot)
         bumpBag()
     }
 
+    @Synchronized
     fun repairPuncture(slot: ComponentSlot) {
         engine.repairPuncture(slot)
         bumpBag()
     }
 
+    @Synchronized
     fun upgradeWithScrap(slot: ComponentSlot) {
         engine.upgradeWithScrap(slot)
         bumpBag()
     }
 
+    @Synchronized
     fun paintBody(paint: VehiclePaint) {
         if (engine.paintBody(paint)) bumpBag() else bump()
     }
 
+    @Synchronized
     fun paintBodyFromAd(paint: VehiclePaint) {
         if (engine.paintBodyFromRewardedAd(paint)) bumpBag() else bump()
     }
 
+    @Synchronized
     fun drainFluid(fluid: FluidType, litres: Float? = null) {
         engine.drainFluid(fluid, litres)
         bumpBag()
     }
 
+    @Synchronized
     fun swapTyres() {
         engine.swapTyres()
         bumpBag()
     }
 
+    @Synchronized
     fun unmount(slot: ComponentSlot) {
         engine.unmountSlot(slot)
         bumpBag()
     }
 
+    @Synchronized
     fun refuelFromPump(kind: FuelKind = FuelKind.PETROL) {
         engine.refuelFromPump(kind)
         bumpBag()
     }
 
+    @Synchronized
     fun restUntilDawn() {
         engine.restUntilDawn()
         bump()
     }
 
+    @Synchronized
     fun toggleRoofLights() {
         engine.toggleRoofLights()
         bump()
     }
 
+    @Synchronized
     fun toggleHeadlights() {
         engine.toggleHeadlights()
         bump()
     }
 
+    @Synchronized
     fun startEngine() {
         engine.tryStartEngine()
         if (engine.car.engineRunning) {
@@ -576,17 +616,20 @@ class GameViewModel(
         bump()
     }
 
+    @Synchronized
     fun stopEngine() {
         engine.stopEngine()
         bump()
     }
 
     /** Voľba vetvy za jazdy – auto nezastavuje. */
+    @Synchronized
     fun selectBranch(id: Int) {
         engine.selectBranch(id)
         bump()
     }
 
+    @Synchronized
     fun chooseBranch(id: Int) {
         gasPressed = false
         brakePressed = false
@@ -603,6 +646,7 @@ class GameViewModel(
      * slučka pri GAME_OVER, tá sa však počas pauzy vôbec nevykoná a jazda
      * ukončená z pauzy by sa do štatistík nedostala.
      */
+    @Synchronized
     fun endRun() {
         engine.endRun()
         hasActiveRun = false
@@ -612,6 +656,7 @@ class GameViewModel(
     }
 
     /** Ukončí obrazovku jazdy a uloží jej štatistiky aj šrot. */
+    @Synchronized
     fun finalizeRun() {
         hasActiveRun = false
         maybeRecord()
@@ -619,6 +664,7 @@ class GameViewModel(
     }
 
     /** Rewarded reklama pripraví dvojnásobný prevod šrotu do skladu. */
+    @Synchronized
     fun claimDoubleScrap(): Boolean {
         if (engine.phase != GamePhase.GAME_OVER || scrapDoubled || engine.scrap <= 0) return false
         scrapDoubled = true
@@ -627,6 +673,7 @@ class GameViewModel(
     }
 
     /** Jedna núdzová záchrana po poruche; jazda pokračuje z aktuálneho miesta. */
+    @Synchronized
     fun recoverFromAd(): Boolean {
         if (engine.phase != GamePhase.GAME_OVER) return false
         val recovered = engine.recoverFromRewardedAd()
@@ -655,6 +702,7 @@ class GameViewModel(
     }
 
     /** Nová jazda od nuly – nový vrak, nový svet. */
+    @Synchronized
     fun retry() {
         if (engine.phase == GamePhase.GAME_OVER) maybeRecord()
         hasActiveRun = false

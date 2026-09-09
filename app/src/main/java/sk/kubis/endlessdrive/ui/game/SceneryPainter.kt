@@ -80,7 +80,8 @@ class SceneryPainter(
         heightAt: (Float) -> Float,
         occupiedAt: (Float) -> Boolean = { false },
         landTint: Color = Color.White,
-        landTintAmount: Float = 0f
+        landTintAmount: Float = 0f,
+        detail: Float = 1f
     ) {
         this@SceneryPainter.landTint = landTint
         this@SceneryPainter.landTintAmount = landTintAmount.coerceIn(0f, 1f)
@@ -94,6 +95,7 @@ class SceneryPainter(
             if (r > density) continue
             val biome = if (MathX.hash01(cell, BIOME_SALT) < blend.amount) blend.to else blend.from
             if (occupiedAt(wx)) continue
+            if (detail < 1f && MathX.hash01(cell, DETAIL_SALT) > detail) continue
             // Hĺbka musí ostať v páse lúky (GameRenderer.SCENERY_BACK_DEPTH),
             // inak by kulisa vyletela nad terén k úbežníku.
             val d = GameConfig.ROAD_DEPTH + 0.45f + MathX.hash01(cell, 137) * 1.2f
@@ -164,7 +166,8 @@ class SceneryPainter(
         heightAt: (Float) -> Float,
         occupiedAt: (Float) -> Boolean = { false },
         landTint: Color = Color.White,
-        landTintAmount: Float = 0f
+        landTintAmount: Float = 0f,
+        detail: Float = 1f
     ) {
         this@SceneryPainter.landTint = landTint
         this@SceneryPainter.landTintAmount = landTintAmount.coerceIn(0f, 1f)
@@ -172,6 +175,7 @@ class SceneryPainter(
         val last = MathX.floorDiv(toX, FRONT_CELL)
         for (cell in first..last) {
             if (MathX.hash01(cell, FRONT_SALT) > 0.55f) continue
+            if (detail < 1f && MathX.hash01(cell, DETAIL_FRONT_SALT) > detail) continue
             val wx = cell * FRONT_CELL + MathX.hash01(cell, 401) * FRONT_CELL
             if (occupiedAt(wx)) continue
             val blend = biomeAt(wx)
@@ -1055,6 +1059,8 @@ class SceneryPainter(
         const val MILESTONE = 100f
         const val BACK_SALT = 4523
         const val FRONT_SALT = 8171
+        const val DETAIL_SALT = 1901
+        const val DETAIL_FRONT_SALT = 1907
         const val BIOME_SALT = 28939
         const val BIOME_FRONT_SALT = 28949
     }

@@ -20,7 +20,8 @@ import sk.kubis.endlessdrive.game.world.WorldBuilding
  * Budovy pri ceste. Každý typ má vlastnú siluetu, v noci svietia okná
  * a vyrabovaná budova ostane tmavá – hráč vidí, kde už bol.
  */
-class BuildingPainter {
+class BuildingPainter(sprites: BuildingSprites? = null) {
+    private val spritePainter = sprites?.let { BuildingSpritePainter(it) }
     private val path = Path()
     private val materials = MaterialPainter()
     private var seed = 0
@@ -60,7 +61,8 @@ class BuildingPainter {
         near: Boolean,
         slopeDeg: Float = 0f,
         environment: BiomeType = BiomeType.RURAL,
-        winterAmount: Float = 0f
+        winterAmount: Float = 0f,
+        paintService: Boolean = false
     ) {
         seed = (b.id xor (b.id ushr 32)).toInt()
         variant = (roll(7103) * 4).toInt().coerceAtMost(3)
@@ -83,6 +85,12 @@ class BuildingPainter {
                 topLeft = Offset(px - s * 2.2f, py - s * 0.12f),
                 size = Size(s * 4.4f, s * 0.34f)
             )
+            val authored = spritePainter
+            if (authored != null) {
+                with(authored) { draw(b, px, py, s, day, environment, winterAmount, paintService) }
+                if (near) drawSearchMarker(px, py, s, b.looted)
+                return@rotate
+            }
             // Keep variations inside the original placement footprint; markers remain upright.
             scale(scaleX = (if (roll(7193) < 0.5f) -1f else 1f) * (0.88f + roll(7207) * 0.12f),
                 scaleY = 0.88f + roll(7211) * 0.22f, pivot = Offset(px, py)) {

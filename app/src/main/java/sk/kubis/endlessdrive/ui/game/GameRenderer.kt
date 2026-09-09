@@ -54,7 +54,7 @@ class GameRenderer(private val assets: GameAssets) {
     private val carArtist = CarArtist()
     private val sky = SkyPainter()
     private val scenery = SceneryPainter(assets.sedan, assets.wreckSprites)
-    private val buildings = BuildingPainter()
+    private val buildings = BuildingPainter(assets.buildingSprites)
     private val band = Path()
     private val edge = Path()
     private val soil = Path()
@@ -147,6 +147,7 @@ class GameRenderer(private val assets: GameAssets) {
         val day = engine.daylight
         val environment = engine.biomeBlend
         val biome = environment.dominant
+        val highSpeed = abs(engine.car.speed) >= HIGH_SPEED_DETAIL_SPEED
         // Horizont je nad vozovkou, nie prilepený na ňu – mesa/les zaberú
         // viac záberu. Mid/near prekryjú švík; farba zeme je poistka.
         // Pozadie má mať viac priestoru nad lokálnym profilom cesty. Samotná
@@ -233,14 +234,15 @@ class GameRenderer(private val assets: GameAssets) {
             drawBackProps(
                 visibleFrom, visibleTo, engine.segment::biomeBlendAtWorld,
                 day, depth, heightAt, occupiedGround,
-                sceneMeadow, landFollowAmount(environment, engine.winterAmount)
+                sceneMeadow, landFollowAmount(environment, engine.winterAmount),
+                detail = if (highSpeed) FAST_SCENERY_DETAIL else 1f
             )
         }
         // Mosty a vodné decky sú vypnuté. V minulosti boli zdrojom zle
         // ukotvených vrakov/budov aj krátkych render spikeov pred prechodom.
         // Roklina ostáva iba ako bezpečný terénny profil.
         drawRoadSurface(engine.segment, day)
-        drawRoadHistory(engine.segment, day)
+        if (!highSpeed) drawRoadHistory(engine.segment, day)
         drawSurfacePatches(engine.segment, day)
         drawRoadEventDecals(engine, day, visibleFrom, visibleTo)
         recordSkid(engine)
@@ -253,7 +255,8 @@ class GameRenderer(private val assets: GameAssets) {
             drawFrontProps(
                 visibleFrom, visibleTo, engine.segment::biomeBlendAtWorld,
                 day, depth, heightAt, occupiedGround,
-                sceneMeadow, landFollowAmount(environment, engine.winterAmount)
+                sceneMeadow, landFollowAmount(environment, engine.winterAmount),
+                detail = if (highSpeed) FAST_SCENERY_DETAIL else 1f
             )
         }
         drawNight(engine, day, horizonY, visibleFrom, visibleTo)
@@ -886,7 +889,10 @@ class GameRenderer(private val assets: GameAssets) {
         val screenOrigin = screenOriginX / screenWidth
         val from = engine.camera.x - worldW * screenOrigin - EDGE_MARGIN
         val to = engine.camera.x + worldW * (1f - screenOrigin) + EDGE_MARGIN
-        val step = 1.1f
+        // Pri rýchlej jazde sa na obrazovke mení najmä obrys cesty. Jemné
+        // vzorkovanie profilu by vtedy vyrábalo zbytočné body vo všetkých
+        // terénnych pásoch.
+        val step = if (abs(engine.car.speed) >= HIGH_SPEED_DETAIL_SPEED) 1.55f else 1.1f
         var n = 0
         var wx = from
         while (wx <= to && n < MAX_POINTS) {
@@ -2158,7 +2164,8 @@ class GameRenderer(private val assets: GameAssets) {
                 if (near === b) with(buildings) { drawSearchMarker(px, py, s, b.looted) }
             } else {
                 with(buildings) { drawBuilding(b, px, py, s, day, near === b, slopeDeg,
-                    seg.biomeBlendAtWorld(wx).dominant, if (seg.paving.winter) 1f else 0f) }
+                    seg.biomeBlendAtWorld(wx).dominant, if (seg.paving.winter) 1f else 0f,
+                    paintService = engine.distanceM >= 10_000f) }
             }
         }
     }
@@ -3426,6 +3433,8 @@ class GameRenderer(private val assets: GameAssets) {
         private const val RAIN_DROPS = 90
         /** Above this speed the headlight cone uses the road-only LOD. */
         private const val HEADLIGHT_DETAIL_SPEED = 28f
+        private const val HIGH_SPEED_DETAIL_SPEED = 25f
+        private const val FAST_SCENERY_DETAIL = 0.62f
         private const val SNOW_FLAKES = 70
         /** Vietor v daždi a snežení – konštantný, nezávislý od rýchlosti auta. */
         private const val RAIN_DRIFT = 330f

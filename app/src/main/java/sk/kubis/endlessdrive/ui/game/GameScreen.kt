@@ -60,6 +60,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -93,6 +94,7 @@ import sk.kubis.endlessdrive.ui.theme.SectionLabel
 import sk.kubis.endlessdrive.ui.theme.StatBar
 import sk.kubis.endlessdrive.ui.theme.levelColor
 import sk.kubis.endlessdrive.ui.theme.purityColor
+import java.util.concurrent.atomic.AtomicReference
 
 /** Odstup UI od okrajov – zaoblené displeje a výrezy nesmú nič odrezať. */
 private val SCREEN_MARGIN = 10.dp
@@ -123,6 +125,8 @@ fun GameScreen(
     val configuration = LocalConfiguration.current
     val compactLoot = configuration.screenWidthDp < 760 || configuration.screenHeightDp < 500
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
+    val layoutDirection = LocalLayoutDirection.current
+    val surfaceRef = remember { AtomicReference<GameSurfaceView?>(null) }
     val ui by viewModel.ui.collectAsState()
     val engine = viewModel.game
 
@@ -171,6 +175,9 @@ fun GameScreen(
                         step,
                         paused = viewModel.ui.value.paused
                     )
+                    // The scene is posted by the dedicated SurfaceView thread;
+                    // Compose only needs to update the HUD state.
+                    surfaceRef.get()?.requestGameRender()
                 }
             }
         }
@@ -188,16 +195,27 @@ fun GameScreen(
     Box(Modifier.fillMaxSize().background(GameColors.panelSoft)) {
         // Scéna ide cez celú plochu vrátane výrezu. Odsadenie plátna do čiernych
         // pásov po stranách sa neosvedčilo – obraz tým utrpel viac, než získal.
-        Canvas(Modifier.fillMaxSize()) {
-            @Suppress("UNUSED_EXPRESSION")
-            viewModel.frame
-            with(renderer) { draw(engine) }
-        }
+        AndroidView(
+            factory = { context ->
+                GameSurfaceView(
+                    context = context,
+                    viewModel = viewModel,
+                    renderer = renderer,
+                    density = density,
+                    layoutDirection = layoutDirection
+                ).also(surfaceRef::set)
+            },
+            update = { surface ->
+                surface.updateViewport(density, layoutDirection)
+                surfaceRef.set(surface)
+            },
+            modifier = Modifier.fillMaxSize()
+        )
 
         // …ale ovládanie a HUD sa držia mimo výrezu, zaoblených rohov aj
         // systémových líšt. Bez navigačnej lišty sa spodok palubnej dosky
         // schoval pod gesto-pruh a kontrolky boli orezané.
-        val layoutDir = LocalLayoutDirection.current
+        val layoutDir = layoutDirection
         val safe = WindowInsets.safeDrawing
         val cutoutSide = with(density) {
             max(safe.getLeft(this, layoutDir).toDp(), safe.getRight(this, layoutDir).toDp())

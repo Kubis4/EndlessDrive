@@ -22,6 +22,7 @@ import kotlin.math.max
  */
 class GameAssets(context: Context) {
     private val app = context.applicationContext
+    val buildingSprites = BuildingSprites(app)
 
     /**
      * Auto: holá karoséria plus kresby dielov. Diely idú v polovičnom
