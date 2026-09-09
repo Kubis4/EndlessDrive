@@ -87,7 +87,6 @@ class GameRenderer(private val assets: GameAssets) {
 
     /** Nazbieraný posun vrstiev pozadia (far, mid, near) v pixeloch. */
     private val backdropShift = FloatArray(3)
-    private val backdropBlendPaint = Paint()
     private val backdropSkyPaint = Paint()
     private var lastBackdropX = Float.NaN
     /** Farba zeme z aktuálnej kresby – tráva, apron aj cesta sa k nej priblížia. */
@@ -155,6 +154,15 @@ class GameRenderer(private val assets: GameAssets) {
         // nespustia vzdialený horizont a apron medzi nimi zostane prirodzený.
         val horizonY = size.height * BACKDROP_HORIZON
 
+        // Warm the next backdrop well before the transition. Decoding and
+        // tiling the PNGs is not allowed to happen in the draw callback.
+        val nextChoice = engine.segment.choices.firstOrNull()
+        if (nextChoice != null &&
+            engine.car.x >= engine.segment.transitionStartWorldX - BACKDROP_PRELOAD_LEAD
+        ) {
+            assets.preloadBackdrop(nextChoice.style.biome, nextChoice.segmentSeed)
+        }
+
         // Terén zbierame pred pozadím pre apron, ale samotné vzdialené kulisy
         // ostávajú v screen-space. Keď ich spodok sledoval medián kopcov, celý
         // les pri každom stúpaní a klesaní viditeľne poskakoval.
@@ -164,29 +172,34 @@ class GameRenderer(private val assets: GameAssets) {
         // Kreslené pozadie má dnes každý bióm a nesie si vlastnú oblohu aj
         // krajinu – procedurálne vrstvy by sa cezeň len bili.
         updateBackdropScroll(cam, engine.car.x)
-        val backdrop = assets.backdropFor(environment.from)
+        val backdrop = assets.backdropFor(environment.from, engine.segment.seed)
         val nextBackdrop = if (environment.amount > 0.001f && environment.to != environment.from) {
-            assets.backdropFor(environment.to)
+            assets.cachedBackdropFor(
+                environment.to,
+                engine.segment.choices.firstOrNull()?.segmentSeed ?: engine.segment.seed
+            )
         } else null
         rememberLandscape(backdrop, nextBackdrop, environment.amount)
-        // Fade the assembled scenes once, including all three layers and celestial light.
-        // Fading incoming transparent sprites alone leaves the old buildings visible
-        // through their gaps until the segment switches.
-        drawBackdropCrossfade(
-            if (nextBackdrop == null) 0f else environment.amount,
-            backdropBlendPaint,
-            from = { drawBackdropScene(environment.from, backdrop, cam, horizonY, day, engine.timeOfDay) },
-            to = {
-                drawBackdropScene(
-                    environment.to,
-                    nextBackdrop ?: backdrop,
-                    cam,
-                    horizonY,
-                    day,
-                    engine.timeOfDay
-                )
-            }
-        )
+        // Render the base scene once. The old implementation rendered two complete
+        // scenes into a full-screen saveLayer during every biome transition. That
+        // doubled the bitmap work exactly where the camera is already moving fast.
+        drawBackdropScene(environment.from, backdrop, cam, horizonY, day, engine.timeOfDay)
+        if (nextBackdrop != null && environment.amount > 0.001f) {
+            // The incoming sky/starfield is intentionally omitted: the current sky
+            // already covers the screen and the three incoming landscape layers are
+            // what the player reads as the new biome. This keeps the transition smooth
+            // without a second full-screen composition pass.
+            drawBackdropScene(
+                environment.to,
+                nextBackdrop,
+                cam,
+                horizonY,
+                day,
+                engine.timeOfDay,
+                includeSky = false,
+                opacity = environment.amount
+            )
+        }
         val skyHaze = when (environment.from) {
             BiomeType.FOREST, BiomeType.FOREST_ALIVE -> 0.16f
             BiomeType.DESERT, BiomeType.DESERT_DUSK, BiomeType.WASTELAND -> 0.20f
@@ -223,10 +236,9 @@ class GameRenderer(private val assets: GameAssets) {
                 sceneMeadow, landFollowAmount(environment, engine.winterAmount)
             )
         }
-        drawBridges(engine, day)
-        // Voda má rovnakú geometriu ako vozovka: plochu o kúsok nižšie
-        // a bočné steny, ktoré siahajú až na dno jamy.
-        drawBridgeWaterDeck(engine, day)
+        // Mosty a vodné decky sú vypnuté. V minulosti boli zdrojom zle
+        // ukotvených vrakov/budov aj krátkych render spikeov pred prechodom.
+        // Roklina ostáva iba ako bezpečný terénny profil.
         drawRoadSurface(engine.segment, day)
         drawRoadHistory(engine.segment, day)
         drawSurfacePatches(engine.segment, day)
@@ -585,27 +597,31 @@ class GameRenderer(private val assets: GameAssets) {
         cam: Camera2D,
         horizonY: Float,
         day: Float,
-        timeOfDay: Float
+        timeOfDay: Float,
+        includeSky: Boolean = true,
+        opacity: Float = 1f
     ) {
-        drawParallaxBackdrop(backdrop, horizonY, day, BackdropPass.SKY)
-        // Hviezdy ostávajú za diaľkovou krajinou.
-        with(sky) { drawStarfield(day, cam.x, horizonY) }
-        // Slnko patrí za celú kreslenú krajinu. FAR, HORIZON aj LANDSCAPE ho
-        // musia prekryť; inak pri východe presvitá medzi stromami.
-        val celestialClipBottom = BackdropLayout.celestialClipBottom(
-            horizonY,
-            size.height,
-            forestArtwork = biome == BiomeType.FOREST ||
-                biome == BiomeType.FOREST_ALIVE ||
-                biome == BiomeType.RURAL ||
-                biome == BiomeType.ALPINE
-        )
-        clipRect(0f, 0f, size.width, celestialClipBottom) {
-            with(sky) { drawCelestialOver(timeOfDay, day, horizonY) }
+        if (includeSky) {
+            drawParallaxBackdrop(backdrop, horizonY, day, BackdropPass.SKY, opacity)
+            // Hviezdy ostávajú za diaľkovou krajinou.
+            with(sky) { drawStarfield(day, cam.x, horizonY) }
+            // Slnko patrí za celú kreslenú krajinu. FAR, HORIZON aj LANDSCAPE ho
+            // musia prekryť; inak pri východe presvitá medzi stromami.
+            val celestialClipBottom = BackdropLayout.celestialClipBottom(
+                horizonY,
+                size.height,
+                forestArtwork = biome == BiomeType.FOREST ||
+                    biome == BiomeType.FOREST_ALIVE ||
+                    biome == BiomeType.RURAL ||
+                    biome == BiomeType.ALPINE
+            )
+            clipRect(0f, 0f, size.width, celestialClipBottom) {
+                with(sky) { drawCelestialOver(timeOfDay, day, horizonY) }
+            }
         }
-        drawParallaxBackdrop(backdrop, horizonY, day, BackdropPass.FAR)
-        drawParallaxBackdrop(backdrop, horizonY, day, BackdropPass.HORIZON)
-        drawParallaxBackdrop(backdrop, horizonY, day, BackdropPass.LANDSCAPE)
+        drawParallaxBackdrop(backdrop, horizonY, day, BackdropPass.FAR, opacity)
+        drawParallaxBackdrop(backdrop, horizonY, day, BackdropPass.HORIZON, opacity)
+        drawParallaxBackdrop(backdrop, horizonY, day, BackdropPass.LANDSCAPE, opacity)
     }
 
     private fun DrawScope.drawParallaxBackdrop(
@@ -898,12 +914,12 @@ class GameRenderer(private val assets: GameAssets) {
         engine.segment.groundAtWorld(worldX)
 
     private fun biomeGrassColor(biome: BiomeType) = when (biome) {
-            BiomeType.RURAL -> Color(0xFF7A8F5A)
+            BiomeType.RURAL -> Color(0xFF858B58)
             BiomeType.INDUSTRIAL -> Color(0xFF4A463E)
-            BiomeType.WASTELAND -> Color(0xFF8A7A4F)
-            // V uschnutom lese je tráva vyblednutá, v živom sýta.
-            BiomeType.FOREST -> Color(0xFF6E7A5E)
-            BiomeType.FOREST_ALIVE -> Color(0xFF5D7A45)
+            BiomeType.WASTELAND -> Color(0xFF858176)
+            // Močiar je tmavý a studený, jesenné údolie medeno-hnedé.
+            BiomeType.FOREST -> Color(0xFF506A63)
+            BiomeType.FOREST_ALIVE -> Color(0xFF9A5A35)
             BiomeType.DESERT -> Color(0xFFC2A469)
             BiomeType.DESERT_DUSK -> Color(0xFF8A6A6B)
             BiomeType.SANDSTORM -> Color(0xFFB49767)
@@ -1038,7 +1054,9 @@ class GameRenderer(private val assets: GameAssets) {
                     winterAmount >= 0.55f -> Color(0xFF6B5340)
                     environment.dominant == BiomeType.DESERT -> Color(0xFFA9855A)
                     environment.dominant == BiomeType.SANDSTORM -> Color(0xFF9A7B52)
-                    environment.dominant == BiomeType.FOREST -> Color(0xFF54402D)
+                    environment.dominant == BiomeType.FOREST -> Color(0xFF39473F)
+                    environment.dominant == BiomeType.FOREST_ALIVE -> Color(0xFF65412E)
+                    environment.dominant == BiomeType.WASTELAND -> Color(0xFF5F5B54)
                     environment.dominant == BiomeType.ALPINE -> Color(0xFF657078)
                     else -> Color(0xFF6B5340)
                 },
@@ -1069,7 +1087,8 @@ class GameRenderer(private val assets: GameAssets) {
 
         val earthMaterial = when {
             environment.dominant.arid -> MaterialKind.SAND
-            environment.dominant == BiomeType.ALPINE -> MaterialKind.STONE
+            environment.dominant == BiomeType.ALPINE ||
+                environment.dominant == BiomeType.WASTELAND -> MaterialKind.STONE
             else -> MaterialKind.DIRT
         }
         val cutDepth = size.height / depth.ppm + 10f
@@ -1096,6 +1115,7 @@ class GameRenderer(private val assets: GameAssets) {
         val vergeMaterial = when {
             winterAmount > 0.55f || environment.dominant == BiomeType.ALPINE -> MaterialKind.SNOW
             environment.dominant.arid -> MaterialKind.SAND
+            environment.dominant == BiomeType.WASTELAND -> MaterialKind.STONE
             else -> MaterialKind.GRASS
         }
         drawMaterialBand(vergeMaterial, 0f, SCENERY_BACK_DEPTH + 0.5f, groundY, day, 0.72f)
@@ -1654,7 +1674,11 @@ class GameRenderer(private val assets: GameAssets) {
         val grass = grassColor(roadBlend, winter, day)
         val nextPaving = segment.choices.firstOrNull()?.plan?.paving ?: segment.paving
         val road = shade(
-            lerp(pavingColor(segment.paving), pavingColor(nextPaving), roadBlend.amount),
+            lerp(
+                pavingColor(segment.paving, roadBlend.from),
+                pavingColor(nextPaving, roadBlend.to),
+                roadBlend.amount
+            ),
             day
         )
 
@@ -1701,7 +1725,7 @@ class GameRenderer(private val assets: GameAssets) {
         )
     }
 
-    private fun pavingColor(paving: RoadPaving): Color {
+    private fun pavingColor(paving: RoadPaving, biome: BiomeType): Color {
         val base = when (paving) {
             RoadPaving.ASPHALT -> Color(0xFF3E3E42)
             RoadPaving.CRACKED -> Color(0xFF4A4844)
@@ -1717,7 +1741,15 @@ class GameRenderer(private val assets: GameAssets) {
             RoadPaving.SNOW, RoadPaving.PACKED_SNOW -> 0.10f
             else -> 0.16f
         }
-        return lerp(base, sceneGround, follow)
+        val localGround = when (biome) {
+            BiomeType.RURAL -> Color(0xFF777052)
+            BiomeType.FOREST_ALIVE -> Color(0xFF76503A)
+            BiomeType.FOREST -> Color(0xFF414F49)
+            BiomeType.WASTELAND -> Color(0xFF716D65)
+            BiomeType.ALPINE -> Color(0xFFAEBFC8)
+            else -> sceneGround
+        }
+        return lerp(base, localGround, follow)
     }
 
     /** Farby naplavenín – každá prekážka musí byť na prvý pohľad iná. */
@@ -2736,12 +2768,14 @@ class GameRenderer(private val assets: GameAssets) {
         alpha: Float
     ) {
         val axis = CarBodyFx.carAxisRad(pose.bodyPitch)
-        val vents = arrayOf(
-            rotated(layout.radiatorX, layout.radiatorY),
-            rotated(layout.hoodVentX, layout.hoodVentY)
-        )
-        for (v in vents.indices) {
-            val origin = vents[v]
+        // Keep the two vent positions scalar. This helper can run every frame
+        // during a coolant leak/overheat and must not allocate an array there.
+        for (v in 0..1) {
+            val origin = if (v == 0) {
+                rotated(layout.radiatorX, layout.radiatorY)
+            } else {
+                rotated(layout.hoodVentX, layout.hoodVentY)
+            }
             for (i in 0 until puffs) {
                 val phase = ((t * (1.15f + v * 0.12f)) + i * 0.13f) % 1f
                 val h = MathX.hash01(i + v * 11, (t * 6f).toInt())
@@ -3256,11 +3290,20 @@ class GameRenderer(private val assets: GameAssets) {
         visibleFrom: Float,
         visibleTo: Float
     ) {
+        // At high speed the headlight cone moves over a large amount of scenery.
+        // The road and its hazards remain important, but illuminating a second
+        // copy of every ground polygon, prop and building costs a full extra
+        // render pass. Keep the cone readable while using a cheaper road-only
+        // light pass once the player is travelling fast enough.
+        val fastHeadlightPass = abs(engine.car.speed) >= HEADLIGHT_DETAIL_SPEED
         val cam = engine.camera
         val environment = engine.biomeBlend
-        val backdrop = assets.backdropFor(environment.from)
+        val backdrop = assets.backdropFor(environment.from, engine.segment.seed)
         val nextBackdrop = if (environment.amount > 0.001f && environment.to != environment.from) {
-            assets.backdropFor(environment.to)
+            assets.cachedBackdropFor(
+                environment.to,
+                engine.segment.choices.firstOrNull()?.segmentSeed ?: engine.segment.seed
+            )
         } else null
         drawParallaxBackdrop(backdrop, horizonY, litDay, BackdropPass.LANDSCAPE)
         if (nextBackdrop != null) {
@@ -3269,23 +3312,25 @@ class GameRenderer(private val assets: GameAssets) {
                 opacity = environment.amount
             )
         }
-        val heightAt: (Float) -> Float = { wx -> groundFor(engine, wx) }
-        val occupiedGround: (Float) -> Boolean = { wx ->
-            engine.segment.buildingOccupies(wx, BUILDING_CLEAR_M) ||
-                engine.segment.bridgeClearanceAtWorld(wx) > BRIDGE_PROP_CLEARANCE_M
-        }
-        drawLandscapeApron(environment, engine.winterAmount, litDay)
-        drawGround(engine.segment, environment, engine.winterAmount, litDay)
-        with(scenery) {
-            drawBackProps(
-                visibleFrom, visibleTo, engine.segment::biomeBlendAtWorld,
-                litDay, depth, heightAt, occupiedGround,
-                sceneMeadow, landFollowAmount(environment, engine.winterAmount)
-            )
+        if (!fastHeadlightPass) {
+            val heightAt: (Float) -> Float = { wx -> groundFor(engine, wx) }
+            val occupiedGround: (Float) -> Boolean = { wx ->
+                engine.segment.buildingOccupies(wx, BUILDING_CLEAR_M) ||
+                    engine.segment.bridgeClearanceAtWorld(wx) > BRIDGE_PROP_CLEARANCE_M
+            }
+            drawLandscapeApron(environment, engine.winterAmount, litDay)
+            drawGround(engine.segment, environment, engine.winterAmount, litDay)
+            with(scenery) {
+                drawBackProps(
+                    visibleFrom, visibleTo, engine.segment::biomeBlendAtWorld,
+                    litDay, depth, heightAt, occupiedGround,
+                    sceneMeadow, landFollowAmount(environment, engine.winterAmount)
+                )
+            }
         }
         drawRoadSurface(engine.segment, litDay)
         drawSurfacePatches(engine.segment, litDay)
-        drawBuildings(engine, litDay)
+        if (!fastHeadlightPass) drawBuildings(engine, litDay)
     }
 
     private inline fun DrawScope.withSaveLayer(paint: Paint, block: DrawScope.() -> Unit) {
@@ -3364,6 +3409,8 @@ class GameRenderer(private val assets: GameAssets) {
          * pri pravom okraji vidieť, ako trať „končí“ a dostavuje sa.
          */
         private const val EDGE_MARGIN = 24f
+        /** Lead time for decoding the next backdrop off the render thread. */
+        private const val BACKDROP_PRELOAD_LEAD = 900f
         /** Minimálna výška mostovky, pri ktorej vyčistíme roklinu od kulís. */
         private const val BRIDGE_PROP_CLEARANCE_M = 0.45f
         /** Vzorky vodnej hladiny pod mostom. */
@@ -3377,6 +3424,8 @@ class GameRenderer(private val assets: GameAssets) {
         private const val BUILDING_CLEAR_M = 4.5f
         private const val MAX_POINTS = 260
         private const val RAIN_DROPS = 90
+        /** Above this speed the headlight cone uses the road-only LOD. */
+        private const val HEADLIGHT_DETAIL_SPEED = 28f
         private const val SNOW_FLAKES = 70
         /** Vietor v daždi a snežení – konštantný, nezávislý od rýchlosti auta. */
         private const val RAIN_DRIFT = 330f

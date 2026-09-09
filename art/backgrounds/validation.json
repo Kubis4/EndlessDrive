@@ -1,0 +1,182 @@
+[
+  {
+    "name": "rural_far",
+    "size": [
+      2048,
+      512
+    ],
+    "rgba": true,
+    "identical_horizontal_edges": true,
+    "transparent_fraction": 0.0
+  },
+  {
+    "name": "rural_mid",
+    "size": [
+      2048,
+      512
+    ],
+    "rgba": true,
+    "identical_horizontal_edges": true,
+    "transparent_fraction": 0.724
+  },
+  {
+    "name": "rural_near",
+    "size": [
+      2048,
+      512
+    ],
+    "rgba": true,
+    "identical_horizontal_edges": true,
+    "transparent_fraction": 0.649
+  },
+  {
+    "name": "autumn_far",
+    "size": [
+      2048,
+      512
+    ],
+    "rgba": true,
+    "identical_horizontal_edges": true,
+    "transparent_fraction": 0.0
+  },
+  {
+    "name": "autumn_mid",
+    "size": [
+      2048,
+      512
+    ],
+    "rgba": true,
+    "identical_horizontal_edges": true,
+    "transparent_fraction": 0.64
+  },
+  {
+    "name": "autumn_near",
+    "size": [
+      2048,
+      512
+    ],
+    "rgba": true,
+    "identical_horizontal_edges": true,
+    "transparent_fraction": 0.666
+  },
+  {
+    "name": "quarry_far",
+    "size": [
+      2048,
+      512
+    ],
+    "rgba": true,
+    "identical_horizontal_edges": true,
+    "transparent_fraction": 0.0
+  },
+  {
+    "name": "quarry_mid",
+    "size": [
+      2048,
+      512
+    ],
+    "rgba": true,
+    "identical_horizontal_edges": true,
+    "transparent_fraction": 0.707
+  },
+  {
+    "name": "quarry_near",
+    "size": [
+      2048,
+      512
+    ],
+    "rgba": true,
+    "identical_horizontal_edges": true,
+    "transparent_fraction": 0.831
+  },
+  {
+    "name": "marsh_far",
+    "size": [
+      2048,
+      512
+    ],
+    "rgba": true,
+    "identical_horizontal_edges": true,
+    "transparent_fraction": 0.0
+  },
+  {
+    "name": "marsh_mid",
+    "size": [
+      2048,
+      512
+    ],
+    "rgba": true,
+    "identical_horizontal_edges": true,
+    "transparent_fraction": 0.722
+  },
+  {
+    "name": "marsh_near",
+    "size": [
+      2048,
+      512
+    ],
+    "rgba": true,
+    "identical_horizontal_edges": true,
+    "transparent_fraction": 0.81
+  },
+  {
+    "name": "winter_alpine_far",
+    "size": [
+      2048,
+      512
+    ],
+    "rgba": true,
+    "identical_horizontal_edges": true,
+    "transparent_fraction": 0.0
+  },
+  {
+    "name": "winter_alpine_mid",
+    "size": [
+      2048,
+      512
+    ],
+    "rgba": true,
+    "identical_horizontal_edges": true,
+    "transparent_fraction": 0.686
+  },
+  {
+    "name": "winter_alpine_near",
+    "size": [
+      2048,
+      512
+    ],
+    "rgba": true,
+    "identical_horizontal_edges": true,
+    "transparent_fraction": 0.801
+  },
+  {
+    "name": "winter_pines_far",
+    "size": [
+      2048,
+      512
+    ],
+    "rgba": true,
+    "identical_horizontal_edges": true,
+    "transparent_fraction": 0.0
+  },
+  {
+    "name": "winter_pines_mid",
+    "size": [
+      2048,
+      512
+    ],
+    "rgba": true,
+    "identical_horizontal_edges": true,
+    "transparent_fraction": 0.701
+  },
+  {
+    "name": "winter_pines_near",
+    "size": [
+      2048,
+      512
+    ],
+    "rgba": true,
+    "identical_horizontal_edges": true,
+    "transparent_fraction": 0.746
+  }
+]

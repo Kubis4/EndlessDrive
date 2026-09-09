@@ -29,7 +29,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -52,6 +54,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -179,6 +182,9 @@ fun GameScreen(
         onDispose { viewModel.setGarageOpen(false) }
     }
 
+    CompositionLocalProvider(
+        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = FontFamily.SansSerif)
+    ) {
     Box(Modifier.fillMaxSize().background(GameColors.panelSoft)) {
         // Scéna ide cez celú plochu vrátane výrezu. Odsadenie plátna do čiernych
         // pásov po stranách sa neosvedčilo – obraz tým utrpel viac, než získal.
@@ -229,6 +235,16 @@ fun GameScreen(
                     .fillMaxWidth()
                     .padding(top = 12.dp, start = 150.dp, end = 210.dp)
             )
+
+            val lootDistance = ui.lootableWreckAheadM
+            if (ui.phase == GamePhase.DRIVING && lootDistance != null) {
+                LootAheadIndicator(
+                    distanceM = lootDistance,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 58.dp)
+                )
+            }
 
             SideIcons(
                 ui = ui,
@@ -301,6 +317,8 @@ fun GameScreen(
                     bagRevision = ui.bagRevision,
                     relayNodes = ui.relayNodes,
                     onTake = { viewModel.takeLoot(it) },
+                    onTakeAll = { viewModel.takeAllLoot() },
+                    onScrapAll = { viewModel.scrapAllLoot() },
                     onRefuel = { viewModel.refuelFromPump(it) },
                     onActivateDepot = { viewModel.activateDepot() },
                     onClose = { viewModel.leaveBuilding() },
@@ -365,6 +383,15 @@ fun GameScreen(
                         onScrapRepair = { viewModel.repairWithScrap(it) },
                         onPatchPuncture = { viewModel.repairPuncture(it) },
                         onUpgrade = { viewModel.upgradeWithScrap(it) },
+                        onPaint = { paint ->
+                            if (engine.paintShopAvailable && engine.scrap < engine.paintShopCost &&
+                                adReady && activity != null
+                            ) {
+                                rewardedAds?.show(activity, onReward = { viewModel.paintBodyFromAd(paint) })
+                            } else {
+                                viewModel.paintBody(paint)
+                            }
+                        },
                         onDrain = { fluid, litres -> viewModel.drainFluid(fluid, litres) },
                         onUnmount = { viewModel.unmount(it) },
                         onSwapTyres = { viewModel.swapTyres() },
@@ -413,6 +440,7 @@ fun GameScreen(
                 }
             }
         }
+    }
     }
 }
 
@@ -1015,6 +1043,8 @@ private fun LootPanel(
     bagRevision: Int,
     relayNodes: Int,
     onTake: (Int) -> Unit,
+    onTakeAll: () -> Unit,
+    onScrapAll: () -> Unit,
     onRefuel: (FuelKind) -> Unit,
     onActivateDepot: () -> Unit,
     onClose: () -> Unit,
@@ -1035,6 +1065,16 @@ private fun LootPanel(
         modifier = modifier
     ) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            if (b.loot.isNotEmpty()) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    GameButton("TAKE ALL", onTakeAll, compact = true, style = BtnStyle.Primary)
+                    GameButton("SCRAP ALL", onScrapAll, compact = true, style = BtnStyle.Danger)
+                }
+                Spacer(Modifier.height(8.dp))
+            }
             if (b.landmark) {
                 Column(
                     Modifier
@@ -1192,6 +1232,7 @@ private fun CarPanel(
     onScrapRepair: (ComponentSlot) -> Unit,
     onPatchPuncture: (ComponentSlot) -> Unit,
     onUpgrade: (ComponentSlot) -> Unit,
+    onPaint: (VehiclePaint) -> Unit,
     onDrain: (FluidType, Float?) -> Unit,
     onUnmount: (ComponentSlot) -> Unit,
     onSwapTyres: () -> Unit,
@@ -1286,6 +1327,74 @@ private fun CarPanel(
             onUnmount = onUnmount,
             onSwapTyres = onSwapTyres
         )
+        if (engine.activeBuilding?.type == sk.kubis.endlessdrive.domain.model.BuildingType.AUTO_SHOP) {
+            PaintService(
+                engine = engine,
+                onPaint = onPaint,
+                modifier = Modifier.padding(top = 6.dp)
+            )
+
+        }
+    }
+}
+
+@Composable
+private fun LootAheadIndicator(distanceM: Int, modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .background(GameColors.hudBg.copy(alpha = 0.86f), RoundedCornerShape(8.dp))
+            .border(1.dp, GameColors.accent.copy(alpha = 0.8f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text("➜", color = GameColors.accent, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text("LOOTABLE WRECK · ${distanceM} m", color = GameColors.text, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun PaintService(
+    engine: GameEngine,
+    onPaint: (VehiclePaint) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier
+            .fillMaxWidth()
+            .background(GameColors.panelSoft, RoundedCornerShape(10.dp))
+            .border(1.dp, GameColors.outline, RoundedCornerShape(10.dp))
+            .padding(horizontal = 10.dp, vertical = 7.dp)
+    ) {
+        Text("PAINT SHOP", color = GameColors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Text(
+            if (engine.paintShopAvailable) "Choose a colour · ${engine.paintShopCost} scrap"
+            else "Available after 10 km · upgrades also need this shop",
+            color = GameColors.textDim,
+            fontSize = 11.sp
+        )
+        Row(
+            Modifier.fillMaxWidth().padding(top = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            VehiclePaint.entries.forEach { paint ->
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .height(24.dp)
+                        .background(Color(paint.argb), RoundedCornerShape(6.dp))
+                        .border(
+                            1.dp,
+                            if (engine.car.bodyPaintIndex == paint.ordinal) Color.White else Color.Transparent,
+                            RoundedCornerShape(6.dp)
+                        )
+                        .clickable { onPaint(paint) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(paint.displayName.take(1), color = Color.White, fontSize = 10.sp)
+                }
+            }
+        }
     }
 }
 
@@ -2033,7 +2142,7 @@ private fun partExtraHint(slot: ComponentSlot, def: ItemDef, car: Car): String? 
         "Layout ${car.driveLayout.displayName}"
     ComponentSlot.ALTERNATOR ->
         "Charging output ${(car.alternatorOutput * 100).toInt()} % · " +
-            "battery ceiling ${(car.batteryChargeCeiling * 100).toInt()} %"
+            "battery capacity ${(car.batteryChargeCeiling * 100).toInt()} %"
     ComponentSlot.BATTERY -> {
         val healthPct = ((car.parts[ComponentSlot.BATTERY]?.health ?: 0f) * 100f).toInt()
         val socPct = (car.batteryCharge * 100f).toInt()
@@ -2192,11 +2301,10 @@ private fun GameOverPanel(
             showDistance = false
         )
         Spacer(Modifier.height(14.dp))
-        if (engine.endReason != sk.kubis.endlessdrive.domain.model.EndReason.MANUAL &&
-            engine.endReason != sk.kubis.endlessdrive.domain.model.EndReason.ARRIVED
-        ) {
+        val rescueLabel = engine.rescueAdLabel
+        if (rescueLabel != null) {
             GameButton(
-                "ROADSIDE ASSIST · WATCH AD",
+                rescueLabel,
                 onRescue,
                 style = BtnStyle.Secondary,
                 enabled = adReady,

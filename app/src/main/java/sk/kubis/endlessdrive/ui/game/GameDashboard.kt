@@ -11,9 +11,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -73,7 +70,6 @@ private const val SPEEDO_MAX = 180f
  * kontrolky a ovládanie, napravo rýchlosť a trasa.
  */
 @Composable
-@OptIn(ExperimentalLayoutApi::class)
 fun Dashboard(
     ui: GameUiState,
     onStart: () -> Unit,
@@ -89,13 +85,18 @@ fun Dashboard(
     // Palubovka sedí priamo na scéne. Tmavý film cez spodok by zakryl cestu
     // aj hlinu; čitateľnosť drží tieň textu a vlastný podklad kontrolek.
     val driving = ui.phase == GamePhase.DRIVING
-    FlowRow(
+    Row(
         modifier
             .fillMaxWidth()
             .padding(start = Space.l, end = Space.l, top = Space.s, bottom = Space.s),
-        // Za jazdy je obsah len budíky + ručná brzda, takže sa dá vycentrovať.
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        horizontalArrangement = Arrangement.spacedBy(Space.l, Alignment.CenterHorizontally)
+        // Za jazdy ostáva dashboard v strede. Iba v PARK sa rozdelí na
+        // dashboard vľavo a ovládanie vpravo.
+        horizontalArrangement = if (driving) {
+            Arrangement.Center
+        } else {
+            Arrangement.SpaceBetween
+        },
+        verticalAlignment = Alignment.Bottom
     ) {
         // --- Budíky, pod nimi kontrolky -----------------------------------
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -159,24 +160,33 @@ fun Dashboard(
         // --- Ovládanie ----------------------------------------------------
         if (!driving) {
             Column(
-                Modifier.width(420.dp).align(Alignment.Bottom),
+                Modifier.width(420.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                FlowRow(
+                // V PARK už akcie nezalamujeme podľa ich textu. Každá má
+                // rovnakú šírku a panel tak ostáva vizuálne pokojný.
+                val parkActions = buildList<Pair<String, () -> Unit>> {
+                    add("PACK" to onInventory)
+                    add("CAR" to onCar)
+                    when {
+                        ui.exploring -> add("LEAVE" to onLeave)
+                        ui.hasNearbyBuilding -> add("SEARCH" to onEnter)
+                    }
+                    if (ui.canRest) add("SLEEP" to onRest)
+                }
+                Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    GameButton("PACK", onInventory, compact = true)
-                    GameButton("CAR", onCar, compact = true)
-                    if (ui.exploring) {
-                        GameButton("LEAVE", onLeave, compact = true)
-                    } else if (ui.hasNearbyBuilding) {
-                        GameButton("SEARCH", onEnter, compact = true)
-                    }
-                    if (ui.canRest) {
-                        GameButton("SLEEP", onRest, compact = true)
+                    parkActions.forEach { (label, action) ->
+                        GameButton(
+                            label,
+                            action,
+                            compact = true,
+                            modifier = Modifier.width(94.dp)
+                        )
                     }
                 }
                 Row(
@@ -199,6 +209,7 @@ fun Dashboard(
                             compact = true,
                             iconRes = R.drawable.ic_stop_engine,
                             iconOnly = true,
+                            modifier = Modifier.width(64.dp),
                         )
                         GameButton(
                             "DRIVE",
@@ -478,6 +489,7 @@ private fun TellTales(ui: GameUiState) {
         Lamp(
             icon = AutomotiveIcon.COOLANT,
             state = when {
+                sk.kubis.endlessdrive.game.event.RoadEvent.COOLANT_LEAK in ui.activeEventKinds -> LampState.Alarm
                 coolRatio < 0.2f -> LampState.Alarm
                 coolRatio < 0.4f || ui.coolantPurity < 0.5f -> LampState.Warn
                 else -> LampState.Off

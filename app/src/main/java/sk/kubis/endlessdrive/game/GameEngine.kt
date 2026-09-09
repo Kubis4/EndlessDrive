@@ -364,6 +364,16 @@ class GameEngine(
         if (!car.hasPart(ComponentSlot.ALTERNATOR)) {
             shed.loot.add(ItemStack(ItemCatalog.ALTERNATOR.id, ComponentCondition.DAMAGED, rng.nextFloat(0.4f, 0.7f)))
         }
+        // Na začiatku je jeden výkonnejší, ale krátkodobý „lucky find“.
+        // Pomôže s prvým prudším kopcom bez toho, aby hráč dostal trvalý
+        // endgame motor zadarmo.
+        shed.loot.add(
+            ItemStack(
+                ItemCatalog.ENGINE_B.id,
+                ComponentCondition.CRITICAL,
+                rng.nextFloat(0.28f, 0.40f)
+            )
+        )
         // Len jeden ukážkový interiérový/karosársky diel. Kôlňa má hráča
         // sprevádzkovať, nie mu hneď odovzdať polovicu hotového auta.
         val showcase = rng.pick(
@@ -388,6 +398,16 @@ class GameEngine(
     val distanceKm: Float get() = distanceM / 1000f
     val isNewRecord: Boolean get() = distanceKm > bestDistanceKm && distanceKm > 0.05f
     val localX: Float get() = car.x - segment.worldOrigin
+    /** Najbližší vrak s lootom pred autom – pre včasné brzdenie. */
+    val lootableWreckAheadDistanceM: Int?
+        get() = segment.buildings
+            .asSequence()
+            .filter { it.type == BuildingType.WRECK && it.loot.isNotEmpty() }
+            .map { (it.localX - localX).toInt() }
+            // Upozornenie má pomôcť s brzdením, nie ukazovať vrak dva kilometre
+            // dopredu a zahlcovať obrazovku počas celej jazdy.
+            .filter { it in 3..90 }
+            .minOrNull()
     val inJunctionZone: Boolean get() = false
 
     /** Koľko metrov zostáva k rázcestiu. */
@@ -739,11 +759,7 @@ class GameEngine(
         }
         if (car.x > maxReachedX) maxReachedX = car.x
 
-        val milestoneReward = Journey.rewardBetween(distanceM, maxReachedX)
         distanceM = maxReachedX.coerceAtLeast(0f)
-        if (milestoneReward > 0) {
-            scrap += milestoneReward
-        }
         if (distanceM >= Journey.FINAL_DISTANCE_M) {
             if (relayProgress >= Journey.goals.size) {
                 endRun(EndReason.ARRIVED)
@@ -1453,26 +1469,82 @@ class GameEngine(
     }
 
     /** Jednorazová núdzová pomoc z rewarded reklamy. */
+    val rescueAdLabel: String?
+        get() = when (endReason) {
+            EndReason.OUT_OF_FUEL -> "FUEL +12 L · WATCH AD"
+            EndReason.BATTERY_DEAD -> if (car.hasPart(ComponentSlot.BATTERY)) {
+                "BATTERY CHARGE +50 % · WATCH AD"
+            } else {
+                "BATTERY +50 % · WATCH AD"
+            }
+            EndReason.ENGINE_DESTROYED -> "ENGINE +50 % · WATCH AD"
+            EndReason.OVERHEAT -> when {
+                !car.hasPart(ComponentSlot.RADIATOR) -> "RADIATOR +50 % · WATCH AD"
+                car.coolant < 0.3f -> "COOLANT +3 L · WATCH AD"
+                else -> "ENGINE +50 % · WATCH AD"
+            }
+            EndReason.ARRIVED, EndReason.MANUAL, null -> null
+        }
+
     fun recoverFromRewardedAd(): Boolean {
         if (phase != GamePhase.GAME_OVER) return false
         val reason = endReason ?: return false
         val detail = when (reason) {
             EndReason.OUT_OF_FUEL -> {
+                if (!car.hasPart(ComponentSlot.FUEL_TANK)) {
+                    car.mount(
+                        ComponentSlot.FUEL_TANK,
+                        ItemStack(ItemCatalog.FUEL_TANK.id, ComponentCondition.DAMAGED, 0.50f)
+                    )
+                }
                 car.refill(FluidType.FUEL, 12f, 0.88f, car.requiredFuelKind)
                 "Roadside help delivered 12 L of fuel"
             }
             EndReason.ENGINE_DESTROYED -> {
-                car.repair(ComponentSlot.ENGINE, 0.25f)
-                "Roadside help patched the engine to 25 %"
+                if (car.hasPart(ComponentSlot.ENGINE)) {
+                    car.repair(ComponentSlot.ENGINE, 0.50f)
+                } else {
+                    car.mount(
+                        ComponentSlot.ENGINE,
+                        ItemStack(ItemCatalog.ENGINE_A.id, ComponentCondition.DAMAGED, 0.50f)
+                    )
+                }
+                "Roadside help restored 50 % engine health"
             }
             EndReason.OVERHEAT -> {
-                car.repair(ComponentSlot.ENGINE, 0.20f)
+                val missingRadiator = !car.hasPart(ComponentSlot.RADIATOR)
+                val lowCoolant = car.coolant < 0.3f
+                when {
+                    missingRadiator -> car.mount(
+                        ComponentSlot.RADIATOR,
+                        ItemStack(ItemCatalog.RADIATOR.id, ComponentCondition.DAMAGED, 0.50f)
+                    )
+                    lowCoolant -> car.refill(FluidType.COOLANT, 3f, 0.75f)
+                    else -> car.repair(ComponentSlot.ENGINE, 0.50f)
+                }
                 car.temperature = 55f
-                "Roadside help cooled and patched the engine"
+                when {
+                    missingRadiator ->
+                        "Roadside help fitted a radiator at 50 % health"
+                    lowCoolant -> "Roadside help delivered 3 L of coolant"
+                    else -> "Roadside help restored 50 % engine health and cooled it"
+                }
             }
             EndReason.BATTERY_DEAD -> {
-                car.batteryCharge = minOf(car.batteryHoldCapacity, 0.38f)
-                "Roadside help jump-started the battery"
+                if (!car.hasPart(ComponentSlot.BATTERY)) {
+                    car.mount(
+                        ComponentSlot.BATTERY,
+                        ItemStack(ItemCatalog.BATTERY.id, ComponentCondition.DAMAGED, 0.50f)
+                    )
+                } else {
+                    car.repair(ComponentSlot.BATTERY, 0.50f)
+                }
+                car.batteryCharge = minOf(car.batteryHoldCapacity, 0.50f)
+                if (car.batteryHoldCapacity >= 0.50f) {
+                    "Roadside help restored 50 % battery charge"
+                } else {
+                    "Roadside help fitted a battery and charged it"
+                }
             }
             EndReason.ARRIVED -> return false
             EndReason.MANUAL -> return false
@@ -1490,6 +1562,10 @@ class GameEngine(
 
     /** Natankuje vybranú hadicu priamo z pumpy (obe majú vlastnú zásobu). */
     fun refuelFromPump(kind: FuelKind = FuelKind.PETROL): Boolean {
+        if (!car.hasPart(ComponentSlot.FUEL_TANK)) {
+            message = "Fit a fuel tank before using the pump"
+            return false
+        }
         val b = activeBuilding ?: run {
             message = "Enter a fuel station first"
             return false
@@ -1577,6 +1653,31 @@ class GameEngine(
         b.loot.removeAt(index)
         itemsLooted += item.count
         message = "Picked up: ${item.def.name}"
+        return true
+    }
+
+    /** Hráč môže vyriešiť bežnú zastávku jedným rozhodnutím. */
+    fun takeAllLoot(): Boolean {
+        if (phase != GamePhase.EXPLORING || activeBuilding == null) return false
+        var moved = false
+        while (activeBuilding?.loot?.isNotEmpty() == true) {
+            val before = activeBuilding?.loot?.size ?: 0
+            if (!takeLoot(0)) break
+            moved = moved || before > (activeBuilding?.loot?.size ?: before)
+        }
+        if (moved) message = "Took everything that fit"
+        return moved
+    }
+
+    /** Zoberie všetok zostávajúci loot ako materiál bez riešenia kapacity. */
+    fun scrapAllLoot(): Boolean {
+        val b = activeBuilding ?: return false
+        if (phase != GamePhase.EXPLORING || b.loot.isEmpty()) return false
+        val gained = b.loot.sumOf { it.scrapValue }
+        b.loot.clear()
+        scrap += gained
+        itemsLooted += 1
+        message = "Scrapped the leftovers: +$gained scrap"
         return true
     }
 
@@ -1742,6 +1843,16 @@ class GameEngine(
             return usePunctureKitFrom(inventory, index, target)
         }
         if (def.fluid != null) {
+            val requiredPart = when (def.fluid) {
+                FluidType.FUEL -> ComponentSlot.FUEL_TANK
+                FluidType.OIL -> ComponentSlot.ENGINE
+                FluidType.COOLANT -> ComponentSlot.RADIATOR
+                FluidType.BRAKE_FLUID -> null
+            }
+            if (requiredPart != null && !car.hasPart(requiredPart)) {
+                message = "Fit the ${requiredPart.displayName.lowercase()} before using this fluid"
+                return false
+            }
             val room = when (def.fluid) {
                 FluidType.FUEL -> car.fuelCapacity - car.fuel
                 FluidType.OIL -> car.oilCapacity - car.oil
@@ -1944,9 +2055,22 @@ class GameEngine(
         val current = car.parts[slot]?.def ?: return null
         val target = scrapUpgradeTarget(slot) ?: return null
         val difference = (target.baseValue - current.baseValue).coerceAtLeast(1)
-        return kotlin.math.ceil(difference * 0.24f + target.baseValue * 0.04f)
+        // Upgrade je dlhodobá odmena zo servisnej budovy, nie lacný nákup
+        // každé dva kilometre. Opravy ostávajú lacnejšie.
+        return kotlin.math.ceil(difference * 0.72f + target.baseValue * 0.12f)
             .toInt()
-            .coerceAtLeast(4)
+            .coerceAtLeast(18)
+    }
+
+    private fun upgradeWorkshopBlockReason(slot: ComponentSlot): String? = when {
+        activeBuilding?.type != BuildingType.AUTO_SHOP ->
+            "Take the car to a repair shop before upgrading"
+        distanceM < when (slot) {
+            ComponentSlot.ENGINE -> 8_000f
+            ComponentSlot.DRIVETRAIN -> 12_000f
+            else -> 6_000f
+        } -> "This workshop upgrade unlocks further down the road"
+        else -> null
     }
 
     /** Dôvod, prečo scrap oprava/upgrade práve nejde; null znamená pripravené. */
@@ -2030,6 +2154,7 @@ class GameEngine(
         }
         if (consumePunctureKit()) {
             part.injury = TireInjury.INFLATED
+            car.repair(slot, GameConfig.PUNCTURE_KIT_HEAL)
             message = "Patched the ${slot.displayName.lowercase()}"
             return true
         }
@@ -2041,6 +2166,7 @@ class GameEngine(
         }
         scrap -= cost
         part.injury = TireInjury.INFLATED
+        car.repair(slot, GameConfig.PUNCTURE_KIT_HEAL)
         message = "Patched the ${slot.displayName.lowercase()}: -$cost scrap"
         return true
     }
@@ -2095,12 +2221,17 @@ class GameEngine(
         stack.count--
         if (stack.count <= 0) source.removeAt(index)
         part.injury = TireInjury.INFLATED
+        car.repair(slot, GameConfig.PUNCTURE_KIT_HEAL)
         message = "Patched the ${slot.displayName.lowercase()}"
         return true
     }
 
     fun upgradeWithScrap(slot: ComponentSlot): Boolean {
         if (!workshopReady()) return false
+        upgradeWorkshopBlockReason(slot)?.let {
+            message = it
+            return false
+        }
         val current = car.parts[slot] ?: return false
         val target = scrapUpgradeTarget(slot) ?: run {
             message = "No direct upgrade for ${slot.displayName.lowercase()}"
@@ -2119,6 +2250,47 @@ class GameEngine(
             paintIndex = current.paintIndex
         )
         message = "Upgraded ${slot.displayName}: ${target.name} (-$cost scrap)"
+        return true
+    }
+
+    val paintShopAvailable: Boolean
+        get() = activeBuilding?.type == BuildingType.AUTO_SHOP && distanceM >= 10_000f
+
+    val paintShopCost: Int
+        get() = (18 + (distanceKm / 20f).toInt() * 4).coerceAtMost(42)
+
+    fun paintBody(paint: VehiclePaint): Boolean = paintBodyInternal(paint, free = false)
+
+    /** Odmena z rewarded reklamy: jedna zmena laku bez scrapu. */
+    fun paintBodyFromRewardedAd(paint: VehiclePaint): Boolean =
+        paintBodyInternal(paint, free = true)
+
+    private fun paintBodyInternal(paint: VehiclePaint, free: Boolean): Boolean {
+        if (!paintShopAvailable) {
+            message = if (activeBuilding?.type == BuildingType.AUTO_SHOP) {
+                "Paint service unlocks after 10 km"
+            } else {
+                "Take the car to a repair shop"
+            }
+            return false
+        }
+        if (!workshopReady()) return false
+        if (car.bodyPaintIndex == paint.ordinal) {
+            message = "The car already has ${paint.displayName.lowercase()} paint"
+            return false
+        }
+        val cost = paintShopCost
+        if (!free && scrap < cost) {
+            message = "Need $cost scrap to repaint — you have $scrap"
+            return false
+        }
+        if (!free) scrap -= cost
+        car.bodyPaintIndex = paint.ordinal
+        message = if (free) {
+            "Repainted the car ${paint.displayName.lowercase()} — ad reward"
+        } else {
+            "Repainted the car ${paint.displayName.lowercase()}: -$cost scrap"
+        }
         return true
     }
 
@@ -2171,6 +2343,7 @@ class GameEngine(
     val canRest: Boolean
         get() = isNight && phase != GamePhase.DRIVING && phase != GamePhase.GAME_OVER &&
             kotlin.math.abs(car.speed) < 0.2f &&
+            (activeBuilding ?: buildingNear())?.type != BuildingType.WRECK &&
             (activeBuilding != null || buildingNear() != null)
 
     /**
@@ -2183,6 +2356,9 @@ class GameEngine(
             message = when {
                 !isNight -> "It is still light out"
                 phase == GamePhase.DRIVING || kotlin.math.abs(car.speed) >= 0.2f -> "Stop the car first"
+                activeBuilding?.type == BuildingType.WRECK ||
+                    (activeBuilding == null && buildingNear()?.type == BuildingType.WRECK) ->
+                    "You can only sleep beside a building, not a wreck"
                 activeBuilding == null && buildingNear() == null -> "You can only sleep beside a building"
                 else -> "You cannot sleep here"
             }

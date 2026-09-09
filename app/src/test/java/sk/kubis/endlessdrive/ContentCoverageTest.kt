@@ -54,6 +54,34 @@ class ContentCoverageTest {
         }
     }
 
+    @Test
+    fun backdropVariantsAreStableAndIncludeEveryNewScene() {
+        val expectedFarLayers = mapOf(
+            BiomeType.RURAL to listOf(R.drawable.bg_rural_far),
+            BiomeType.FOREST_ALIVE to listOf(R.drawable.bg_autumn_far),
+            BiomeType.WASTELAND to listOf(R.drawable.bg_quarry_far),
+            BiomeType.FOREST to listOf(R.drawable.bg_marsh_far),
+            BiomeType.ALPINE to listOf(
+                R.drawable.bg_winter_alpine_far,
+                R.drawable.bg_winter_pines_far
+            )
+        )
+        expectedFarLayers.forEach { (biome, expected) ->
+            assertEquals(expected, BackdropCatalog.variants.getValue(biome).map { it.far })
+        }
+        BiomeType.entries.forEach { biome ->
+            val seen = mutableSetOf<Int>()
+            repeat(20) { seed ->
+                val first = BackdropCatalog.variantIndex(biome, seed.toLong())
+                val again = BackdropCatalog.variantIndex(biome, seed.toLong())
+                assertEquals(first, again)
+                assertTrue(first in BackdropCatalog.variants.getValue(biome).indices)
+                seen += first
+            }
+            assertEquals(BackdropCatalog.variants.getValue(biome).indices.toSet(), seen)
+        }
+    }
+
     /**
      * Preklep v unlockDistance by celú vetvu nenápadne skryl – hráč by o nej
      * nikdy nevedel a nič by to nenahlásilo.

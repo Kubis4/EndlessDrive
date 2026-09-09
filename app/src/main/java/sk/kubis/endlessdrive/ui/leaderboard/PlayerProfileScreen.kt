@@ -2,6 +2,7 @@ package sk.kubis.endlessdrive.ui.leaderboard
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,13 +11,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -34,6 +41,41 @@ import sk.kubis.endlessdrive.ui.theme.BtnStyle
 import sk.kubis.endlessdrive.ui.theme.GameButton
 import sk.kubis.endlessdrive.ui.theme.GameColors
 import sk.kubis.endlessdrive.ui.theme.GamePanel
+
+private data class CountryOption(val code: String, val name: String)
+
+private val CountryOptions = listOf(
+    CountryOption("SK", "Slovakia"),
+    CountryOption("CZ", "Czechia"),
+    CountryOption("PL", "Poland"),
+    CountryOption("AT", "Austria"),
+    CountryOption("HU", "Hungary"),
+    CountryOption("DE", "Germany"),
+    CountryOption("CH", "Switzerland"),
+    CountryOption("SI", "Slovenia"),
+    CountryOption("HR", "Croatia"),
+    CountryOption("RS", "Serbia"),
+    CountryOption("UA", "Ukraine"),
+    CountryOption("RO", "Romania"),
+    CountryOption("BG", "Bulgaria"),
+    CountryOption("FR", "France"),
+    CountryOption("IT", "Italy"),
+    CountryOption("ES", "Spain"),
+    CountryOption("GB", "United Kingdom"),
+    CountryOption("IE", "Ireland"),
+    CountryOption("NL", "Netherlands"),
+    CountryOption("BE", "Belgium"),
+    CountryOption("DK", "Denmark"),
+    CountryOption("SE", "Sweden"),
+    CountryOption("NO", "Norway"),
+    CountryOption("FI", "Finland"),
+    CountryOption("US", "United States"),
+    CountryOption("CA", "Canada"),
+    CountryOption("AU", "Australia"),
+    CountryOption("BR", "Brazil"),
+    CountryOption("JP", "Japan"),
+    CountryOption("IN", "India")
+)
 
 @Composable
 fun PlayerProfileScreen(
@@ -45,6 +87,7 @@ fun PlayerProfileScreen(
 ) {
     var nickname by remember(profile.nickname) { mutableStateOf(profile.nickname) }
     var countryCode by remember(profile.countryCode) { mutableStateOf(profile.countryCode) }
+    var countryPickerOpen by remember { mutableStateOf(false) }
     val cleanNickname = nickname.trim()
     val cleanCountry = countryCode.trim().uppercase()
     val valid = cleanNickname.length in 2..18 && cleanCountry.length == 2 &&
@@ -93,9 +136,17 @@ fun PlayerProfileScreen(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii)
                 )
                 Spacer(Modifier.width(14.dp))
-                Text(countryFlag(cleanCountry), fontSize = 30.sp)
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { countryPickerOpen = true }
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(countryFlag(cleanCountry), fontSize = 30.sp)
+                }
                 Spacer(Modifier.width(10.dp))
-                Text("Use a two-letter ISO code", color = GameColors.textDim, fontSize = 12.sp)
+                Text("Tap the flag to choose a country", color = GameColors.textDim, fontSize = 12.sp)
             }
             Spacer(Modifier.height(14.dp))
             Text(
@@ -117,5 +168,44 @@ fun PlayerProfileScreen(
                 )
             }
         }
+    }
+
+    if (countryPickerOpen) {
+        AlertDialog(
+            onDismissRequest = { countryPickerOpen = false },
+            title = { Text("SELECT COUNTRY") },
+            text = {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    CountryOptions.forEach { option ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    countryCode = option.code
+                                    countryPickerOpen = false
+                                }
+                                .padding(horizontal = 8.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(countryFlag(option.code), fontSize = 25.sp)
+                            Spacer(Modifier.width(10.dp))
+                            Text(option.name, color = GameColors.text, modifier = Modifier.weight(1f))
+                            Text(option.code, color = GameColors.textDim, fontSize = 12.sp)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { countryPickerOpen = false }) {
+                    Text("CANCEL")
+                }
+            }
+        )
     }
 }

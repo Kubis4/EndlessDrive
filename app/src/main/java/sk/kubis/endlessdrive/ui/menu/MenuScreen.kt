@@ -31,7 +31,6 @@ import sk.kubis.endlessdrive.ui.theme.*
 
 private val MenuIvory = Color(0xFFF5ECD7)
 private val MenuAmber = Color(0xFFE9BA68)
-private val MenuCondensed = FontFamily(Font(R.font.bebas_neue_regular))
 private val MenuTitle = FontFamily(Font(R.font.anton_regular))
 
 @Composable
@@ -48,7 +47,7 @@ fun MenuScreen(
     onAchievements: () -> Unit = {}
 ) {
     var confirmNewRun by remember { mutableStateOf(false) }
-    CompositionLocalProvider(LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = MenuCondensed)) {
+    CompositionLocalProvider(LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = MenuCondensedFont)) {
     BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF25271E))) {
         val compact = maxHeight < 470.dp
         val portrait = maxWidth < maxHeight
@@ -166,12 +165,12 @@ private fun ExpeditionStats(profile: PlayerProfile) {
             Column {
                 Text("BEST", color = MenuAmber, fontSize = 12.sp, letterSpacing = 1.5.sp)
                 Text(String.format("%.1f KM", profile.bestDistanceKm), color = MenuIvory,
-                    fontFamily = MenuCondensed, fontSize = 23.sp)
+                    fontFamily = MenuCondensedFont, fontSize = 23.sp)
             }
             Column {
                 Text("RELAYS", color = MenuAmber, fontSize = 12.sp, letterSpacing = 1.5.sp)
                 Text("${profile.relayNodes}/${Journey.goals.size}", color = MenuIvory,
-                    fontFamily = MenuCondensed, fontSize = 23.sp)
+                    fontFamily = MenuCondensedFont, fontSize = 23.sp)
             }
         }
         Spacer(Modifier.height(7.dp))
@@ -194,14 +193,14 @@ private fun RunCard(
         Text(if (canContinue) "SAVED RUN" else "YOUR NEXT EXPEDITION",
             color = MenuAmber, fontSize = 12.sp, letterSpacing = 1.7.sp)
         Spacer(Modifier.height(if (compact) 9.dp else 18.dp))
-        Text("THE ROAD IS CALLING.", color = MenuIvory, fontFamily = MenuCondensed,
+                Text("THE ROAD IS CALLING.", color = MenuIvory, fontFamily = MenuCondensedFont,
             fontSize = if (compact) 20.sp else 27.sp)
         if (canContinue) {
             Row(Modifier.padding(vertical = if (compact) 4.dp else 16.dp),
                 verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 Text(String.format("%.1f", distanceKm), color = MenuIvory,
-                    fontFamily = MenuCondensed, fontSize = if (compact) 31.sp else 59.sp,
+                    fontFamily = MenuCondensedFont, fontSize = if (compact) 31.sp else 59.sp,
                     lineHeight = if (compact) 33.sp else 62.sp)
                 Text("KM  ·  $clock", color = MenuAmber, fontSize = 13.sp,
                     modifier = Modifier.padding(bottom = 6.dp))
@@ -240,7 +239,7 @@ private fun MenuButton(text: String, onClick: () -> Unit, modifier: Modifier, st
         contentColor = if (primary) Color(0xFF211B10) else MenuIvory,
         border = BorderStroke(1.dp, if (primary) Color(0xFFFFD383) else MenuIvory.copy(alpha = 0.26f))) {
         Box(Modifier.fillMaxSize().padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
-            Text(text, fontFamily = MenuCondensed, fontSize = 23.sp,
+            Text(text, fontFamily = MenuCondensedFont, fontSize = 23.sp,
                 fontWeight = FontWeight.Normal, letterSpacing = 2.sp, maxLines = 1)
         }
     }

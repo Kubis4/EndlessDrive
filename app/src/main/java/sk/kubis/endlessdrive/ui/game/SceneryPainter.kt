@@ -51,8 +51,9 @@ class SceneryPainter(
             propBiome.arid -> if (propBiome == BiomeType.DESERT_DUSK) Color(0xFF9C777C) else Color(0xFFB49A70)
             propBiome == BiomeType.ALPINE -> Color(0xFF9EAFB4)
             propBiome == BiomeType.INDUSTRIAL -> Color(0xFF6F7775)
-            propBiome == BiomeType.FOREST_ALIVE -> Color(0xFF657254)
-            propBiome == BiomeType.FOREST -> Color(0xFF756D59)
+            propBiome == BiomeType.FOREST_ALIVE -> Color(0xFF9A593A)
+            propBiome == BiomeType.FOREST -> Color(0xFF536D68)
+            propBiome == BiomeType.WASTELAND -> Color(0xFF8B8579)
             else -> Color(0xFF8E846B)
         }
         return land(lerp(base, tint, 0.42f), day)
@@ -219,10 +220,9 @@ class SceneryPainter(
             scaleY = 0.82f + MathX.hash01(cell, 8111) * 0.30f, pivot = Offset(px, py)) {
         when (biome) {
             BiomeType.RURAL -> when {
-                kind < 0.42f -> broadTree(px, py, s, day)
-                kind < 0.62f -> pineTree(px, py, s, day)
-                kind < 0.80f -> bush(px, py, s, day, Color(0xFF4E6B3C))
-                kind < 0.92f -> planted { fence(px, py, s, day) }
+                kind < 0.52f -> broadTree(px, py, s, day)
+                kind < 0.73f -> bush(px, py, s, day, Color(0xFF656B42))
+                kind < 0.90f -> planted { fence(px, py, s, day) }
                 kind < 0.985f -> planted { stone(px, py, s * 0.32f, day) }
                 else -> wreck(px, py, s, day, cell, groundDeg)
             }
@@ -234,24 +234,24 @@ class SceneryPainter(
                 else -> planted { stone(px, py, s * 0.36f, day) }
             }
             BiomeType.WASTELAND -> when {
-                kind < 0.34f -> deadTree(px, py, s, day)
-                kind < 0.56f -> bush(px, py, s * 0.8f, day, Color(0xFF6E6741))
-                kind < 0.74f -> planted { stone(px, py, s * 0.42f, day) }
-                kind < 0.80f -> wreck(px, py, s, day, cell, groundDeg)
-                else -> planted { fence(px, py, s * 0.8f, day) }
+                kind < 0.18f -> deadTree(px, py, s * 0.9f, day)
+                kind < 0.32f -> bush(px, py, s * 0.68f, day, Color(0xFF77725F))
+                kind < 0.78f -> planted { stone(px, py, s * 0.58f, day) }
+                kind < 0.86f -> wreck(px, py, s, day, cell, groundDeg)
+                else -> planted { fence(px, py, s * 0.72f, day) }
             }
-            // Uschnutý les je stena holých kmeňov – ihličie ani kry tu nie sú.
+            // Močiar: vŕby, tŕstie a holé kmene na tmavej mokrej pôde.
             BiomeType.FOREST -> when {
-                kind < 0.58f -> deadTree(px, py, s * 1.15f, day)
-                kind < 0.80f -> pineTree(px, py, s * 1.05f, day)
-                kind < 0.90f -> planted { stone(px, py, s * 0.34f, day) }
+                kind < 0.48f -> willowTree(px, py, s * 1.05f, day)
+                kind < 0.68f -> deadTree(px, py, s, day)
+                kind < 0.90f -> planted { reedClump(px, py, s * 0.72f, day) }
                 else -> planted { logPile(px, py, s, day) }
             }
-            // Živý les je stena kmeňov – takmer nič iné tam nestojí.
+            // Jesenné údolie: listnaté koruny a nízke medené kry.
             BiomeType.FOREST_ALIVE -> when {
-                kind < 0.52f -> pineTree(px, py, s * 1.15f, day)
-                kind < 0.80f -> broadTree(px, py, s * 1.05f, day)
-                kind < 0.92f -> bush(px, py, s, day, Color(0xFF3E5E32))
+                kind < 0.66f -> broadTree(px, py, s * 1.05f, day)
+                kind < 0.78f -> deadTree(px, py, s * 0.9f, day)
+                kind < 0.94f -> bush(px, py, s, day, Color(0xFF9A4E2E))
                 else -> planted { logPile(px, py, s, day) }
             }
             BiomeType.DESERT -> when {
@@ -339,9 +339,18 @@ class SceneryPainter(
         drawLine(bark, Offset(x, y - h * 0.52f), Offset(x + s * 0.32f, y - h * 0.68f), strokeWidth = s * 0.055f)
 
         // Koruna v troch tónoch – tieň, plášť, svetlo.
-        val dark = land(Color(0xFF2F4F2A), day)
-        val mid = land(Color(0xFF4A7038), day)
-        val lit = land(Color(0xFF6E9A46), day)
+        val (darkBase, midBase, litBase) = when (propBiome) {
+            BiomeType.FOREST_ALIVE -> Triple(
+                Color(0xFF6C3026), Color(0xFFA64D2D), Color(0xFFD17A35)
+            )
+            BiomeType.RURAL -> Triple(
+                Color(0xFF465035), Color(0xFF687047), Color(0xFF8E9259)
+            )
+            else -> Triple(Color(0xFF2F4F2A), Color(0xFF4A7038), Color(0xFF6E9A46))
+        }
+        val dark = land(darkBase, day)
+        val mid = land(midBase, day)
+        val lit = land(litBase, day)
         canopyPath.reset()
         fun foliage(color: Color, radius: Float, center: Offset) {
             drawCircle(color, radius, center)
@@ -354,7 +363,9 @@ class SceneryPainter(
                 val cx = center.x + kotlin.math.cos(angle) * reach
                 val cy = center.y + kotlin.math.sin(angle) * reach * 0.85f
                 val r = radius * (0.13f + MathX.hash01(propSeed + i, 8329) * 0.16f)
-                val leaf = lerp(color, if (cy < center.y) land(Color(0xFFADC36B), day) else dark,
+                val crownLight = if (propBiome == BiomeType.FOREST_ALIVE) Color(0xFFE09A45)
+                    else Color(0xFFADC36B)
+                val leaf = lerp(color, if (cy < center.y) land(crownLight, day) else dark,
                     0.25f + MathX.hash01(propSeed + i, 8353) * 0.22f)
                 drawOval(leaf, Offset(cx - r, cy - r * 0.5f), Size(r * 2f, r))
                 canopyPath.addOval(Rect(cx - r, cy - r * 0.5f, cx + r, cy + r * 0.5f))
@@ -441,6 +452,51 @@ class SceneryPainter(
         drawLine(col, Offset(x - s * 0.06f, y - h * 0.75f), Offset(x + s * 0.55f, y - h * 0.98f), strokeWidth = s * 0.07f, cap = StrokeCap.Round)
     }
 
+    /** Nízka močiarna vŕba s previsnutými vetvami a riedkou sivou korunou. */
+    private fun DrawScope.willowTree(x: Float, y: Float, s: Float, day: Float) {
+        groundShadow(x, y, s, day, 1.15f)
+        val trunk = land(Color(0xFF4D5148), day)
+        val leafDark = land(Color(0xFF354E49), day)
+        val leaf = land(Color(0xFF60776C), day)
+        val h = s * 2.35f
+        drawLine(trunk, Offset(x, y), Offset(x, y - h * 0.72f), s * 0.16f, StrokeCap.Round)
+        for (side in -1..1 step 2) {
+            val tipX = x + side * s * 0.82f
+            val branchY = y - h * (0.52f + if (side < 0) 0.06f else 0f)
+            drawLine(trunk, Offset(x, y - h * 0.55f), Offset(tipX, branchY), s * 0.075f, StrokeCap.Round)
+            for (i in 0..4) {
+                val f = i / 4f
+                val bx = MathX.lerp(x, tipX, f)
+                val by = MathX.lerp(y - h * 0.55f, branchY, f)
+                val drop = s * (0.38f + MathX.hash01(propSeed + i + side * 17, 8461) * 0.55f)
+                drawLine(trunk, Offset(bx, by), Offset(bx + side * s * 0.08f, by + drop),
+                    s * 0.035f, StrokeCap.Round)
+                drawOval(
+                    lerp(leafDark, leaf, f * 0.55f),
+                    Offset(bx - s * 0.25f, by + drop * 0.45f),
+                    Size(s * 0.50f, s * 0.30f)
+                )
+            }
+        }
+        drawOval(leafDark, Offset(x - s * 0.72f, y - h * 0.88f), Size(s * 1.44f, s * 0.62f))
+        drawOval(leaf, Offset(x - s * 0.48f, y - h * 0.96f), Size(s * 0.96f, s * 0.45f))
+    }
+
+    /** Tŕstie pri okraji močaristej cesty. */
+    private fun DrawScope.reedClump(x: Float, y: Float, s: Float, day: Float) {
+        val stem = land(Color(0xFF66735A), day)
+        val head = land(Color(0xFF51483B), day)
+        for (i in -3..3) {
+            val h = s * (0.65f + MathX.hash01(propSeed + i, 8473) * 0.55f)
+            val xx = x + i * s * 0.16f
+            drawLine(stem, Offset(xx, y), Offset(xx + i * s * 0.035f, y - h),
+                (s * 0.045f).coerceAtLeast(0.7f), StrokeCap.Round)
+            if (i % 2 == 0) {
+                drawOval(head, Offset(xx - s * 0.055f, y - h - s * 0.16f), Size(s * 0.11f, s * 0.24f))
+            }
+        }
+    }
+
     private fun DrawScope.bush(x: Float, y: Float, s: Float, day: Float, base: Color) {
         groundShadow(x, y, s, day, 0.6f)
         val c = land(base, day)
@@ -450,7 +506,10 @@ class SceneryPainter(
         for (i in 0 until 22) {
             val xx = x + (MathX.hash01(propSeed + i, 8419) - 0.5f) * s * 1.10f
             val yy = y - s * (0.12f + MathX.hash01(propSeed + i, 8423) * 0.44f)
-            drawOval(lerp(c, land(Color(0xFFA9AE70), day), 0.22f + (i % 3) * 0.12f),
+            val bushLight = if (propBiome == BiomeType.FOREST_ALIVE) Color(0xFFC97836)
+                else if (propBiome == BiomeType.FOREST) Color(0xFF829184)
+                else Color(0xFFA9AE70)
+            drawOval(lerp(c, land(bushLight, day), 0.22f + (i % 3) * 0.12f),
                 Offset(xx - s * 0.09f, yy), Size(s * 0.18f, s * 0.10f))
         }
         canopyPath.reset()
@@ -465,9 +524,9 @@ class SceneryPainter(
             when (biome) {
                 BiomeType.RURAL -> Color(0xFF6F8B4A)
                 BiomeType.INDUSTRIAL -> Color(0xFF6A7355)
-                BiomeType.WASTELAND -> Color(0xFF8E8151)
-                BiomeType.FOREST -> Color(0xFF6B7758)
-                BiomeType.FOREST_ALIVE -> Color(0xFF56743F)
+                BiomeType.WASTELAND -> Color(0xFF817E72)
+                BiomeType.FOREST -> Color(0xFF536B63)
+                BiomeType.FOREST_ALIVE -> Color(0xFF9A5A32)
                 BiomeType.DESERT -> Color(0xFFB49A62)
                 BiomeType.DESERT_DUSK -> Color(0xFF8E6E6C)
                 BiomeType.SANDSTORM -> Color(0xFFA98F5E)
@@ -961,10 +1020,10 @@ class SceneryPainter(
     private fun densityFor(biome: BiomeType): Float = when (biome) {
         BiomeType.RURAL -> 0.72f
         BiomeType.INDUSTRIAL -> 0.58f
-        BiomeType.WASTELAND -> 0.42f
+        BiomeType.WASTELAND -> 0.48f
         // Les má kreslenú stenu stromov v pozadí – kulisy pri ceste ju len rámujú.
-        BiomeType.FOREST -> 0.68f
-        BiomeType.FOREST_ALIVE -> 0.74f
+        BiomeType.FOREST -> 0.62f
+        BiomeType.FOREST_ALIVE -> 0.70f
         BiomeType.DESERT -> 0.30f
         BiomeType.DESERT_DUSK -> 0.28f
         BiomeType.SANDSTORM -> 0.24f

@@ -1,0 +1,110 @@
+[
+  {
+    "name": "rural_far",
+    "source": "sources/rural_far.png",
+    "prompt": "Create ONE production game background asset for EndlessDrive, new scene RURAL MEADOWS, FAR layer. Reference is visual style only. Output a 2048x512 PNG, exact panoramic 4:1 aspect, seamlessly tileable horizontally with identical heights and colours at both edges. Match reference muted painterly slightly textured 2D side-scrolling scenery, no outlines, no photorealism. Opaque pale sage blue clouded sky fills upper 70%, distant soft rolling meadow hills and tiny hedgerows occupy lower 30%, subdued olive and straw green. Flat side elevation, no perspective road, no cars, no text, no sun. Landscape anchored to bottom. Edges must join without visible seam.",
+    "tool": "built-in image_gen"
+  },
+  {
+    "name": "rural_mid",
+    "source": "sources/rural_mid.png",
+    "prompt": "ONE game parallax layer for EndlessDrive, rural meadows with orchard trees, olive green foliage, straw grass, weathered little wooden fences. MIDDLE distance: small trees, shrubs, low scenery rising from bottom to at most 50% of image height. Continuous low ground band bottom 18%. Hand painted subdued textured 2D side elevation matching reference, no perspective road. Panoramic 4:1 ideally 2048x512. Seamless horizontal repeat; clear empty margins at left and right except continuous equal-height ground. All empty background MUST be perfectly uniform SOLID CHROMA MAGENTA #FF00FF, including gaps between branches. This is a technical color key plate for later removal. NO checkerboard, NO sky, NO shadow on magenta, NO pink light on subjects, NO lettering, NO people or vehicles. Ground touches bottom edge. Separate single layer only.",
+    "tool": "built-in image_gen"
+  },
+  {
+    "name": "rural_near",
+    "source": "sources/rural_near.png",
+    "prompt": "ONE game parallax layer for EndlessDrive, rural meadows with orchard trees, olive green foliage, straw grass, weathered little wooden fences. NEAR distance: sparse larger trees and bushes, some rocks, varied spaced silhouettes rising from bottom to at most 78% height. Continuous very thin ground strip bottom 8%. Hand painted subdued textured 2D side elevation matching reference, no perspective road. Panoramic 4:1 ideally 2048x512. Seamless horizontal repeat; clear empty margins at left and right except continuous equal-height ground. All empty background MUST be perfectly uniform SOLID CHROMA MAGENTA #FF00FF, including gaps between branches. This is a technical color key plate for later removal. NO checkerboard, NO sky, NO shadow on magenta, NO pink light on subjects, NO lettering, NO people or vehicles. Ground touches bottom edge. Separate single layer only.",
+    "tool": "built-in image_gen"
+  },
+  {
+    "name": "autumn_far",
+    "source": "sources/autumn_far.png",
+    "prompt": "Create ONE production game background asset for EndlessDrive, new scene AUTUMN VALLEY, FAR parallax layer. Reference only for style. Panoramic 4:1 ideally 2048x512, horizontally seamless repeating terrain. Muted painterly slightly textured 2D side scrolling scenery matching reference. Opaque pale warm gray-blue sky fills upper 70%, layered distant russet ochre hills and tiny autumn woodland silhouettes fill lower 30%, subdued copper, dusty amber, misty mauve. No roads, no text, no people, no sun. Landscape anchored flush bottom, calm simple broad shapes, equal terrain heights and colours at left/right tile edges.",
+    "tool": "built-in image_gen"
+  },
+  {
+    "name": "autumn_mid",
+    "source": "sources/autumn_mid.png",
+    "prompt": "ONE game parallax layer for EndlessDrive, autumn woodland with deciduous trees and shrubs, muted ochre copper and burnt orange foliage, brown earth. MIDDLE distance: small trees, shrubs, low scenery rising from bottom to at most 50% of image height. Continuous low ground band bottom 18%. Hand painted subdued textured 2D side elevation matching reference, no perspective road. Panoramic 4:1 ideally 2048x512. Seamless horizontal repeat; clear empty margins at left and right except continuous equal-height ground. All empty background MUST be perfectly uniform SOLID CHROMA MAGENTA #FF00FF, including gaps between branches. This is a technical color key plate for later removal. NO checkerboard, NO sky, NO shadow on magenta, NO pink light on subjects, NO lettering, NO people or vehicles. Ground touches bottom edge. Separate single layer only.",
+    "tool": "built-in image_gen"
+  },
+  {
+    "name": "autumn_near",
+    "source": "sources/autumn_near.png",
+    "prompt": "ONE game parallax layer for EndlessDrive, autumn woodland with deciduous trees and shrubs, muted ochre copper and burnt orange foliage, brown earth. NEAR distance: sparse larger trees and bushes or rock formations, varied spaced silhouettes rising from bottom to at most 78% height. Continuous very thin ground strip bottom 8%. Hand painted subdued textured 2D side elevation matching reference, no perspective road. Panoramic 4:1 ideally 2048x512. Seamless horizontal repeat; clear empty margins at left and right except continuous equal-height ground. All empty background MUST be perfectly uniform SOLID CHROMA MAGENTA #FF00FF, including gaps between branches. This is a technical color key plate for later removal. NO checkerboard, NO sky, NO shadow on magenta, NO pink light on subjects, NO lettering, NO people or vehicles. Ground touches bottom edge. Separate single layer only.",
+    "tool": "built-in image_gen"
+  },
+  {
+    "name": "quarry_far",
+    "source": "sources/quarry_far.png",
+    "prompt": "Create ONE production game background asset for EndlessDrive: abandoned limestone quarry, pale stratified rocky ridges, dusty slate gray and desaturated sandstone beige, FAR parallax layer. Reference is visual style only. Panoramic 4:1 ideally 2048x512. Seamlessly repeatable horizontally. Match reference muted painterly subtly textured 2D side-scrolling scenery with simplified silhouettes, soft haze, no black outlines. Opaque overcast sky upper 65%, distant landscape lower 35%, uninterrupted terrain reaches bottom. No road, cars, people, text, sun or moon. Left and right edge terrain heights and colors match exactly. Calm restrained composition.",
+    "tool": "built-in image_gen"
+  },
+  {
+    "name": "quarry_mid",
+    "source": "sources/quarry_mid.png",
+    "prompt": "ONE game parallax layer for EndlessDrive, abandoned limestone quarry with layered rock outcrops and scattered scrub, dusty gray beige stone, restrained desaturated colors. MIDDLE distance: small trees, shrubs, low scenery rising from bottom to at most 50% of image height. Continuous low ground band bottom 18%. Hand painted subdued textured 2D side elevation matching reference, no perspective road. Panoramic 4:1 ideally 2048x512. Seamless horizontal repeat; clear empty margins at left and right except continuous equal-height ground. All empty background MUST be perfectly uniform SOLID CHROMA MAGENTA #FF00FF, including gaps between branches. This is a technical color key plate for later removal. NO checkerboard, NO sky, NO shadow on magenta, NO pink light on subjects, NO lettering, NO people or vehicles. Ground touches bottom edge. Separate single layer only.",
+    "tool": "built-in image_gen"
+  },
+  {
+    "name": "quarry_near",
+    "source": "sources/quarry_near.png",
+    "prompt": "ONE game parallax layer for EndlessDrive, abandoned limestone quarry with layered rock outcrops and scattered scrub, dusty gray beige stone, restrained desaturated colors. NEAR distance: sparse larger trees and bushes or rock formations, varied spaced silhouettes rising from bottom to at most 78% height. Continuous very thin ground strip bottom 8%. Hand painted subdued textured 2D side elevation matching reference, no perspective road. Panoramic 4:1 ideally 2048x512. Seamless horizontal repeat; clear empty margins at left and right except continuous equal-height ground. All empty background MUST be perfectly uniform SOLID CHROMA MAGENTA #FF00FF, including gaps between branches. This is a technical color key plate for later removal. NO checkerboard, NO sky, NO shadow on magenta, NO pink light on subjects, NO lettering, NO people or vehicles. Ground touches bottom edge. Separate single layer only.",
+    "tool": "built-in image_gen"
+  },
+  {
+    "name": "marsh_far",
+    "source": "sources/marsh_far.png",
+    "prompt": "Create ONE production game background asset for EndlessDrive: misty wetland, distant flat reed islands and low willow silhouettes, muted blue green and soft gray sage, FAR parallax layer. Reference is visual style only. Panoramic 4:1 ideally 2048x512. Seamlessly repeatable horizontally. Match reference muted painterly subtly textured 2D side-scrolling scenery with simplified silhouettes, soft haze, no black outlines. Opaque overcast sky upper 65%, distant landscape lower 35%, uninterrupted terrain reaches bottom. No road, cars, people, text, sun or moon. Left and right edge terrain heights and colors match exactly. Calm restrained composition.",
+    "tool": "built-in image_gen"
+  },
+  {
+    "name": "marsh_mid",
+    "source": "sources/marsh_mid.png",
+    "prompt": "ONE game parallax layer for EndlessDrive, wetland with willow trees, cattail reeds and low tufts of marsh grasses, muted deep blue green and sage, dark peat banks. MIDDLE distance: small trees, shrubs, low scenery rising from bottom to at most 50% of image height. Continuous low ground band bottom 18%. Hand painted subdued textured 2D side elevation matching reference, no perspective road. Panoramic 4:1 ideally 2048x512. Seamless horizontal repeat; clear empty margins at left and right except continuous equal-height ground. All empty background MUST be perfectly uniform SOLID CHROMA MAGENTA #FF00FF, including gaps between branches. This is a technical color key plate for later removal. NO checkerboard, NO sky, NO shadow on magenta, NO pink light on subjects, NO lettering, NO people or vehicles. Ground touches bottom edge. Separate single layer only.",
+    "tool": "built-in image_gen"
+  },
+  {
+    "name": "marsh_near",
+    "source": "sources/marsh_near.png",
+    "prompt": "ONE game parallax layer for EndlessDrive, wetland with willow trees, cattail reeds and low tufts of marsh grasses, muted deep blue green and sage, dark peat banks. NEAR distance: sparse larger trees and bushes or rock formations, varied spaced silhouettes rising from bottom to at most 78% height. Continuous very thin ground strip bottom 8%. Hand painted subdued textured 2D side elevation matching reference, no perspective road. Panoramic 4:1 ideally 2048x512. Seamless horizontal repeat; clear empty margins at left and right except continuous equal-height ground. All empty background MUST be perfectly uniform SOLID CHROMA MAGENTA #FF00FF, including gaps between branches. This is a technical color key plate for later removal. NO checkerboard, NO sky, NO shadow on magenta, NO pink light on subjects, NO lettering, NO people or vehicles. Ground touches bottom edge. Separate single layer only.",
+    "tool": "built-in image_gen"
+  },
+  {
+    "name": "winter_alpine_far",
+    "source": "sources/winter_alpine_far.png",
+    "prompt": "Create ONE production game background asset for EndlessDrive: snowy alpine mountain valley, distant angular snow covered mountain range with blue gray rock faces, icy pale blue and off white snow, FAR parallax layer. Reference is visual style only. Panoramic 4:1 ideally 2048x512. Seamlessly repeatable horizontally. Match reference muted painterly subtly textured 2D side-scrolling scenery with simplified silhouettes, soft haze, no black outlines. Opaque overcast sky upper 65%, distant landscape lower 35%, uninterrupted terrain reaches bottom. No road, cars, people, text, sun or moon. Left and right edge terrain heights and colors match exactly. Calm restrained composition.",
+    "tool": "built-in image_gen"
+  },
+  {
+    "name": "winter_alpine_mid",
+    "source": "sources/winter_alpine_mid.png",
+    "prompt": "ONE game parallax layer for EndlessDrive, snowy alpine valley with rocky outcrops and sparse small snow dusted conifers, soft off white snow, blue gray rocks. MIDDLE distance: small trees, shrubs, low scenery rising from bottom to at most 50% of image height. Continuous low ground band bottom 18%. Hand painted subdued textured 2D side elevation matching reference, no perspective road. Panoramic 4:1 ideally 2048x512. Seamless horizontal repeat; clear empty margins at left and right except continuous equal-height ground. All empty background MUST be perfectly uniform SOLID CHROMA MAGENTA #FF00FF, including gaps between branches. This is a technical color key plate for later removal. NO checkerboard, NO sky, NO shadow on magenta, NO pink light on subjects, NO lettering, NO people or vehicles. Ground touches bottom edge. Separate single layer only.",
+    "tool": "built-in image_gen"
+  },
+  {
+    "name": "winter_alpine_near",
+    "source": "sources/winter_alpine_near.png",
+    "prompt": "ONE game parallax layer for EndlessDrive, snowy alpine valley with rocky outcrops and sparse small snow dusted conifers, soft off white snow, blue gray rocks. NEAR distance: sparse larger trees and bushes or rock formations, varied spaced silhouettes rising from bottom to at most 78% height. Continuous very thin ground strip bottom 8%. Hand painted subdued textured 2D side elevation matching reference, no perspective road. Panoramic 4:1 ideally 2048x512. Seamless horizontal repeat; clear empty margins at left and right except continuous equal-height ground. All empty background MUST be perfectly uniform SOLID CHROMA MAGENTA #FF00FF, including gaps between branches. This is a technical color key plate for later removal. NO checkerboard, NO sky, NO shadow on magenta, NO pink light on subjects, NO lettering, NO people or vehicles. Ground touches bottom edge. Separate single layer only.",
+    "tool": "built-in image_gen"
+  },
+  {
+    "name": "winter_pines_far",
+    "source": "sources/winter_pines_far.png",
+    "prompt": "Create ONE production game background asset for EndlessDrive: snow covered boreal forest, distant low rounded snowy hills and dense tiny spruce silhouettes, muted icy turquoise blue gray, soft snow white, FAR parallax layer. Reference is visual style only. Panoramic 4:1 ideally 2048x512. Seamlessly repeatable horizontally. Match reference muted painterly subtly textured 2D side-scrolling scenery with simplified silhouettes, soft haze, no black outlines. Opaque overcast sky upper 65%, distant landscape lower 35%, uninterrupted terrain reaches bottom. No road, cars, people, text, sun or moon. Left and right edge terrain heights and colors match exactly. Calm restrained composition.",
+    "tool": "built-in image_gen"
+  },
+  {
+    "name": "winter_pines_mid",
+    "source": "sources/winter_pines_mid.png",
+    "prompt": "ONE game parallax layer for EndlessDrive, snow laden spruce forest with thick white snow on evergreen branches and rounded snowbanks, desaturated dark teal trees, off white snow and blue gray shadow. MIDDLE distance: small trees, shrubs, low scenery rising from bottom to at most 50% of image height. Continuous low ground band bottom 18%. Hand painted subdued textured 2D side elevation matching reference, no perspective road. Panoramic 4:1 ideally 2048x512. Seamless horizontal repeat; clear empty margins at left and right except continuous equal-height ground. All empty background MUST be perfectly uniform SOLID CHROMA MAGENTA #FF00FF, including gaps between branches. This is a technical color key plate for later removal. NO checkerboard, NO sky, NO shadow on magenta, NO pink light on subjects, NO lettering, NO people or vehicles. Ground touches bottom edge. Separate single layer only.",
+    "tool": "built-in image_gen"
+  },
+  {
+    "name": "winter_pines_near",
+    "source": "sources/winter_pines_near.png",
+    "prompt": "ONE game parallax layer for EndlessDrive, snow laden spruce forest with thick white snow on evergreen branches and rounded snowbanks, desaturated dark teal trees, off white snow and blue gray shadow. NEAR distance: sparse larger trees and bushes or rock formations, varied spaced silhouettes rising from bottom to at most 78% height. Continuous very thin ground strip bottom 8%. Hand painted subdued textured 2D side elevation matching reference, no perspective road. Panoramic 4:1 ideally 2048x512. Seamless horizontal repeat; clear empty margins at left and right except continuous equal-height ground. All empty background MUST be perfectly uniform SOLID CHROMA MAGENTA #FF00FF, including gaps between branches. This is a technical color key plate for later removal. NO checkerboard, NO sky, NO shadow on magenta, NO pink light on subjects, NO lettering, NO people or vehicles. Ground touches bottom edge. Separate single layer only.",
+    "tool": "built-in image_gen"
+  }
+]

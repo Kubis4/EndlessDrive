@@ -73,6 +73,8 @@ data class GameUiState(
     val isNight: Boolean = false,
     val clock: String = "08:00",
     val hasNearbyBuilding: Boolean = false,
+    /** Vrak s lootom pred autom, aby hráč stihol zložiť plyn. */
+    val lootableWreckAheadM: Int? = null,
     /** Dá sa práve prespať do rána. */
     val canRest: Boolean = false,
     val exploring: Boolean = false,
@@ -91,6 +93,8 @@ data class GameUiState(
     val fullTankReached: Boolean = false,
     val fullUpgradeReached: Boolean = false,
     val eventKindsSeen: Set<RoadEvent> = emptySet(),
+    /** Práve aktívne poruchy – používajú sa pre blikajúce kontrolky. */
+    val activeEventKinds: Set<RoadEvent> = emptySet(),
     /** Krátke mená namontovaných dielov do HUD. */
     val fittedEngine: String = "—",
     val fittedDrive: String = "—",

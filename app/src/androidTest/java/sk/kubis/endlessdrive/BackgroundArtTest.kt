@@ -31,13 +31,12 @@ import java.io.File
 class BackgroundArtTest {
     @Test fun layeredArtworkDecodesAndRenders() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        for (biome in listOf(BiomeType.RURAL, BiomeType.ALPINE)) {
-            val spec = BackdropCatalog.specs.getValue(biome)
+        BackdropCatalog.allSpecs.forEachIndexed { index, spec ->
             for ((resource, transparent) in listOf(spec.far to false, spec.mid to true, spec.near to true)) {
                 val bitmap = BitmapFactory.decodeResource(context.resources, resource)
-                assertTrue("$biome must have landscape artwork", bitmap.width > bitmap.height)
+                assertTrue("backdrop $index must have landscape artwork", bitmap.width > bitmap.height)
                 val alpha = bitmap.getPixel(bitmap.width / 2, 0).ushr(24)
-                assertEquals("$biome layer must preserve sky/alpha", if (transparent) 0 else 255, alpha)
+                assertEquals("backdrop $index must preserve sky/alpha", if (transparent) 0 else 255, alpha)
                 bitmap.recycle()
             }
         }

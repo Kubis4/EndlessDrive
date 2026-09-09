@@ -560,17 +560,15 @@ class Car {
         get() = parts[ComponentSlot.BATTERY]?.health?.coerceIn(0f, 1f) ?: 0f
 
     /**
-     * Max elektrické SoC pri nabíjaní: ~zdravie alternátora, navyše ohraničené
-     * kapacitou batérie. 56 % alternátor nedá 100 % nabitia.
+     * Maximálne SoC, ktoré vie batéria držať. Alternátor už neurčuje strop
+     * nabitia – jeho stav určuje rýchlosť nabíjania. Aj 76 % alternátor preto
+     * dokáže nabiť 78 % batériu, iba pomalšie než nový kus.
      */
     val batteryChargeCeiling: Float
         get() {
             val hold = batteryHoldCapacity
-            if (hold <= 0.001f) return 0f
-            val output = alternatorOutput
-            if (output <= 0.005f) return 0f
-            val altMax = (output + GameConfig.ALTERNATOR_SOC_SLACK).coerceIn(0f, 1f)
-            return minOf(hold, altMax)
+            if (hold <= 0.001f || alternatorOutput <= 0.005f) return 0f
+            return hold
         }
 
     val overallHealth: Float
@@ -631,15 +629,16 @@ class Car {
         // Karoséria (dvere/kapota/okná/nárazníky) chýba vždy – okrem ladenia,
         // to sa dorába nižšie, až keď sú nastavené aj kvapaliny.
 
-        // Kvapaliny: občas úplne suchá nádrž.
-        fuel = if (rng.chance(0.20f)) 0f else rng.nextFloat(6f, 22f)
-        oil = if (rng.chance(0.20f)) 0f else rng.nextFloat(0.6f, 2.6f)
-        coolant = if (rng.chance(0.20f)) 0f else rng.nextFloat(1.0f, 4.2f)
-        fuelPurity = rng.nextFloat(0.55f, 0.95f)
+        // Bezpečný štart: prvé kilometre majú byť náročné rozhodovaním,
+        // nie náhodným game overom na prázdnej nádrži.
+        fuel = rng.nextFloat(GameConfig.START_FUEL_MIN, GameConfig.START_FUEL_MAX)
+        oil = rng.nextFloat(GameConfig.START_OIL_MIN, 2.6f)
+        coolant = rng.nextFloat(GameConfig.START_COOLANT_MIN, 4.2f)
+        fuelPurity = starterFluidPurity(rng, 0.46f, 0.76f)
         fuelDieselFraction = 0f
         bodyPaintIndex = rng.nextInt(VehiclePaint.entries.size)
-        oilPurity = rng.nextFloat(0.50f, 0.95f)
-        coolantPurity = rng.nextFloat(0.45f, 0.95f)
+        oilPurity = starterFluidPurity(rng, 0.42f, 0.74f)
+        coolantPurity = starterFluidPurity(rng, 0.38f, 0.72f)
 
         temperature = 40f
         batteryCharge = seededBatteryCharge(rng)
@@ -721,6 +720,14 @@ class Car {
         val lo = (health * 0.72f).coerceAtLeast(0.08f)
         return rng.nextFloat(lo, health).coerceIn(0f, health)
     }
+
+    /**
+     * Na začiatku má hráč viac náplní, ale čistá kvapalina je vzácna.
+     * Približne 80 % štartov dostane riedenú/zanesenú náplň pod 80 % čistoty.
+     */
+    private fun starterFluidPurity(rng: SeededRandom, dirtyMin: Float, dirtyMax: Float): Float =
+        if (rng.chance(0.20f)) rng.nextFloat(0.84f, 0.98f)
+        else rng.nextFloat(dirtyMin, dirtyMax)
 
     /** Priviaže auto na vozovku (príprava, stop, teleport). */
     fun snapToGround(groundY: Float, slope: Float = 0f) {
@@ -839,7 +846,17 @@ class Car {
         amount: Float,
         purity: Float = 1f,
         fuelKind: FuelKind = FuelKind.PETROL
-    ): Float = when (fluid) {
+    ): Float {
+        // Kvapalina patrí konkrétnemu dielu. Bez nádrže/chladiča sa nesmie
+        // spotrebovať a pri neskoršej montáži potichu zmiznúť.
+        val holder = when (fluid) {
+            FluidType.FUEL -> ComponentSlot.FUEL_TANK
+            FluidType.OIL -> ComponentSlot.ENGINE
+            FluidType.COOLANT -> ComponentSlot.RADIATOR
+            FluidType.BRAKE_FLUID -> null
+        }
+        if (holder != null && !hasPart(holder)) return 0f
+        return when (fluid) {
         FluidType.FUEL -> {
             val add = amount.coerceAtMost(fuelCapacity - fuel)
             fuelPurity = blend(fuelPurity, fuel, purity, add)
@@ -861,6 +878,7 @@ class Car {
             add
         }
         FluidType.BRAKE_FLUID -> amount * 0.5f
+        }
     }
 
     private fun blend(currentPurity: Float, currentVol: Float, addPurity: Float, addVol: Float): Float {
@@ -970,6 +988,9 @@ class Car {
         val v = kotlin.math.abs(speed)
         if (v < 0.2f && !engineRunning) return
         val load = (v / GameConfig.MAX_SPEED).coerceIn(0f, 1.2f)
+        // 160 km/h je možný krátky risk, nie bezplatná cestovná rýchlosť.
+        val speedWear = 1f + ((v - GameConfig.HIGH_SPEED_WEAR_START)
+            .coerceAtLeast(0f) * GameConfig.HIGH_SPEED_WEAR_GAIN)
 
         fun wear(slot: ComponentSlot, amount: Float) {
             val part = parts[slot] ?: return
@@ -986,8 +1007,8 @@ class Car {
         // Valivé opotrebenie berie obe kolesá, preklz len to hnané –
         // pri RWD sa zodiera zadok, pri FWD predok, 4×4 delí záťaž.
         val chainStrain = if (hasChains) 1.35f else 1f
-        val roll = GameConfig.WEAR_TIRES * load * (1f + bumpMul * 0.8f) * chainStrain / tireBumpResist
-        val spin = GameConfig.WEAR_TIRES * wheelSlip * 1.2f / tireBumpResist
+        val roll = GameConfig.WEAR_TIRES * load * speedWear * (1f + bumpMul * 0.8f) * chainStrain / tireBumpResist
+        val spin = GameConfig.WEAR_TIRES * wheelSlip * 1.2f * speedWear / tireBumpResist
         val locked = if (wheelsLocked) spin else 0f
         // Reťaze pri rýchlosti trhajú gumy aj samy seba.
         if (hasChains) {
@@ -1009,18 +1030,18 @@ class Car {
                 tyreClimateWear(ComponentSlot.TIRE_REAR)
         )
         // Brzdy sa zodierajú len keď sa brzdí, o to rýchlejšie z rýchlosti.
-        wear(ComponentSlot.BRAKES, GameConfig.WEAR_BRAKES * brake * (0.3f + load))
+        wear(ComponentSlot.BRAKES, GameConfig.WEAR_BRAKES * brake * (0.3f + load) * speedWear)
         // Pruženie: hrbole a dopady.
         wear(
             ComponentSlot.SUSPENSION,
-            GameConfig.WEAR_SUSPENSION * (0.25f + load) * (1f + bumpMul * 1.4f)
+            GameConfig.WEAR_SUSPENSION * (0.25f + load) * (1f + bumpMul * 1.4f) * speedWear
         )
         if (engineRunning) {
-            wear(ComponentSlot.ENGINE, GameConfig.WEAR_ENGINE_IDLE * (0.5f + load))
-            wear(ComponentSlot.ALTERNATOR, GameConfig.WEAR_AUX)
-            wear(ComponentSlot.STARTER, GameConfig.WEAR_AUX * 0.4f)
-            wear(ComponentSlot.RADIATOR, GameConfig.WEAR_AUX * (0.6f + load))
-            wear(ComponentSlot.DRIVETRAIN, GameConfig.WEAR_AUX * (0.4f + load * 1.2f))
+            wear(ComponentSlot.ENGINE, GameConfig.WEAR_ENGINE_IDLE * (0.5f + load) * speedWear)
+            wear(ComponentSlot.ALTERNATOR, GameConfig.WEAR_AUX * speedWear)
+            wear(ComponentSlot.STARTER, GameConfig.WEAR_AUX * 0.4f * speedWear)
+            wear(ComponentSlot.RADIATOR, GameConfig.WEAR_AUX * (0.6f + load) * speedWear)
+            wear(ComponentSlot.DRIVETRAIN, GameConfig.WEAR_AUX * (0.4f + load * 1.2f) * speedWear)
         }
     }
 

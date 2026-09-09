@@ -36,7 +36,10 @@ class BuildingPainter {
             biome.arid -> Color(0xFFC3A27D)
             biome == BiomeType.ALPINE -> Color(0xFF879A9D)
             biome == BiomeType.INDUSTRIAL -> Color(0xFF747E7B)
-            biome == BiomeType.FOREST || biome == BiomeType.FOREST_ALIVE -> Color(0xFF788064)
+            biome == BiomeType.FOREST -> Color(0xFF63746E)
+            biome == BiomeType.FOREST_ALIVE -> Color(0xFF936246)
+            biome == BiomeType.WASTELAND -> Color(0xFF8A867D)
+            biome == BiomeType.RURAL -> Color(0xFF93886A)
             else -> Color(0xFFB49A78)
         }
         val paint = when (variant) {

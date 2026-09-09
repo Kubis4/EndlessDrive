@@ -25,6 +25,10 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,6 +63,7 @@ fun SettingsScreen(
     showPrivacyOptions: Boolean = false,
     onPrivacyOptions: () -> Unit = {}
 ) {
+    var debugToolsVisible by rememberSaveable { mutableStateOf(false) }
     Box(
         Modifier
             .fillMaxSize()
@@ -82,11 +87,6 @@ fun SettingsScreen(
                     fontSize = 30.sp, fontWeight = FontWeight.Bold, letterSpacing = 3.sp)
                 GameButton("BACK", onBack, style = BtnStyle.Ghost, compact = true)
             }
-            Spacer(Modifier.height(18.dp))
-
-            Text("DISPLAY", color = GameColors.accent, fontSize = 12.sp,
-                fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-            Toggle("FPS counter", "Show the live frame-rate counter in the driving HUD.", showFps, onShowFpsChange)
             Spacer(Modifier.height(18.dp))
 
             Text("CONTROLS", color = GameColors.accent, fontSize = 12.sp,
@@ -132,65 +132,79 @@ fun SettingsScreen(
             Spacer(Modifier.height(24.dp))
 
             Text(
-                "TESTING",
+                "DEBUG TOOLS",
                 color = GameColors.accent,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 2.sp
             )
-            Text(
-                "Applies to the next new run — an already started one is left alone.",
-                color = GameColors.textDim,
-                fontSize = 13.sp
+            GameButton(
+                if (debugToolsVisible) "HIDE DEBUG TOOLS" else "SHOW DEBUG TOOLS",
+                { debugToolsVisible = !debugToolsVisible },
+                compact = true,
+                style = BtnStyle.Ghost
             )
-            Spacer(Modifier.height(10.dp))
+            if (debugToolsVisible) {
+                Text(
+                    "These tools are for testing only and apply to the next new run.",
+                    color = GameColors.textDim,
+                    fontSize = 13.sp
+                )
+                Spacer(Modifier.height(10.dp))
 
-            Toggle(
-                title = "All components",
-                detail = "Fills every empty slot with a basic part, so nothing is missing.",
-                checked = options.allComponents,
-                onToggle = { onChange(options.copy(allComponents = it)) }
-            )
-            Toggle(
-                title = "Full upgrades",
-                detail = "Best part in every slot — strongest engine, sport tyres, big tank.",
-                checked = options.fullUpgrades,
-                onToggle = { onChange(options.copy(fullUpgrades = it)) }
-            )
-            Toggle(
-                title = "Whole body",
-                detail = "Doors, bonnet, boot lid, bumpers, lights and seats fitted from the start.",
-                checked = options.fullBody,
-                // Plná výbava karosériu obsahuje tiež – samostatný prepínač
-                // by potom nič nemenil, tak sa vypne.
-                enabled = !options.allComponents && !options.fullUpgrades,
-                onToggle = { onChange(options.copy(fullBody = it)) }
-            )
-            Toggle(
-                title = "Full fluids",
-                detail = "Clean fuel, oil and coolant to the brim, battery charged.",
-                checked = options.fullFluids,
-                onToggle = { onChange(options.copy(fullFluids = it)) }
-            )
-            Toggle(
-                title = "Test track",
-                detail = "Washboard, a sharp bump, a jump, a long climb, dips and " +
-                    "growing steps — on a loop, for tuning suspension and handling.",
-                checked = options.testTrack,
-                onToggle = { onChange(options.copy(testTrack = it)) }
-            )
-            Toggle(
-                title = "Repair controls",
-                detail = "Shows the instant REPAIR action in CAR. Debug only; normal runs hide it.",
-                checked = options.repairControls,
-                onToggle = { onChange(options.copy(repairControls = it)) }
-            )
+                Toggle(
+                    title = "FPS counter",
+                    detail = "Show the live frame-rate counter in the driving HUD.",
+                    checked = showFps,
+                    onToggle = onShowFpsChange
+                )
 
-            Spacer(Modifier.height(20.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                GameButton("BACK", onBack, style = BtnStyle.Primary)
-                GameButton("FULL CAR + TRACK", { onChange(DebugOptions.TUNE_SUSPENSION) }, compact = true)
-                GameButton("TURN ALL OFF", { onChange(DebugOptions.OFF) })
+                Toggle(
+                    title = "All components",
+                    detail = "Fills every empty slot with a basic part, so nothing is missing.",
+                    checked = options.allComponents,
+                    onToggle = { onChange(options.copy(allComponents = it)) }
+                )
+                Toggle(
+                    title = "Full upgrades",
+                    detail = "Best part in every slot — strongest engine, sport tyres, big tank.",
+                    checked = options.fullUpgrades,
+                    onToggle = { onChange(options.copy(fullUpgrades = it)) }
+                )
+                Toggle(
+                    title = "Whole body",
+                    detail = "Doors, bonnet, boot lid, bumpers, lights and seats fitted from the start.",
+                    checked = options.fullBody,
+                    // Plná výbava karosériu obsahuje tiež – samostatný prepínač
+                    // by potom nič nemenil, tak sa vypne.
+                    enabled = !options.allComponents && !options.fullUpgrades,
+                    onToggle = { onChange(options.copy(fullBody = it)) }
+                )
+                Toggle(
+                    title = "Full fluids",
+                    detail = "Clean fuel, oil and coolant to the brim, battery charged.",
+                    checked = options.fullFluids,
+                    onToggle = { onChange(options.copy(fullFluids = it)) }
+                )
+                Toggle(
+                    title = "Test track",
+                    detail = "Washboard, a sharp bump, a jump, a long climb, dips and " +
+                        "growing steps — on a loop, for tuning suspension and handling.",
+                    checked = options.testTrack,
+                    onToggle = { onChange(options.copy(testTrack = it)) }
+                )
+                Toggle(
+                    title = "Repair controls",
+                    detail = "Shows the instant REPAIR action in CAR. Debug only; normal runs hide it.",
+                    checked = options.repairControls,
+                    onToggle = { onChange(options.copy(repairControls = it)) }
+                )
+
+                Spacer(Modifier.height(20.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    GameButton("FULL CAR + TRACK", { onChange(DebugOptions.TUNE_SUSPENSION) }, compact = true)
+                    GameButton("TURN ALL OFF", { onChange(DebugOptions.OFF) })
+                }
             }
         }
     }

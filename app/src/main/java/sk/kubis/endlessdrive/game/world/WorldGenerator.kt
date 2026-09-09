@@ -122,11 +122,18 @@ object WorldGenerator {
                 roll < 0.85f -> RoadPaving.DIRT
                 else -> RoadPaving.GRAVEL_ROAD
             }
-            // V lese vedie skôr vyjazdená lesná cesta než súvislý asfalt.
-            BranchStyle.FOREST, BranchStyle.FOREST_ALIVE -> when {
-                roll < 0.22f -> RoadPaving.ASPHALT
+            // Močiar: tmavá vyjazdená cesta, asfalt iba výnimočne.
+            BranchStyle.FOREST -> when {
+                roll < 0.14f -> RoadPaving.ASPHALT
+                roll < 0.30f -> RoadPaving.CRACKED
+                roll < 0.78f -> RoadPaving.DIRT
+                else -> RoadPaving.GRAVEL_ROAD
+            }
+            // Jesenné údolie: starší asfalt sa strieda s hlinou a štrkom.
+            BranchStyle.FOREST_ALIVE -> when {
+                roll < 0.20f -> RoadPaving.ASPHALT
                 roll < 0.42f -> RoadPaving.CRACKED
-                roll < 0.80f -> RoadPaving.DIRT
+                roll < 0.78f -> RoadPaving.DIRT
                 else -> RoadPaving.GRAVEL_ROAD
             }
             BranchStyle.INDUSTRIAL -> when {
@@ -143,9 +150,8 @@ object WorldGenerator {
                 else -> RoadPaving.DIRT
             }
             BranchStyle.SHORTCUT_RISK -> when {
-                roll < 0.30f -> RoadPaving.DIRT
-                roll < 0.58f -> RoadPaving.SAND_TRACK
-                roll < 0.84f -> RoadPaving.GRAVEL_ROAD
+                roll < 0.16f -> RoadPaving.DIRT
+                roll < 0.72f -> RoadPaving.GRAVEL_ROAD
                 else -> RoadPaving.CRACKED
             }
             // V búrke je cesta prakticky len stopa v naviatom piesku.
@@ -224,7 +230,7 @@ object WorldGenerator {
             RoadFeature.HILLS,
             RoadFeature.STRAIGHT,
             RoadFeature.HILLS,
-            RoadFeature.BRIDGE,
+            RoadFeature.STRAIGHT,
             RoadFeature.STRAIGHT
         )
 
@@ -239,15 +245,23 @@ object WorldGenerator {
         while (covered < length - GameConfig.FEATURE_MIN_LENGTH) {
             val roll = rng.nextFloat()
             val next = when (style) {
-                // Les kopíruje vidiek – len s ostrejšími zákrutami medzi stromami.
-                BranchStyle.SAFE_RURAL, BranchStyle.FOREST, BranchStyle.FOREST_ALIVE -> when {
+                // Vidiek a jesenné údolie sa vlnia medzi stromami.
+                BranchStyle.SAFE_RURAL, BranchStyle.FOREST_ALIVE -> when {
                     roll < 0.18f + earlySoft * 0.06f -> RoadFeature.STRAIGHT
                     roll < 0.52f + earlySoft * 0.08f -> RoadFeature.HILLS
                     roll < 0.64f -> if (earlySoft > 0.65f) RoadFeature.HILLS else RoadFeature.CREST
                     roll < 0.74f -> if (earlySoft > 0.5f) RoadFeature.SWITCHBACK else RoadFeature.RAVINE
                     roll < 0.86f -> RoadFeature.SWITCHBACK
-                    roll < 0.94f -> RoadFeature.BRIDGE
+                    roll < 0.94f -> RoadFeature.HILLS
                     else -> RoadFeature.BROKEN
+                }
+                // Močiar ostáva nízky; náročnosť robia preliačiny a rozmočená cesta.
+                BranchStyle.FOREST -> when {
+                    roll < 0.34f + earlySoft * 0.08f -> RoadFeature.STRAIGHT
+                    roll < 0.62f -> RoadFeature.HILLS
+                    roll < 0.78f -> RoadFeature.RAVINE
+                    roll < 0.90f -> RoadFeature.BROKEN
+                    else -> RoadFeature.SWITCHBACK
                 }
                 // Púšť je dlhá a otvorená: rovinky a duny, mosty takmer nikdy.
                 BranchStyle.DESERT, BranchStyle.DESERT_DUSK -> when {
@@ -255,7 +269,7 @@ object WorldGenerator {
                     roll < 0.62f -> RoadFeature.HILLS
                     roll < 0.74f -> if (earlySoft > 0.5f) RoadFeature.HILLS else RoadFeature.CREST
                     roll < 0.86f -> RoadFeature.SWITCHBACK
-                    roll < 0.92f -> RoadFeature.BRIDGE
+                    roll < 0.92f -> RoadFeature.HILLS
                     else -> RoadFeature.BROKEN
                 }
                 // V búrke sa jazdí naslepo – krátke, rozbité a zaviate úseky.
@@ -280,7 +294,7 @@ object WorldGenerator {
                     roll < 0.56f -> if (earlySoft > 0.55f) RoadFeature.HILLS else RoadFeature.CREST
                     roll < 0.68f -> if (earlySoft > 0.4f) RoadFeature.SWITCHBACK else RoadFeature.RAVINE
                     roll < 0.82f -> RoadFeature.SWITCHBACK
-                    roll < 0.92f -> RoadFeature.BRIDGE
+                    roll < 0.92f -> RoadFeature.HILLS
                     else -> RoadFeature.BROKEN
                 }
                 BranchStyle.SHORTCUT_RISK -> when {
@@ -289,7 +303,7 @@ object WorldGenerator {
                     roll < 0.50f -> if (earlySoft > 0.5f) RoadFeature.HILLS else RoadFeature.CREST
                     roll < 0.64f -> if (earlySoft > 0.35f) RoadFeature.SWITCHBACK else RoadFeature.RAVINE
                     roll < 0.78f -> RoadFeature.SWITCHBACK
-                    roll < 0.88f -> RoadFeature.BRIDGE
+                    roll < 0.88f -> RoadFeature.HILLS
                     else -> RoadFeature.BROKEN
                 }
             }
@@ -473,34 +487,38 @@ object WorldGenerator {
         }
         // Rozbitá cesta sype štrk, roklina drží vodu, pustatina zaváta pieskom.
         if (feature == RoadFeature.BROKEN && rng.nextFloat() < 0.55f) return RoadSurface.GRAVEL
+        // Voda bola zdrojom nečitateľných kolízií a spikeov pri mostoch.
+        // Roklina ostáva náročná, ale ako stabilné bahno.
         if (standing && feature == RoadFeature.RAVINE && rng.nextFloat() < 0.75f) {
-            return RoadSurface.WATER
+            return RoadSurface.MUD
         }
         val roll = rng.nextFloat()
         val picked = when (style) {
             BranchStyle.SAFE_RURAL -> when {
                 roll < 0.42f -> RoadSurface.MUD
-                roll < 0.70f -> RoadSurface.WATER
+                roll < 0.70f -> RoadSurface.MUD
                 else -> RoadSurface.GRAVEL
             }
-            // V lese je mokro a bahno – slnko sa na cestu nedostane.
-            BranchStyle.FOREST, BranchStyle.FOREST_ALIVE -> when {
-                roll < 0.50f -> RoadSurface.MUD
-                roll < 0.80f -> RoadSurface.WATER
+            // Močiar drží tmavé bahno; štrk je len spevnený krátky úsek.
+            BranchStyle.FOREST -> when {
+                roll < 0.86f -> RoadSurface.MUD
+                else -> RoadSurface.GRAVEL
+            }
+            BranchStyle.FOREST_ALIVE -> when {
+                roll < 0.62f -> RoadSurface.MUD
                 else -> RoadSurface.GRAVEL
             }
             BranchStyle.INDUSTRIAL -> when {
                 roll < 0.45f -> RoadSurface.GRAVEL
                 roll < 0.72f -> RoadSurface.MUD
-                else -> RoadSurface.WATER
+                else -> RoadSurface.MUD
             }
             BranchStyle.DESERT, BranchStyle.DESERT_DUSK -> when {
                 roll < 0.66f -> RoadSurface.SAND
                 else -> RoadSurface.GRAVEL
             }
             BranchStyle.SHORTCUT_RISK -> when {
-                roll < 0.44f -> RoadSurface.SAND
-                roll < 0.72f -> RoadSurface.GRAVEL
+                roll < 0.74f -> RoadSurface.GRAVEL
                 else -> RoadSurface.MUD
             }
             // Búrka zaváta cestu závejmi piesku – iná prekážka tu ani nie je.
@@ -558,17 +576,26 @@ object WorldGenerator {
         isTutorial: Boolean
     ) {
         if (isTutorial) return
-        val count = when {
-            rng.chance(0.08f) -> 2
-            rng.chance(0.28f) -> 1
-            else -> 0
+        val count = if (plan.style.arid) {
+            // Piesok už nemá pôsobiť ako cintorín nelootovateľných áut.
+            when {
+                rng.chance(0.30f) -> 2
+                rng.chance(0.42f) -> 1
+                else -> 0
+            }
+        } else {
+            when {
+                rng.chance(0.08f) -> 2
+                rng.chance(0.28f) -> 1
+                else -> 0
+            }
         }
         if (count <= 0) return
         val usableEnd = plan.length - GameConfig.JUNCTION_ZONE - 40f
         val minStart = GameConfig.BUILDING_MIN_GAP_FROM_START
         if (usableEnd <= minStart + 20f) return
         var cursor = minStart + rng.nextFloat() * 80f
-        repeat(count) {
+        repeat(count) { wreckIndex ->
             val windowEnd = (usableEnd - (count - 1) * GameConfig.BUILDING_MIN_SPACING)
                 .coerceAtLeast(cursor + 1f)
             val lx = flattestLocalX(segment, cursor, windowEnd)
@@ -587,7 +614,8 @@ object WorldGenerator {
             }
             if (!occupied) {
                 segment.buildings += makeBuilding(
-                    rng, BuildingType.WRECK, lx, tripDistance, plan.style
+                    rng, BuildingType.WRECK, lx, tripDistance, plan.style,
+                    wreckLootOverride = plan.style.arid && wreckIndex == 0
                 )
             }
             cursor = lx + GameConfig.BUILDING_MIN_SPACING
@@ -909,7 +937,8 @@ object WorldGenerator {
         distance: Float,
         style: BranchStyle,
         landmark: Boolean = false,
-        relayIndex: Int = -1
+        relayIndex: Int = -1,
+        wreckLootOverride: Boolean = false
     ): WorldBuilding {
         val id = (type.ordinal.toLong() shl 32) xor localX.toRawBits().toLong() xor rng.nextLong()
         // Stojany nie sú univerzálne. Diesel je o niečo vzácnejší, ale dosť
@@ -928,16 +957,21 @@ object WorldGenerator {
         // všetky stavby v jednom segmente už nedostanú ten istý „kilometer“.
         val lootDistance = distance + localX
         val loot = if (type == BuildingType.WRECK) {
-            wreckLoot(rng).toMutableList()
+            wreckLoot(rng, guaranteed = wreckLootOverride).toMutableList()
         } else {
             LootGenerator.generate(rng, type, lootDistance, style).toMutableList()
         }
         // Vyschnutý stojan neznamená prázdnu stanicu – v sklade ostal kanister.
         // Zájsť na benzínku a odísť bez paliva je najhorší možný záver zastávky.
         if (type == BuildingType.GAS_STATION && pump <= 0.05f) {
-            // Aj vyschnutá pumpa má núdzovo oba druhy paliva. Dieselový motor
-            // tak nie je potrestaný len preto, že RNG doteraz hádzalo benzín.
-            listOf(ItemCatalog.FUEL_CAN, ItemCatalog.DIESEL_CAN).forEach { fallbackFuel ->
+            // V prvých kilometroch je suchá pumpa ešte záchrana. Neskôr môže
+            // zostať naozaj prázdna; vzdialené zásobovanie má byť rozhodnutie.
+            val fallback = when {
+                distance < 8_000f -> listOf(ItemCatalog.FUEL_CAN, ItemCatalog.DIESEL_CAN)
+                rng.chance(0.42f) -> listOf(if (pumpFuelKind == FuelKind.DIESEL) ItemCatalog.DIESEL_CAN else ItemCatalog.FUEL_CAN)
+                else -> emptyList()
+            }
+            fallback.forEach { fallbackFuel ->
                 if (loot.none { it.defId == fallbackFuel.id }) loot.add(
                     ItemStack(
                         defId = fallbackFuel.id,
@@ -967,9 +1001,9 @@ object WorldGenerator {
     }
 
     /** Vrak pri ceste: občas scrap, zriedkavo poškodený diel, často prázdny. */
-    private fun wreckLoot(rng: SeededRandom): List<ItemStack> {
+    private fun wreckLoot(rng: SeededRandom, guaranteed: Boolean = false): List<ItemStack> {
         val loot = ArrayList<ItemStack>(2)
-        if (rng.chance(0.52f)) {
+        if (guaranteed || rng.chance(0.52f)) {
             loot += ItemStack(
                 defId = ItemCatalog.SCRAP_PILE.id,
                 condition = ComponentCondition.NEW,
@@ -977,7 +1011,7 @@ object WorldGenerator {
                 count = 1 + rng.nextInt(3)
             )
         }
-        if (rng.chance(0.22f)) {
+        if (guaranteed || rng.chance(0.22f)) {
             val part = rng.pick(
                 listOf(
                     ItemCatalog.TIRE_POOR, ItemCatalog.BATTERY, ItemCatalog.ALTERNATOR,

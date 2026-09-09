@@ -10,6 +10,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import sk.kubis.endlessdrive.R
 import sk.kubis.endlessdrive.domain.model.BiomeType
 import sk.kubis.endlessdrive.game.car.WHEEL_HUB_FRAC
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlin.math.hypot
 import kotlin.math.max
 
@@ -63,12 +67,15 @@ class GameAssets(context: Context) {
      * Načítať všetkých sedem naraz stálo 21 MB, ktoré tam ležali celý beh –
      * a s každým ďalším biómom by to rástlo o ďalšie tri megabajty.
      */
-    private val backdrops = object : LinkedHashMap<BiomeType, BiomeBackdrop>(
+    private val backdrops = object : LinkedHashMap<BackdropCacheKey, BiomeBackdrop>(
         MAX_BACKDROPS + 1, 0.75f, /* accessOrder = */ true
     ) {
-        override fun removeEldestEntry(eldest: Map.Entry<BiomeType, BiomeBackdrop>) =
+        override fun removeEldestEntry(eldest: Map.Entry<BackdropCacheKey, BiomeBackdrop>) =
             size > MAX_BACKDROPS
     }
+    private val backdropLock = Any()
+    private val backdropPreloads = mutableSetOf<BackdropCacheKey>()
+    private val backdropPreloadScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private fun loadBackdrop(spec: BackdropSpec): BiomeBackdrop {
         val material = if (spec.bakedSun) MaterialKind.SAND else MaterialKind.LEAVES
@@ -258,15 +265,53 @@ class GameAssets(context: Context) {
         )
     }
 
+    /** Pozadie biómu, ktoré už je bezpečne pripravené pre render frame. */
+    fun backdropFor(biome: BiomeType, segmentSeed: Long = 0L): BiomeBackdrop {
+        val variant = BackdropCatalog.variantIndex(biome, segmentSeed)
+        val key = BackdropCacheKey(biome, variant)
+        synchronized(backdropLock) {
+            backdrops[key]?.let { return it }
+        }
+        val spec = BackdropCatalog.specFor(biome, variant)
+        val loaded = loadBackdrop(spec)
+        return synchronized(backdropLock) {
+            // A background preload may have won the race while this call was
+            // decoding. Reuse it instead of replacing the cached instance.
+            backdrops[key] ?: loaded.also { backdrops[key] = it }
+        }
+    }
+
     /**
-     * Pozadie biómu. Prvý pohľad doň sadu dekóduje (~30 ms), ďalšie ju už len
-     * vytiahnu z cache. Deje sa to hneď po križovatke, kde auto stojí, takže
-     * to prípadné zaváhanie nikoho nepripraví o riadenie.
+     * Starts decoding a future biome away from the UI/render thread. The
+     * renderer can then use [cachedBackdropFor] without ever blocking a frame.
      */
-    fun backdropFor(biome: BiomeType): BiomeBackdrop {
-        backdrops[biome]?.let { return it }
-        val spec = BackdropCatalog.specs.getValue(biome)
-        return loadBackdrop(spec).also { backdrops[biome] = it }
+    fun preloadBackdrop(biome: BiomeType, segmentSeed: Long = 0L) {
+        val variant = BackdropCatalog.variantIndex(biome, segmentSeed)
+        val key = BackdropCacheKey(biome, variant)
+        val shouldLoad = synchronized(backdropLock) {
+            key !in backdrops && backdropPreloads.add(key)
+        }
+        if (!shouldLoad) return
+        val spec = BackdropCatalog.specFor(biome, variant)
+        backdropPreloadScope.launch {
+            try {
+                val loaded = loadBackdrop(spec)
+                synchronized(backdropLock) {
+                    if (key !in backdrops) backdrops[key] = loaded
+                    backdropPreloads.remove(key)
+                }
+            } catch (_: Throwable) {
+                // A failed warm-up must not affect gameplay. The normal
+                // backdropFor path remains able to load the asset on demand.
+                synchronized(backdropLock) { backdropPreloads.remove(key) }
+            }
+        }
+    }
+
+    /** Returns a warm asset without doing any decoding on the render thread. */
+    fun cachedBackdropFor(biome: BiomeType, segmentSeed: Long = 0L): BiomeBackdrop? {
+        val variant = BackdropCatalog.variantIndex(biome, segmentSeed)
+        return synchronized(backdropLock) { backdrops[BackdropCacheKey(biome, variant)] }
     }
 
     private fun decode(resId: Int, sample: Int = 1): ImageBitmap =
@@ -310,9 +355,17 @@ class GameAssets(context: Context) {
         R.drawable.bg_forest_far, R.drawable.bg_forest_mid, R.drawable.bg_forest_near,
         R.drawable.bg_forest_alive_far, R.drawable.bg_forest_alive_mid, R.drawable.bg_forest_alive_near,
         R.drawable.bg_industry_far, R.drawable.bg_industry_mid, R.drawable.bg_industry_near,
-        R.drawable.bg_sandstorm_far, R.drawable.bg_sandstorm_mid, R.drawable.bg_sandstorm_near -> true
+        R.drawable.bg_sandstorm_far, R.drawable.bg_sandstorm_mid, R.drawable.bg_sandstorm_near,
+        R.drawable.bg_rural_far, R.drawable.bg_rural_mid, R.drawable.bg_rural_near,
+        R.drawable.bg_autumn_far, R.drawable.bg_autumn_mid, R.drawable.bg_autumn_near,
+        R.drawable.bg_quarry_far, R.drawable.bg_quarry_mid, R.drawable.bg_quarry_near,
+        R.drawable.bg_marsh_far, R.drawable.bg_marsh_mid, R.drawable.bg_marsh_near,
+        R.drawable.bg_winter_alpine_far, R.drawable.bg_winter_alpine_mid, R.drawable.bg_winter_alpine_near,
+        R.drawable.bg_winter_pines_far, R.drawable.bg_winter_pines_mid, R.drawable.bg_winter_pines_near -> true
         else -> false
     }
+
+    private data class BackdropCacheKey(val biome: BiomeType, val variant: Int)
 
     private companion object {
         const val HALF = 2
@@ -446,6 +499,90 @@ object BackdropCatalog {
             midHaze = 0.08f, nearHaze = 0.04f, hazeDay = Color(0xFFA8C0C8), midRise = 0.04f
         )
     )
+
+    private fun newSpec(
+        far: Int,
+        mid: Int,
+        near: Int,
+        hazeDay: Color,
+        landscapeLift: Float = 0.05f,
+        midHaze: Float = 0.08f,
+        nearHaze: Float = 0.035f,
+        midRise: Float = 0.04f
+    ) = BackdropSpec(
+        far, mid, near,
+        horizonCover = 0f,
+        landscapeLift = landscapeLift,
+        widthScale = 0.85f,
+        heightScale = 1f,
+        skyWash = 0.18f,
+        midHaze = midHaze,
+        nearHaze = nearHaze,
+        hazeDay = hazeDay,
+        midRise = midRise
+    )
+
+    /**
+     * Nové kresby rozširujú existujúce biómy, takže nemenia fyziku ani formát
+     * uložených hier. Seed segmentu vyberie stabilný variant a rovnaký seed sa
+     * používa aj počas prechodu na ďalší úsek.
+     */
+    val variants: Map<BiomeType, List<BackdropSpec>> = specs.mapValues { (biome, original) ->
+        when (biome) {
+            BiomeType.RURAL -> listOf(
+                newSpec(
+                    R.drawable.bg_rural_far, R.drawable.bg_rural_mid, R.drawable.bg_rural_near,
+                    hazeDay = Color(0xFF9DAFA6), midHaze = 0.07f, nearHaze = 0.03f
+                )
+            )
+            BiomeType.FOREST_ALIVE -> listOf(
+                newSpec(
+                    R.drawable.bg_autumn_far, R.drawable.bg_autumn_mid, R.drawable.bg_autumn_near,
+                    hazeDay = Color(0xFFB49B8D), midHaze = 0.06f, nearHaze = 0.025f
+                )
+            )
+            BiomeType.WASTELAND -> listOf(
+                newSpec(
+                    R.drawable.bg_quarry_far, R.drawable.bg_quarry_mid, R.drawable.bg_quarry_near,
+                    hazeDay = Color(0xFFA6AFAC), midHaze = 0.09f, nearHaze = 0.04f
+                )
+            )
+            BiomeType.FOREST -> listOf(
+                newSpec(
+                    R.drawable.bg_marsh_far, R.drawable.bg_marsh_mid, R.drawable.bg_marsh_near,
+                    hazeDay = Color(0xFF879F9B), midHaze = 0.09f, nearHaze = 0.04f
+                )
+            )
+            BiomeType.ALPINE -> listOf(
+                newSpec(
+                    R.drawable.bg_winter_alpine_far,
+                    R.drawable.bg_winter_alpine_mid,
+                    R.drawable.bg_winter_alpine_near,
+                    hazeDay = Color(0xFFC3D4DA), midHaze = 0.08f, nearHaze = 0.035f
+                ),
+                newSpec(
+                    R.drawable.bg_winter_pines_far,
+                    R.drawable.bg_winter_pines_mid,
+                    R.drawable.bg_winter_pines_near,
+                    hazeDay = Color(0xFFB7CDD1), midHaze = 0.075f, nearHaze = 0.03f
+                )
+            )
+            else -> listOf(original)
+        }
+    }
+
+    val allSpecs: List<BackdropSpec> = variants.values.flatten()
+
+    fun variantIndex(biome: BiomeType, segmentSeed: Long): Int {
+        val count = variants.getValue(biome).size
+        if (count == 1) return 0
+        return Math.floorMod(segmentSeed xor VARIANT_SALT, count.toLong()).toInt()
+    }
+
+    fun specFor(biome: BiomeType, variant: Int): BackdropSpec =
+        variants.getValue(biome)[variant]
+
+    private const val VARIANT_SALT = 0x4B1D5A77C3E9210L
 }
 
 data class BiomeBackdrop(

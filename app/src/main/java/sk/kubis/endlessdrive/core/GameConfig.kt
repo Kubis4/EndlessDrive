@@ -57,8 +57,10 @@ object GameConfig {
     const val ACCEL = 14f
     const val BRAKE = 18f
     /** Valivý odpor (m/s²) – veľká fixná brzda pri nízkej rýchlosti. */
-    const val COAST_DRAG = 1.15f
-    const val AERO_DRAG = 0.014f
+    // Auto si má po pustení plynu zachovať rozbehnutú rýchlosť. Brzdenie
+    // odporom ostáva citeľné, ale krátky nájazd už nezmizne pred kopcom.
+    const val COAST_DRAG = 0.82f
+    const val AERO_DRAG = 0.011f
     const val STOP_SPEED = 1.0f
     /** Voľná výška stredu nad vozovkou pri stlačenom pružení. */
     const val CAR_RIDE_HEIGHT = 0.42f
@@ -205,6 +207,7 @@ object GameConfig {
     const val BLOWN_TYRE_HEALTH = 0.12f
     /** Scrap za záplatu defektu, keď hráč nemá puncture kit. */
     const val PUNCTURE_PATCH_SCRAP = 8
+    const val PUNCTURE_KIT_HEAL = 0.15f
     /** Strop rýchlosti na roztrhanej gume (m/s). */
     const val BLOWN_TYRE_MAX_SPEED = 7f
     /** O koľko °C nižšie drží motor v mraze. */
@@ -273,6 +276,15 @@ object GameConfig {
     const val WEAR_ENGINE_IDLE = 0.00007f
     /** Elektrika a chladič starnú najpomalšie. */
     const val WEAR_AUX = 0.00005f
+    /** Nad touto rýchlosťou rastie opotrebenie nelineárne. */
+    const val HIGH_SPEED_WEAR_START = 28f
+    const val HIGH_SPEED_WEAR_GAIN = 0.055f
+
+    // --- Bezpečný štart ---
+    const val START_FUEL_MIN = 10f
+    const val START_FUEL_MAX = 20f
+    const val START_OIL_MIN = 1.0f
+    const val START_COOLANT_MIN = 1.8f
 
     // --- Nečakané udalosti ---
     /** Rozsah pauzy medzi udalosťami (s). */
@@ -303,11 +315,6 @@ object GameConfig {
     const val ROOF_LIGHT_DRAIN_MULTIPLIER = 0.42f
     /** Nabíjanie alternátorom počas jazdy. */
     const val ALTERNATOR_CHARGE = 0.015f
-    /**
-     * Max SoC, ktoré vie alternátor udržať, je približne jeho zdravie.
-     * Malý slack, aby 56 % diel nesadol presne na 56,000 %.
-     */
-    const val ALTERNATOR_SOC_SLACK = 0.04f
     /** Zapaľovanie, čerpadlá a palubná elektrika pri bežiacom motore. */
     const val RUNNING_ELECTRICAL_DRAIN = 0.002f
     /** Pod touto hodnotou denného svetla treba svetlá (iba skutočná tma). */

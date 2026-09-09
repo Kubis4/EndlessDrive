@@ -369,6 +369,11 @@ object LootGenerator {
             if (e.def.id == ItemCatalog.DRIVE_AWD.id) {
                 rarityBoost *= MathX.growth(distance, 2800f).coerceIn(0.02f, 1.6f)
             }
+            // Silný motor má byť cieľ za servisom a kilometrami, nie náhoda
+            // v prvom meste. Výnimkou je iba garantovaný poškodený kus pri
+            // štarte, ktorý dodáva GameEngine.
+            if (e.def.id == ItemCatalog.ENGINE_E.id && distance < 15_000f) rarityBoost = 0f
+            if (e.def.id == ItemCatalog.ENGINE_B.id && distance < 6_000f) rarityBoost *= 0.12f
             // Zimná výbava sa objaví o kúsok skôr, než začne mrznúť – aby sa
             // hráč stihol pripraviť, nie aby ju zháňal už v snehu.
             if (e.def.id == ItemCatalog.TIRE_WINTER.id || e.def.id == ItemCatalog.SNOW_CHAINS.id) {

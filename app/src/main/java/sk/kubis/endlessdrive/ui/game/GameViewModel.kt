@@ -18,6 +18,7 @@ import sk.kubis.endlessdrive.domain.model.FluidType
 import sk.kubis.endlessdrive.domain.model.FuelKind
 import sk.kubis.endlessdrive.domain.model.GamePhase
 import sk.kubis.endlessdrive.domain.model.ThrottleMode
+import sk.kubis.endlessdrive.domain.model.VehiclePaint
 import sk.kubis.endlessdrive.domain.repository.PlayerRepository
 import sk.kubis.endlessdrive.domain.repository.PlayerProfile
 import sk.kubis.endlessdrive.game.GameEngine
@@ -300,6 +301,7 @@ class GameViewModel(
             isNight = e.isNight,
             clock = e.clock,
             hasNearbyBuilding = e.buildingNear() != null,
+            lootableWreckAheadM = e.lootableWreckAheadDistanceM,
             canRest = e.canRest,
             exploring = e.phase == GamePhase.EXPLORING && e.activeBuilding != null,
             pumpFuelL = e.activeBuilding?.let { it.pumpFuelL + it.pumpDieselL } ?: 0f,
@@ -314,6 +316,7 @@ class GameViewModel(
             fullTankReached = e.hasReachedFullTank,
             fullUpgradeReached = e.hasReachedFullUpgrade,
             eventKindsSeen = e.eventKindsSeen,
+            activeEventKinds = e.activeEvents.map { it.event }.toSet(),
             fittedEngine = e.car.fittedHudLabel(ComponentSlot.ENGINE),
             fittedDrive = e.car.fittedHudLabel(ComponentSlot.DRIVETRAIN),
             fittedTires = "${e.car.fittedHudLabel(ComponentSlot.TIRE_FRONT)}/${e.car.fittedHudLabel(ComponentSlot.TIRE_REAR)}",
@@ -360,7 +363,7 @@ class GameViewModel(
     private fun partStatuses(e: GameEngine): List<PartStatus> {
         val car = e.car
         // Motor schytáva poškodenie z kvapalín a tepla; ostatné z jazdy.
-        val engineWearing = car.wearRate > 0.0008f
+        val engineWearing = car.wearRate > 0.0008f || e.hasEvent(sk.kubis.endlessdrive.game.event.RoadEvent.MISFIRE)
         val braking = e.brakeInput > 0.25f
         val slipping = car.wheelSlip > 0.25f
 
@@ -381,7 +384,12 @@ class GameViewModel(
         )
         return listOf(
             of("ENG", ComponentSlot.ENGINE, engineWearing),
-            of("RAD", ComponentSlot.RADIATOR, car.temperature > GameConfig.OVERHEAT_THRESHOLD - 6f),
+            of(
+                "RAD",
+                ComponentSlot.RADIATOR,
+                car.temperature > GameConfig.OVERHEAT_THRESHOLD - 6f ||
+                    e.hasEvent(sk.kubis.endlessdrive.game.event.RoadEvent.COOLANT_LEAK)
+            ),
             PartStatus(
                 tag = "TYRES",
                 label = "${car.fittedHudLabel(ComponentSlot.TIRE_FRONT)}/" +
@@ -393,7 +401,8 @@ class GameViewModel(
             ),
             of("BRK", ComponentSlot.BRAKES, braking),
             of("SUS", ComponentSlot.SUSPENSION),
-            of("BAT", ComponentSlot.BATTERY, e.headlightsOn)
+            of("BAT", ComponentSlot.BATTERY, e.headlightsOn),
+            of("HEAD", ComponentSlot.HEADLIGHT)
         )
     }
 
@@ -451,6 +460,14 @@ class GameViewModel(
         bumpBag()
     }
 
+    fun takeAllLoot() {
+        if (engine.takeAllLoot()) bumpBag() else bump()
+    }
+
+    fun scrapAllLoot() {
+        if (engine.scrapAllLoot()) bumpBag() else bump()
+    }
+
     fun discardItem(i: Int) {
         val ok = engine.discardInventoryItem(i)
         if (ok) bumpBag() else bump()
@@ -505,6 +522,14 @@ class GameViewModel(
     fun upgradeWithScrap(slot: ComponentSlot) {
         engine.upgradeWithScrap(slot)
         bumpBag()
+    }
+
+    fun paintBody(paint: VehiclePaint) {
+        if (engine.paintBody(paint)) bumpBag() else bump()
+    }
+
+    fun paintBodyFromAd(paint: VehiclePaint) {
+        if (engine.paintBodyFromRewardedAd(paint)) bumpBag() else bump()
     }
 
     fun drainFluid(fluid: FluidType, litres: Float? = null) {

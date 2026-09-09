@@ -183,17 +183,19 @@ fun SideIcons(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        AutomotiveIconToggleButton(
-            if (ui.highBeamsOn) AutomotiveIcon.HIGH_BEAM else AutomotiveIcon.LOW_BEAM,
-            ui.headlightsOn,
-            onToggleLights,
-            activeColor = if (ui.highBeamsOn) Color(0xFF4D8DFF) else Color(0xFF45C96B),
-            label = when {
-                !ui.headlightsOn -> "Switch on low beams"
-                !ui.highBeamsOn -> "Switch on high beams"
-                else -> "Switch headlights off"
-            }
-        )
+        if (ui.parts.firstOrNull { it.tag == "HEAD" }?.fitted == true) {
+            AutomotiveIconToggleButton(
+                if (ui.highBeamsOn) AutomotiveIcon.HIGH_BEAM else AutomotiveIcon.LOW_BEAM,
+                ui.headlightsOn,
+                onToggleLights,
+                activeColor = if (ui.highBeamsOn) Color(0xFF4D8DFF) else Color(0xFF45C96B),
+                label = when {
+                    !ui.headlightsOn -> "Switch on low beams"
+                    !ui.highBeamsOn -> "Switch on high beams"
+                    else -> "Switch headlights off"
+                }
+            )
+        }
         if (ui.hasExpeditionKit) {
             AutomotiveIconToggleButton(
                 AutomotiveIcon.ROOF_LIGHT,
