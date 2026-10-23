@@ -1,0 +1,72 @@
+[gd_scene format=3]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_afdku"]
+resource_name = "Desert_cactus"
+albedo_color = Color(0.3764706, 0.4117647, 0.2784314, 1)
+roughness = 0.9
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_jcw5g"]
+top_radius = 0.15
+bottom_radius = 0.23
+height = 3.2
+radial_segments = 7
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_cqayj"]
+top_radius = 0.14
+bottom_radius = 0.14
+height = 0.6609841
+radial_segments = 5
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_vtit0"]
+top_radius = 0.1
+bottom_radius = 0.145
+height = 1.1
+radial_segments = 7
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_6sx1i"]
+top_radius = 0.14
+bottom_radius = 0.14
+height = 0.6609841
+radial_segments = 5
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_hr6d2"]
+top_radius = 0.1
+bottom_radius = 0.145
+height = 1.1
+radial_segments = 7
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_0uf2p"]
+size = Vector3(0.45, 2.8, 0.45)
+
+[node name="Saguaro" type="Node3D" unique_id=2144695631]
+
+[node name="Trunk" type="MeshInstance3D" parent="." unique_id=903022317]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
+material_override = SubResource("StandardMaterial3D_afdku")
+mesh = SubResource("CylinderMesh_jcw5g")
+
+[node name="Arm" type="MeshInstance3D" parent="." unique_id=139531869]
+transform = Transform3D(0.18154752, -0.98338217, 0, 0.98338217, 0.18154752, 0, 0, 0, 1, -0.325, 1.3599999, 0)
+material_override = SubResource("StandardMaterial3D_afdku")
+mesh = SubResource("CylinderMesh_cqayj")
+
+[node name="ArmTip" type="MeshInstance3D" parent="." unique_id=1749089769]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.65, 1.85, 0)
+material_override = SubResource("StandardMaterial3D_afdku")
+mesh = SubResource("CylinderMesh_vtit0")
+
+[node name="Arm2" type="MeshInstance3D" parent="." unique_id=1629671730]
+transform = Transform3D(0.18154752, 0.98338217, 0, -0.98338217, 0.18154752, 0, 0, 0, 1, 0.325, 1.8599999, 0)
+material_override = SubResource("StandardMaterial3D_afdku")
+mesh = SubResource("CylinderMesh_6sx1i")
+
+[node name="ArmTip2" type="MeshInstance3D" parent="." unique_id=518282604]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.65, 2.35, 0)
+material_override = SubResource("StandardMaterial3D_afdku")
+mesh = SubResource("CylinderMesh_hr6d2")
+
+[node name="Collision" type="StaticBody3D" parent="." unique_id=1170554439]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4, 0)
+
+[node name="@CollisionShape3D@3" type="CollisionShape3D" parent="Collision" unique_id=1431822389]
+shape = SubResource("BoxShape3D_0uf2p")

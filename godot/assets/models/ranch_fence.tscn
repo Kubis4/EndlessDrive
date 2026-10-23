@@ -1,0 +1,108 @@
+[gd_scene format=3]
+
+[ext_resource type="Shader" path="res://shaders/desert_paint.gdshader" id="1_x5wvt"]
+[ext_resource type="Texture2D" path="res://assets/textures/desert-materials.png" id="2_6uqr4"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ki176"]
+resource_name = "Desert_wood"
+albedo_color = Color(0.4117647, 0.3254902, 0.22745098, 1)
+roughness = 0.9
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_pnm0j"]
+top_radius = 0.065
+bottom_radius = 0.065
+height = 1.8552897
+radial_segments = 5
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_dhv8k"]
+top_radius = 0.065
+bottom_radius = 0.065
+height = 1.8552897
+radial_segments = 5
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_wgb2d"]
+resource_name = "Desert_steel"
+render_priority = 0
+shader = ExtResource("1_x5wvt")
+shader_parameter/atlas = ExtResource("2_6uqr4")
+shader_parameter/tint = Color(0.39215687, 0.41568628, 0.3764706, 1)
+shader_parameter/tile = Vector2(0, 1)
+shader_parameter/metalness = 0.35
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_30gtu"]
+top_radius = 0.016
+bottom_radius = 0.016
+height = 2.5033777
+radial_segments = 5
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_fjqi8"]
+top_radius = 0.016
+bottom_radius = 0.016
+height = 2.5033777
+radial_segments = 5
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_adqfy"]
+top_radius = 0.016
+bottom_radius = 0.016
+height = 2.5033777
+radial_segments = 5
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_qu0th"]
+top_radius = 0.016
+bottom_radius = 0.016
+height = 2.5033777
+radial_segments = 5
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_8ft7f"]
+top_radius = 0.016
+bottom_radius = 0.016
+height = 2.5033777
+radial_segments = 5
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_hhb4o"]
+top_radius = 0.016
+bottom_radius = 0.016
+height = 2.5033777
+radial_segments = 5
+
+[node name="RanchWireFence" type="Node3D" unique_id=686227808]
+
+[node name="FencePost" type="MeshInstance3D" parent="." unique_id=1775749028]
+transform = Transform3D(0.9971488, -0.07545991, 0, 0.07545991, 0.9971488, 0, 0, 0, 1, -0.07, 0.925, 0)
+material_override = SubResource("StandardMaterial3D_ki176")
+mesh = SubResource("CylinderMesh_pnm0j")
+
+[node name="FencePost2" type="MeshInstance3D" parent="." unique_id=9140232]
+transform = Transform3D(0.9971489, -0.07545984, 0, 0.07545984, 0.9971489, 0, 0, 0, 1, 4.9300003, 0.925, 0)
+material_override = SubResource("StandardMaterial3D_ki176")
+mesh = SubResource("CylinderMesh_dhv8k")
+
+[node name="FenceWire" type="MeshInstance3D" parent="." unique_id=2953907]
+transform = Transform3D(-0.05192983, 0.9986508, 0, -0.9986508, -0.05192983, 0, 0, 0, 1, 1.25, 0.485, 0)
+material_override = SubResource("ShaderMaterial_wgb2d")
+mesh = SubResource("CylinderMesh_30gtu")
+
+[node name="FenceWire2" type="MeshInstance3D" parent="." unique_id=617496146]
+transform = Transform3D(0.05192989, 0.9986507, 0, -0.9986507, 0.05192989, 0, 0, 0, 1, 3.75, 0.485, 0)
+material_override = SubResource("ShaderMaterial_wgb2d")
+mesh = SubResource("CylinderMesh_fjqi8")
+
+[node name="FenceWire3" type="MeshInstance3D" parent="." unique_id=365859449]
+transform = Transform3D(-0.05192983, 0.9986508, 0, -0.9986508, -0.05192983, 0, 0, 0, 1, 1.25, 1.0350001, 0)
+material_override = SubResource("ShaderMaterial_wgb2d")
+mesh = SubResource("CylinderMesh_adqfy")
+
+[node name="FenceWire4" type="MeshInstance3D" parent="." unique_id=1454662869]
+transform = Transform3D(0.05192989, 0.9986507, 0, -0.9986507, 0.05192989, 0, 0, 0, 1, 3.75, 1.0350001, 0)
+material_override = SubResource("ShaderMaterial_wgb2d")
+mesh = SubResource("CylinderMesh_qu0th")
+
+[node name="FenceWire5" type="MeshInstance3D" parent="." unique_id=1959752250]
+transform = Transform3D(-0.05192983, 0.9986508, 0, -0.9986508, -0.05192983, 0, 0, 0, 1, 1.25, 1.585, 0)
+material_override = SubResource("ShaderMaterial_wgb2d")
+mesh = SubResource("CylinderMesh_8ft7f")
+
+[node name="FenceWire6" type="MeshInstance3D" parent="." unique_id=1400024289]
+transform = Transform3D(0.05192989, 0.9986507, 0, -0.9986507, 0.05192989, 0, 0, 0, 1, 3.75, 1.585, 0)
+material_override = SubResource("ShaderMaterial_wgb2d")
+mesh = SubResource("CylinderMesh_hhb4o")

@@ -1,0 +1,40 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/vehicle.gd" id="1"]
+[ext_resource type="PackedScene" path="res://assets/models/jeep/jeep_cherokee.tscn" id="2"]
+[ext_resource type="Shape3D" path="res://assets/models/jeep/jeep_chassis.res" id="3"]
+
+[sub_resource type="CylinderShape3D" id="TyreContact"]
+radius = 0.44
+height = 0.286
+
+[node name="Vehicle" type="CharacterBody3D"]
+script = ExtResource("1")
+floor_snap_length = 0.8
+floor_max_angle = 0.837758
+floor_constant_speed = true
+
+[node name="ChassisCollision" type="CollisionShape3D" parent="."]
+shape = ExtResource("3")
+
+[node name="Contact_F_L" type="CollisionShape3D" parent="."]
+position = Vector3(1.48, 0, 0.803008)
+rotation = Vector3(1.5707964, 0, 0)
+shape = SubResource("TyreContact")
+
+[node name="Contact_F_R" type="CollisionShape3D" parent="."]
+position = Vector3(1.48, 0, -0.802976)
+rotation = Vector3(1.5707964, 0, 0)
+shape = SubResource("TyreContact")
+
+[node name="Contact_R_L" type="CollisionShape3D" parent="."]
+position = Vector3(-1.48, 0, 0.803009)
+rotation = Vector3(1.5707964, 0, 0)
+shape = SubResource("TyreContact")
+
+[node name="Contact_R_R" type="CollisionShape3D" parent="."]
+position = Vector3(-1.48, 0, -0.802976)
+rotation = Vector3(1.5707964, 0, 0)
+shape = SubResource("TyreContact")
+
+[node name="Visual" parent="." instance=ExtResource("2")]

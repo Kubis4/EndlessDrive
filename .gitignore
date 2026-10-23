@@ -28,3 +28,7 @@ local.properties
 /builds/
 /cad/
 /.codex_repair_all_icons.py
+
+# Godot import cache and local export output.
+/godot/.godot/
+/godot/export/

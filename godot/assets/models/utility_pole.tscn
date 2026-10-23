@@ -1,0 +1,74 @@
+[gd_scene format=3]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ki176"]
+resource_name = "Desert_wood"
+albedo_color = Color(0.4117647, 0.3254902, 0.22745098, 1)
+roughness = 0.9
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_emqu0"]
+top_radius = 0.1
+bottom_radius = 0.16
+height = 9.6
+radial_segments = 6
+
+[sub_resource type="BoxMesh" id="BoxMesh_0i8pu"]
+size = Vector3(0.16, 0.18, 3.1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_nnc3g"]
+resource_name = "Desert_glass"
+albedo_color = Color(0.20784314, 0.29803923, 0.3137255, 1)
+roughness = 0.9
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_qy2l8"]
+top_radius = 0.1
+bottom_radius = 0.1
+height = 0.28
+radial_segments = 6
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_1myll"]
+top_radius = 0.1
+bottom_radius = 0.1
+height = 0.28
+radial_segments = 6
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_kyuxv"]
+top_radius = 0.1
+bottom_radius = 0.1
+height = 0.28
+radial_segments = 6
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_1aqf0"]
+size = Vector3(0.32, 9, 0.32)
+
+[node name="DesertUtilityPole" type="Node3D" unique_id=1860972734]
+
+[node name="TimberPole" type="MeshInstance3D" parent="." unique_id=471130722]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.8, 0)
+material_override = SubResource("StandardMaterial3D_ki176")
+mesh = SubResource("CylinderMesh_emqu0")
+
+[node name="CrossArm" type="MeshInstance3D" parent="." unique_id=1313741205]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8.85, 0)
+material_override = SubResource("StandardMaterial3D_ki176")
+mesh = SubResource("BoxMesh_0i8pu")
+
+[node name="Insulator" type="MeshInstance3D" parent="." unique_id=1705186614]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 9.08, -1.25)
+material_override = SubResource("StandardMaterial3D_nnc3g")
+mesh = SubResource("CylinderMesh_qy2l8")
+
+[node name="Insulator2" type="MeshInstance3D" parent="." unique_id=1403621078]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 9.08, 0)
+material_override = SubResource("StandardMaterial3D_nnc3g")
+mesh = SubResource("CylinderMesh_1myll")
+
+[node name="Insulator3" type="MeshInstance3D" parent="." unique_id=849654030]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 9.08, 1.25)
+material_override = SubResource("StandardMaterial3D_nnc3g")
+mesh = SubResource("CylinderMesh_kyuxv")
+
+[node name="Collision" type="StaticBody3D" parent="." unique_id=1427828456]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.5, 0)
+
+[node name="@CollisionShape3D@5" type="CollisionShape3D" parent="Collision" unique_id=1298654153]
+shape = SubResource("BoxShape3D_1aqf0")

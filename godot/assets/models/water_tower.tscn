@@ -1,0 +1,122 @@
+[gd_scene format=3]
+
+[ext_resource type="Shader" path="res://shaders/desert_paint.gdshader" id="1_d3hle"]
+[ext_resource type="Texture2D" path="res://assets/textures/desert-materials.png" id="2_i8ien"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ki176"]
+resource_name = "Desert_wood"
+albedo_color = Color(0.4117647, 0.3254902, 0.22745098, 1)
+roughness = 0.9
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_7x0fc"]
+top_radius = 0.09
+bottom_radius = 0.09
+height = 5.728001
+radial_segments = 5
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_eujla"]
+top_radius = 0.09
+bottom_radius = 0.09
+height = 5.728001
+radial_segments = 5
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_mqvoa"]
+top_radius = 0.09
+bottom_radius = 0.09
+height = 5.728001
+radial_segments = 5
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_ncctx"]
+top_radius = 0.09
+bottom_radius = 0.09
+height = 5.728001
+radial_segments = 5
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_a10cp"]
+top_radius = 0.055
+bottom_radius = 0.055
+height = 4.710626
+radial_segments = 5
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_28v1s"]
+top_radius = 0.055
+bottom_radius = 0.055
+height = 4.710626
+radial_segments = 5
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_wgb2d"]
+resource_name = "Desert_steel"
+render_priority = 0
+shader = ExtResource("1_d3hle")
+shader_parameter/atlas = ExtResource("2_i8ien")
+shader_parameter/tint = Color(0.39215687, 0.41568628, 0.3764706, 1)
+shader_parameter/tile = Vector2(0, 1)
+shader_parameter/metalness = 0.35
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_tajnm"]
+top_radius = 1.8
+bottom_radius = 1.8
+height = 2.8
+radial_segments = 10
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_7l2fa"]
+resource_name = "Desert_rock_top"
+albedo_color = Color(0.7254902, 0.627451, 0.47843137, 1)
+roughness = 0.9
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_4pg4d"]
+top_radius = 0.6
+bottom_radius = 1.95
+height = 0.38
+radial_segments = 10
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_jbuic"]
+size = Vector3(2.5, 6.4, 2.5)
+
+[node name="OutpostWaterTower" type="Node3D" unique_id=68122703]
+
+[node name="TowerLeg" type="MeshInstance3D" parent="." unique_id=1244867939]
+transform = Transform3D(0.99755573, 0.06983239, -0.0024442559, -0.06983239, 0.99511147, -0.06983239, -0.0024442559, 0.06983239, 0.99755573, -1.2, 2.85, -1.2)
+material_override = SubResource("StandardMaterial3D_ki176")
+mesh = SubResource("CylinderMesh_7x0fc")
+
+[node name="TowerLeg2" type="MeshInstance3D" parent="." unique_id=107853049]
+transform = Transform3D(0.99755573, 0.06983239, 0.0024442559, -0.06983239, 0.99511147, 0.06983239, 0.0024442559, -0.06983239, 0.99755573, -1.2, 2.85, 1.2)
+material_override = SubResource("StandardMaterial3D_ki176")
+mesh = SubResource("CylinderMesh_eujla")
+
+[node name="TowerLeg3" type="MeshInstance3D" parent="." unique_id=1776821389]
+transform = Transform3D(0.99755573, -0.06983239, 0.0024442559, 0.06983239, 0.99511147, -0.06983239, 0.0024442559, 0.06983239, 0.99755573, 1.2, 2.85, -1.2)
+material_override = SubResource("StandardMaterial3D_ki176")
+mesh = SubResource("CylinderMesh_mqvoa")
+
+[node name="TowerLeg4" type="MeshInstance3D" parent="." unique_id=6579934]
+transform = Transform3D(0.99755573, -0.06983239, -0.0024442559, 0.06983239, 0.99511147, 0.06983239, -0.0024442559, -0.06983239, 0.99755573, 1.2, 2.85, 1.2)
+material_override = SubResource("StandardMaterial3D_ki176")
+mesh = SubResource("CylinderMesh_ncctx")
+
+[node name="DiagonalBrace" type="MeshInstance3D" parent="." unique_id=255951736]
+transform = Transform3D(0.87254107, 0.4882578, -0.016625075, -0.4882578, 0.8703726, -0.0636858, -0.016625075, 0.0636858, 0.9978315, -0.14999998, 3.05, -1.15)
+material_override = SubResource("StandardMaterial3D_ki176")
+mesh = SubResource("CylinderMesh_a10cp")
+
+[node name="DiagonalBrace2" type="MeshInstance3D" parent="." unique_id=1935359559]
+transform = Transform3D(0.87254107, 0.4882578, 0.016625075, -0.4882578, 0.8703726, 0.0636858, 0.016625075, -0.0636858, 0.9978315, -0.14999998, 3.05, 1.15)
+material_override = SubResource("StandardMaterial3D_ki176")
+mesh = SubResource("CylinderMesh_28v1s")
+
+[node name="WaterTank" type="MeshInstance3D" parent="." unique_id=1810514731]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6.3, 0)
+material_override = SubResource("ShaderMaterial_wgb2d")
+mesh = SubResource("CylinderMesh_tajnm")
+
+[node name="TankRoof" type="MeshInstance3D" parent="." unique_id=671920649]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 7.85, 0)
+material_override = SubResource("StandardMaterial3D_7l2fa")
+mesh = SubResource("CylinderMesh_4pg4d")
+
+[node name="Collision" type="StaticBody3D" parent="." unique_id=1801661949]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.2, 0)
+
+[node name="@CollisionShape3D@6" type="CollisionShape3D" parent="Collision" unique_id=1539798233]
+shape = SubResource("BoxShape3D_jbuic")

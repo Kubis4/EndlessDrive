@@ -1,5 +1,24 @@
 # Endless Drive
 
+## Godot migration
+
+The first playable Godot 4.7.2 migration slice is in [`godot/`](godot/README.md).
+Open [`godot/project.godot`](godot/project.godot) in Godot and press **F5**, or
+run `./tools/godot.ps1 Editor` from PowerShell. It includes a playable road,
+a user-supplied Jeep Cherokee, new environment models/materials, basic survival/service systems
+and its own saves. The camera uses a high fixed oblique view.
+The latest Godot preview adds a main menu and persistent starting-car upgrades,
+typed components/quality loot, sparse themed stops, permanent route choices,
+threaded terrain streaming, weather/dust chases, surface effects, bridges,
+tunnels and a moving train crossing. See the migration README for verification
+and the intentionally smaller scope than the full Android game.
+See its README for implemented scope and systems still awaiting migration.
+For visual editing of the Godot scenes and UI, see the Slovak
+[editor guide](godot/EDITOR.md).
+The Jeep by Renafox is CC BY-NC-SA 4.0 (non-commercial); see its
+[asset attribution](godot/assets/models/jeep/ATTRIBUTION.md) before distributing the game.
+The Android Studio project below remains available during the transition.
+
 Endless Drive is a 3D mobile survival-driving game about keeping an old car
 alive on a road that never seems to end.
 

@@ -1,0 +1,236 @@
+[gd_scene format=3]
+
+[ext_resource type="Shader" path="res://shaders/desert_paint.gdshader" id="1_dqgvu"]
+[ext_resource type="Texture2D" path="res://assets/textures/desert-materials.png" id="2_dcw4w"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pc31v"]
+resource_name = "Desert_rock"
+albedo_color = Color(0.60784316, 0.52156866, 0.40392157, 1)
+roughness = 0.9
+
+[sub_resource type="BoxMesh" id="BoxMesh_54heh"]
+size = Vector3(10.3, 0.24, 7.3)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_mbduk"]
+resource_name = "Desert_adobe"
+albedo_color = Color(0.6666667, 0.57254905, 0.4392157, 1)
+roughness = 0.9
+
+[sub_resource type="BoxMesh" id="BoxMesh_3m7ho"]
+size = Vector3(10, 3.5, 7)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_s6iea"]
+resource_name = "Desert_plaster"
+render_priority = 0
+shader = ExtResource("1_dqgvu")
+shader_parameter/atlas = ExtResource("2_dcw4w")
+shader_parameter/tint = Color(0.7647059, 0.6784314, 0.5294118, 1)
+shader_parameter/tile = Vector2(1, 1)
+shader_parameter/metalness = 0.05
+
+[sub_resource type="BoxMesh" id="BoxMesh_q31a3"]
+size = Vector3(9.9, 3.32, 0.08)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_7l2fa"]
+resource_name = "Desert_rock_top"
+albedo_color = Color(0.7254902, 0.627451, 0.47843137, 1)
+roughness = 0.9
+
+[sub_resource type="BoxMesh" id="BoxMesh_1t28a"]
+size = Vector3(10.5, 0.3, 7.5)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ki176"]
+resource_name = "Desert_wood"
+albedo_color = Color(0.4117647, 0.3254902, 0.22745098, 1)
+roughness = 0.9
+
+[sub_resource type="BoxMesh" id="BoxMesh_7r241"]
+size = Vector3(3.9, 2.5, 0.09)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_wgb2d"]
+resource_name = "Desert_steel"
+render_priority = 0
+shader = ExtResource("1_dqgvu")
+shader_parameter/atlas = ExtResource("2_dcw4w")
+shader_parameter/tint = Color(0.39215687, 0.41568628, 0.3764706, 1)
+shader_parameter/tile = Vector2(0, 1)
+shader_parameter/metalness = 0.35
+
+[sub_resource type="BoxMesh" id="BoxMesh_1qiv7"]
+size = Vector3(0.12, 2.6, 0.16)
+
+[sub_resource type="BoxMesh" id="BoxMesh_wsem6"]
+size = Vector3(0.12, 2.6, 0.16)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_nnc3g"]
+resource_name = "Desert_glass"
+albedo_color = Color(0.20784314, 0.29803923, 0.3137255, 1)
+roughness = 0.9
+
+[sub_resource type="BoxMesh" id="BoxMesh_agal4"]
+size = Vector3(1.3, 0.9, 0.12)
+
+[sub_resource type="BoxMesh" id="BoxMesh_773gu"]
+size = Vector3(1.58, 0.14, 0.2)
+
+[sub_resource type="BoxMesh" id="BoxMesh_pkk84"]
+size = Vector3(1.3, 0.9, 0.12)
+
+[sub_resource type="BoxMesh" id="BoxMesh_osrqx"]
+size = Vector3(1.58, 0.14, 0.2)
+
+[sub_resource type="BoxMesh" id="BoxMesh_qq20u"]
+size = Vector3(5.4, 0.12, 2.1)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_p1ini"]
+top_radius = 0.07
+bottom_radius = 0.07
+height = 2.75
+radial_segments = 5
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_ur75m"]
+top_radius = 0.07
+bottom_radius = 0.07
+height = 2.75
+radial_segments = 5
+
+[sub_resource type="BoxMesh" id="BoxMesh_f14bi"]
+size = Vector3(10.7, 0.14, 0.13)
+
+[sub_resource type="BoxMesh" id="BoxMesh_kcfs0"]
+size = Vector3(10.7, 0.14, 0.13)
+
+[sub_resource type="BoxMesh" id="BoxMesh_nub51"]
+size = Vector3(10.7, 0.14, 0.13)
+
+[sub_resource type="BoxMesh" id="BoxMesh_58ao5"]
+size = Vector3(10.7, 0.14, 0.13)
+
+[sub_resource type="BoxMesh" id="BoxMesh_imagq"]
+size = Vector3(0.65, 1.2, 0.65)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_8ge4q"]
+resource_name = "Desert_accent"
+albedo_color = Color(0.6509804, 0.43137255, 0.2627451, 1)
+roughness = 0.9
+
+[sub_resource type="BoxMesh" id="BoxMesh_mevf6"]
+size = Vector3(3.5, 0.48, 0.1)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_uvkjx"]
+size = Vector3(10, 3.5, 7)
+
+[node name="AdobeWorkshop" type="Node3D" unique_id=1192772856]
+
+[node name="StoneFooting" type="MeshInstance3D" parent="." unique_id=2027418375]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.12, 0)
+material_override = SubResource("StandardMaterial3D_pc31v")
+mesh = SubResource("BoxMesh_54heh")
+
+[node name="EarthenWalls" type="MeshInstance3D" parent="." unique_id=349849953]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.75, 0)
+material_override = SubResource("StandardMaterial3D_mbduk")
+mesh = SubResource("BoxMesh_3m7ho")
+
+[node name="PlasterFront" type="MeshInstance3D" parent="." unique_id=501542300]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 3.52)
+material_override = SubResource("ShaderMaterial_s6iea")
+mesh = SubResource("BoxMesh_q31a3")
+
+[node name="RoofParapet" type="MeshInstance3D" parent="." unique_id=328288838]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.57, 0)
+material_override = SubResource("StandardMaterial3D_7l2fa")
+mesh = SubResource("BoxMesh_1t28a")
+
+[node name="WorkshopDoor" type="MeshInstance3D" parent="." unique_id=932134938]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.25, 3.6)
+material_override = SubResource("StandardMaterial3D_ki176")
+mesh = SubResource("BoxMesh_7r241")
+
+[node name="DoorPost" type="MeshInstance3D" parent="." unique_id=1226446780]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.9, 1.3, 3.68)
+material_override = SubResource("ShaderMaterial_wgb2d")
+mesh = SubResource("BoxMesh_1qiv7")
+
+[node name="DoorPost2" type="MeshInstance3D" parent="." unique_id=239027605]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.9, 1.3, 3.68)
+material_override = SubResource("ShaderMaterial_wgb2d")
+mesh = SubResource("BoxMesh_wsem6")
+
+[node name="WindowRecess" type="MeshInstance3D" parent="." unique_id=168166078]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.65, 1.9, 3.62)
+material_override = SubResource("StandardMaterial3D_nnc3g")
+mesh = SubResource("BoxMesh_agal4")
+
+[node name="WindowLintel" type="MeshInstance3D" parent="." unique_id=376463145]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.65, 2.41, 3.68)
+material_override = SubResource("StandardMaterial3D_ki176")
+mesh = SubResource("BoxMesh_773gu")
+
+[node name="WindowRecess2" type="MeshInstance3D" parent="." unique_id=1875226038]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.65, 1.9, 3.62)
+material_override = SubResource("StandardMaterial3D_nnc3g")
+mesh = SubResource("BoxMesh_pkk84")
+
+[node name="WindowLintel2" type="MeshInstance3D" parent="." unique_id=862155860]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.65, 2.41, 3.68)
+material_override = SubResource("StandardMaterial3D_ki176")
+mesh = SubResource("BoxMesh_osrqx")
+
+[node name="CorrugatedAwning" type="MeshInstance3D" parent="." unique_id=566143898]
+transform = Transform3D(1, 0, 0, 0, 0.9939561, -0.1097783, 0, 0.1097783, 0.9939561, 0, 2.9, 4.4)
+material_override = SubResource("ShaderMaterial_wgb2d")
+mesh = SubResource("BoxMesh_qq20u")
+
+[node name="AwningSupport" type="MeshInstance3D" parent="." unique_id=210810645]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.45, 1.375, 5.15)
+material_override = SubResource("StandardMaterial3D_ki176")
+mesh = SubResource("CylinderMesh_p1ini")
+
+[node name="AwningSupport2" type="MeshInstance3D" parent="." unique_id=1707837266]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.45, 1.375, 5.15)
+material_override = SubResource("StandardMaterial3D_ki176")
+mesh = SubResource("CylinderMesh_ur75m")
+
+[node name="RoofJoist" type="MeshInstance3D" parent="." unique_id=2036671789]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.8, -2.4)
+material_override = SubResource("StandardMaterial3D_ki176")
+mesh = SubResource("BoxMesh_f14bi")
+
+[node name="RoofJoist2" type="MeshInstance3D" parent="." unique_id=1684340705]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.8, -1.1)
+material_override = SubResource("StandardMaterial3D_ki176")
+mesh = SubResource("BoxMesh_kcfs0")
+
+[node name="RoofJoist3" type="MeshInstance3D" parent="." unique_id=266699461]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.8, 0.2)
+material_override = SubResource("StandardMaterial3D_ki176")
+mesh = SubResource("BoxMesh_nub51")
+
+[node name="RoofJoist4" type="MeshInstance3D" parent="." unique_id=20167171]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.8, 1.5)
+material_override = SubResource("StandardMaterial3D_ki176")
+mesh = SubResource("BoxMesh_58ao5")
+
+[node name="Chimney" type="MeshInstance3D" parent="." unique_id=623275065]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.4, 4.15, -1.8)
+material_override = SubResource("StandardMaterial3D_mbduk")
+mesh = SubResource("BoxMesh_imagq")
+
+[node name="FadedSign" type="MeshInstance3D" parent="." unique_id=860810186]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.1, 3.7)
+material_override = SubResource("StandardMaterial3D_8ge4q")
+mesh = SubResource("BoxMesh_mevf6")
+
+[node name="WorkshopSign" type="Label3D" parent="." unique_id=2054209191]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.1, 3.77)
+pixel_size = 0.006
+modulate = Color(0.8901961, 0.8117647, 0.64705884, 1)
+text = "SERVIS"
+font_size = 48
+
+[node name="Collision" type="StaticBody3D" parent="." unique_id=1415823930]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.75, 0)
+
+[node name="@CollisionShape3D@2" type="CollisionShape3D" parent="Collision" unique_id=1871029889]
+shape = SubResource("BoxShape3D_uvkjx")

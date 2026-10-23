@@ -1,0 +1,14 @@
+[gd_resource type="ShaderMaterial" load_steps=5 format=3]
+
+[ext_resource type="Shader" path="res://shaders/jeep_paint.gdshader" id="1"]
+[ext_resource type="Texture2D" path="res://assets/models/jeep/jeep_cherokee_0.png" id="2"]
+[ext_resource type="Texture2D" path="res://assets/models/jeep/jeep_cherokee_1.png" id="3"]
+[ext_resource type="Texture2D" path="res://assets/models/jeep/jeep_cherokee_2.png" id="4"]
+
+[resource]
+resource_name = "Desert_paint"
+shader = ExtResource("1")
+shader_parameter/albedo_map = ExtResource("2")
+shader_parameter/orm_map = ExtResource("3")
+shader_parameter/normal_map = ExtResource("4")
+shader_parameter/tint = Color(0.72549, 0.72941, 0.66667, 1)
