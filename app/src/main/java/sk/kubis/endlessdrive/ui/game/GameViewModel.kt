@@ -2,7 +2,6 @@ package sk.kubis.endlessdrive.ui.game
 
 import androidx.compose.runtime.getValue
 import sk.kubis.endlessdrive.core.GameConfig
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
@@ -13,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import sk.kubis.endlessdrive.core.MathX
+import sk.kubis.endlessdrive.domain.model.AppLanguage
 import sk.kubis.endlessdrive.domain.model.ComponentSlot
 import sk.kubis.endlessdrive.domain.model.FluidType
 import sk.kubis.endlessdrive.domain.model.FuelKind
@@ -21,7 +21,11 @@ import sk.kubis.endlessdrive.domain.model.ThrottleMode
 import sk.kubis.endlessdrive.domain.model.VehiclePaint
 import sk.kubis.endlessdrive.domain.repository.PlayerRepository
 import sk.kubis.endlessdrive.domain.repository.PlayerProfile
+import sk.kubis.endlessdrive.domain.repository.GarageUpgrades
 import sk.kubis.endlessdrive.game.GameEngine
+import sk.kubis.endlessdrive.ui.l10n.adNotReady
+import sk.kubis.endlessdrive.ui.l10n.fittedHudLabel
+import sk.kubis.endlessdrive.ui.l10n.wearWarning
 import sk.kubis.endlessdrive.game.Journey
 import sk.kubis.endlessdrive.game.save.RunCodec
 import sk.kubis.endlessdrive.domain.model.DebugOptions
@@ -42,13 +46,26 @@ class GameViewModel(
     /** Schéma plynu z nastavení – mení sa hneď, aj uprostred jazdy. */
     var throttleMode: ThrottleMode = ThrottleMode.BINARY
 
+    /** Jazyk hlášok enginu – mení sa hneď. */
+    var language: AppLanguage = AppLanguage.ENGLISH
+        set(value) {
+            field = value
+            engine.language = value
+        }
+
     private var engine: GameEngine by mutableStateOf(
-        GameEngine(Random.nextLong(), bestDistanceKm, metaRelayNodes = initialProfile.relayNodes)
+        GameEngine(
+            Random.nextLong(),
+            bestDistanceKm,
+            metaRelayNodes = initialProfile.relayNodes,
+            garageUpgrades = initialProfile.garageUpgrades
+        )
     )
     private var recorded = false
     private var bestKm = bestDistanceKm
     private var bankedScrap = initialProfile.bankedScrap
     private var relayNodes = initialProfile.relayNodes.coerceIn(0, META_RELAY_COUNT)
+    private var garageUpgrades = initialProfile.garageUpgrades
     /** Odmena x2 sa iba pripraví; do skladu sa pripíše pri ukončení jazdy. */
     private var scrapDoubled = false
     private var hudTimer = 0f
@@ -57,26 +74,32 @@ class GameViewModel(
     /** CAR / PACK – herný čas aj odber batérie stoja. */
     private var garageOpen = false
     private var bagRevision = 0
-
     // Kĺzavý priemer snímkovej frekvencie pre HUD.
     private var fpsAccum = 0f
     private var fpsFrames = 0
     private var fps = 0
-    /** Pri státí sa scéna šetrí, ale slnko musí ísť ďalej – nie skok s minútou HUD. */
-    private var idleCelestialAge = 0f
+    /** Ochrana dlhej jazdy pred zabitím procesu bez lifecycle callbacku. */
+    private var checkpointAge = 0f
 
-    /** Invalidácia Canvasu – čítať len vnútri Canvas. */
-    var frame by mutableIntStateOf(0)
-        private set
 
     private val _ui = MutableStateFlow(snapshotUi())
     val ui: StateFlow<GameUiState> = _ui.asStateFlow()
 
     private var gasPressed = false
     private var brakePressed = false
+    private var steeringHeld = 0f
     private var throttleHeld = 0f
     private var throttle = 0f
     private var brake = 0f
+    /**
+     * Posledná ručne zvolená poloha plynu. Krátka pamäť umožní pustiť pedál
+     * a jedným prstom ťuknúť na tempomat; netreba držať oba ovládače naraz.
+     */
+    private var lastManualThrottle = 0f
+    private var lastManualThrottleAgeS = Float.POSITIVE_INFINITY
+    /** Cruise drží nastavený plyn; brzda / pauza / stop ho vypnú. */
+    private var cruiseOn = false
+    private var cruiseAmount = 0f
 
     val game: GameEngine get() = engine
 
@@ -93,7 +116,8 @@ class GameViewModel(
                 runCatching { playerRepository.clearRun() }
                 return@launch
             }
-            engine = GameEngine.restore(snap, bestKm, relayNodes)
+            engine = GameEngine.restore(snap, bestKm, relayNodes, garageUpgrades)
+            engine.language = language
             recorded = false
             hasActiveRun = true
             publishUi(force = true)
@@ -130,6 +154,7 @@ class GameViewModel(
             relayNodes = updatedRelayNodes
             engine.setRelayProgress(relayNodes)
         }
+        garageUpgrades = profile.garageUpgrades
         publishUi(force = true)
     }
 
@@ -142,21 +167,70 @@ class GameViewModel(
     fun onThrottle(amount: Float) {
         throttleHeld = amount.coerceIn(0f, 1f)
         gasPressed = throttleHeld > 0.02f
+        if (throttleHeld > 0.05f) {
+            lastManualThrottle = throttleHeld
+            lastManualThrottleAgeS = 0f
+        }
+        if (cruiseOn && throttleHeld > 0.05f) {
+            cruiseAmount = throttleHeld
+        }
     }
 
     @Synchronized
     fun onBrakeChanged(pressed: Boolean) {
         brakePressed = pressed
+        if (pressed) disengageCruise(clearCapturedThrottle = true)
+    }
+
+    @Synchronized
+    fun onSteering(amount: Float) {
+        steeringHeld = if (pausedByLifecycle || pausedByUser || garageOpen) 0f
+        else amount.takeIf(Float::isFinite)?.coerceIn(-1f, 1f) ?: 0f
+    }
+
+    @Synchronized
+    fun toggleCruise() {
+        if (cruiseOn) {
+            disengageCruise()
+        } else if (
+            engine.phase == GamePhase.DRIVING &&
+            engine.car.engineRunning
+        ) {
+            val setpoint = when {
+                throttleHeld > 0.05f -> throttleHeld
+                throttle > 0.05f -> throttle
+                lastManualThrottleAgeS <= CRUISE_CAPTURE_GRACE_S -> lastManualThrottle
+                else -> 0f
+            }
+            if (setpoint > 0.05f) {
+                cruiseOn = true
+                cruiseAmount = setpoint
+            }
+        }
+        publishUi(force = true)
+    }
+
+    private fun disengageCruise(clearCapturedThrottle: Boolean = false) {
+        cruiseOn = false
+        cruiseAmount = 0f
+        engine.cruiseControlActive = false
+        if (clearCapturedThrottle) {
+            lastManualThrottle = 0f
+            lastManualThrottleAgeS = Float.POSITIVE_INFINITY
+        }
     }
 
     @Synchronized
     fun onLifecyclePause() {
+        steeringHeld = 0f
+        engine.steeringInput = 0f
         pausedByLifecycle = true
         gasPressed = false
         brakePressed = false
         throttleHeld = 0f
         throttle = 0f
         brake = 0f
+        disengageCruise(clearCapturedThrottle = true)
         engine.throttleInput = 0f
         engine.brakeInput = 0f
         persistRun()
@@ -174,11 +248,14 @@ class GameViewModel(
     fun setPaused(value: Boolean) {
         pausedByUser = value
         if (value) {
+            steeringHeld = 0f
+            engine.steeringInput = 0f
             gasPressed = false
             brakePressed = false
             throttleHeld = 0f
             throttle = 0f
             brake = 0f
+            disengageCruise(clearCapturedThrottle = true)
             engine.throttleInput = 0f
             engine.brakeInput = 0f
         }
@@ -191,49 +268,70 @@ class GameViewModel(
      */
     @Synchronized
     fun setGarageOpen(open: Boolean) {
+        if (open) {
+            steeringHeld = 0f
+            throttleHeld = 0f
+            throttle = 0f
+            brake = 0f
+            brakePressed = false
+            engine.steeringInput = 0f
+            engine.throttleInput = 0f
+            engine.brakeInput = 0f
+            disengageCruise(clearCapturedThrottle = true)
+        }
         garageOpen = open
         engine.timeHeldByMenu = open
     }
 
     @Synchronized
-    fun onFrame(dt: Float, screenHeightPx: Float) {
+    fun onFrame(dt: Float) {
         trackFps(dt)
+        if (!cruiseOn && throttleHeld <= 0.02f && lastManualThrottleAgeS.isFinite()) {
+            lastManualThrottleAgeS = (lastManualThrottleAgeS + dt)
+                .coerceAtMost(CRUISE_CAPTURE_GRACE_S + 1f)
+        }
         if (pausedByLifecycle || pausedByUser || garageOpen) {
-            frame++
+            return
+        }
+        if (engine.completedSideMission != null) {
             return
         }
 
         if (engine.phase == GamePhase.GAME_OVER) {
             hasActiveRun = false
-            frame++
+            disengageCruise(clearCapturedThrottle = true)
             publishUi(dt, force = true)
             return
         }
 
+        val driving = engine.phase == GamePhase.DRIVING
+        if (cruiseOn && (!driving || !engine.car.engineRunning || brakePressed)) {
+            disengageCruise(clearCapturedThrottle = true)
+        }
+        val throttleTarget = when {
+            cruiseOn && throttleHeld <= 0.02f -> cruiseAmount
+            else -> throttleHeld
+        }
         throttle = MathX.damp(
             throttle,
-            throttleHeld,
+            throttleTarget,
             if (throttleMode == ThrottleMode.SLIDE) 18f else 12f,
             dt
         )
         brake = MathX.damp(brake, if (brakePressed) 1f else 0f, 14f, dt)
 
-        val driving = engine.phase == GamePhase.DRIVING
+        // Cruise žerie navyše len keď drží plyn systém, nie ručný pedál.
+        engine.cruiseControlActive = cruiseOn && driving && throttleHeld <= 0.02f && throttle > 0.02f
         engine.throttleInput = if (driving) throttle else 0f
         engine.brakeInput = if (driving) brake else 0f
-        engine.setScreenHeight(screenHeightPx)
+        engine.steeringInput = if (driving) steeringHeld else 0f
         engine.advance(dt)
-
-        // V PREP/STOPPED netreba 60×/s prekresľovať ťažké Pathy – šetrí CPU/GPU a batériu.
-        val moving = driving || engine.car.speed > 0.05f ||
-            engine.phase == GamePhase.JUNCTION ||
-            engine.phase == GamePhase.GAME_OVER
-        idleCelestialAge += dt
-        val idleCelestial = !moving && idleCelestialAge >= 1f / 12f
-        if (moving || idleCelestial) idleCelestialAge = 0f
-        if (moving || frame == 0 || idleCelestial) {
-            frame++
+        checkpointAge += dt
+        if (hasActiveRun && checkpointAge >= CHECKPOINT_SECONDS) {
+            checkpointAge = 0f
+            persistRun()
         }
+
         publishUi(dt)
     }
 
@@ -262,6 +360,8 @@ class GameViewModel(
         val e = engine
         return GameUiState(
             phase = e.phase,
+            safeHavenDecisionPending = e.safeHavenDecisionPending,
+            endlessMode = e.endlessMode,
             // Stará hláška zmizne sama; blokáciu držíme, kým trvá.
             message = if (e.messageFresh) e.message else "",
             blockedReason = e.blockedReason,
@@ -287,6 +387,12 @@ class GameViewModel(
             approachingJunction = e.approachingJunction,
             junctionDistanceM = e.junctionDistanceM,
             pendingChoiceId = e.pendingChoiceId,
+            pursuitStormKind = e.pursuitStormKind,
+            pursuitStormGapM = e.pursuitStormGapM?.toInt()?.coerceAtLeast(0),
+            pursuitStormCaught = e.pursuitStormCaught,
+            sideMissionTitle = e.sideMissionTitle,
+            sideMissionProgress = e.sideMissionProgress,
+            sideMissionCompletion = e.completedSideMission,
             events = e.activeEvents.mapNotNull { ev ->
                 ev.event.chip?.let { it to ev.remaining.toInt() }
             },
@@ -303,17 +409,23 @@ class GameViewModel(
             batteryCharge = e.car.batteryCharge,
             alternatorOutput = e.car.alternatorOutput,
             batteryChargeCeiling = e.car.batteryChargeCeiling,
+            batteryHoldCapacity = e.car.batteryHoldCapacity,
             engineRunning = e.car.engineRunning,
             headlightsOn = e.headlightsOn,
             highBeamsOn = e.highBeamsOn,
             hasExpeditionKit = e.hasExpeditionKit,
             roofLightsOn = e.roofLightsOn,
+            cruiseOn = cruiseOn,
             isNight = e.isNight,
             clock = e.clock,
             hasNearbyBuilding = e.buildingNear() != null,
             lootableWreckAheadM = e.lootableWreckAheadDistanceM,
             canRest = e.canRest,
             exploring = e.phase == GamePhase.EXPLORING && e.activeBuilding != null,
+            canRequestAssist = e.canRequestAssist,
+            assistOffer = e.rescueOffer.takeIf { e.canRequestAssist },
+            helpAdsRemaining = e.helpAdsRemaining,
+            helpAdsMax = e.helpAdsMax,
             pumpFuelL = e.activeBuilding?.let { it.pumpFuelL + it.pumpDieselL } ?: 0f,
             paused = pausedByUser,
             fps = fps,
@@ -327,12 +439,12 @@ class GameViewModel(
             fullUpgradeReached = e.hasReachedFullUpgrade,
             eventKindsSeen = e.eventKindsSeen,
             activeEventKinds = e.activeEvents.map { it.event }.toSet(),
-            fittedEngine = e.car.fittedHudLabel(ComponentSlot.ENGINE),
-            fittedDrive = e.car.fittedHudLabel(ComponentSlot.DRIVETRAIN),
-            fittedTires = "${e.car.fittedHudLabel(ComponentSlot.TIRE_FRONT)}/${e.car.fittedHudLabel(ComponentSlot.TIRE_REAR)}",
-            fittedSuspension = e.car.fittedHudLabel(ComponentSlot.SUSPENSION),
+            fittedEngine = e.copy.fittedHudLabel(e.car, ComponentSlot.ENGINE),
+            fittedDrive = e.copy.fittedHudLabel(e.car, ComponentSlot.DRIVETRAIN),
+            fittedTires = "${e.copy.fittedHudLabel(e.car, ComponentSlot.TIRE_FRONT)}/${e.copy.fittedHudLabel(e.car, ComponentSlot.TIRE_REAR)}",
+            fittedSuspension = e.copy.fittedHudLabel(e.car, ComponentSlot.SUSPENSION),
             parts = partStatuses(e),
-            wearWarning = e.car.wearCause?.takeIf { e.car.wearRate > 0.0008f }?.warning,
+            wearWarning = e.car.wearCause?.takeIf { e.car.wearRate > 0.0008f }?.let { e.copy.wearWarning(it) },
             bagRevision = bagRevision,
             partsRevision = partsRevision(e),
             frontTireInjury = e.car.tireInjury(ComponentSlot.TIRE_FRONT),
@@ -349,6 +461,8 @@ class GameViewModel(
         h = 31 * h + e.punctureKitCount()
         h = 31 * h + if (e.car.engineRunning) 1 else 0
         h = 31 * h + e.phase.ordinal
+        h = 31 * h + e.car.bodyPaintIndex
+        h = 31 * h + (e.pendingUnmountSlot?.ordinal ?: -3)
         h = 31 * h + e.car.overallHealth.toRawBits()
         for (slot in ComponentSlot.entries) {
             val part = e.car.parts[slot]
@@ -381,7 +495,7 @@ class GameViewModel(
             val part = car.parts[slot]
             return PartStatus(
                 tag = tag,
-                label = car.fittedHudLabel(slot),
+                label = e.copy.fittedHudLabel(car, slot),
                 health = part?.health ?: 0f,
                 wearing = wearing && part != null,
                 fitted = part != null
@@ -422,17 +536,19 @@ class GameViewModel(
     }
 
     private fun bump() {
-        frame++
         publishUi(force = true)
     }
 
     @Synchronized
     fun stop() {
+        steeringHeld = 0f
+        engine.steeringInput = 0f
         gasPressed = false
         brakePressed = false
         throttleHeld = 0f
         throttle = 0f
         brake = 0f
+        disengageCruise(clearCapturedThrottle = true)
         engine.requestStop()
         bump()
     }
@@ -479,6 +595,32 @@ class GameViewModel(
     @Synchronized
     fun takeAllLoot() {
         if (engine.takeAllLoot()) bumpBag() else bump()
+    }
+
+    @Synchronized
+    fun startSideMission() {
+        if (engine.startSideMission()) persistRun()
+        bump()
+    }
+
+    @Synchronized
+    fun collectSideMissionReward() {
+        if (engine.dismissSideMissionReward()) persistRun()
+        bump()
+    }
+
+    @Synchronized
+    fun claimDoubleSideMissionReward(): Boolean {
+        val claimed = engine.claimDoubleSideMissionReward()
+        if (claimed) persistRun()
+        bump()
+        return claimed
+    }
+
+    @Synchronized
+    fun shelterFromPursuit() {
+        if (engine.shelterFromPursuit()) persistRun()
+        bump()
     }
 
     @Synchronized
@@ -555,6 +697,11 @@ class GameViewModel(
     }
 
     @Synchronized
+    fun upgradeFromAd(slot: ComponentSlot) {
+        if (engine.upgradeFromRewardedAd(slot)) bumpBag() else bump()
+    }
+
+    @Synchronized
     fun paintBody(paint: VehiclePaint) {
         if (engine.paintBody(paint)) bumpBag() else bump()
     }
@@ -578,8 +725,14 @@ class GameViewModel(
 
     @Synchronized
     fun unmount(slot: ComponentSlot) {
-        engine.unmountSlot(slot)
+        engine.requestUnmount(slot)
         bumpBag()
+    }
+
+    @Synchronized
+    fun cancelPendingUnmount() {
+        engine.cancelPendingUnmount()
+        bump()
     }
 
     @Synchronized
@@ -655,6 +808,24 @@ class GameViewModel(
         bump()
     }
 
+    @Synchronized
+    fun finishJourney() {
+        if (engine.finishJourney()) {
+            hasActiveRun = false
+            maybeRecord()
+            bump()
+        }
+    }
+
+    @Synchronized
+    fun continueEndless() {
+        if (engine.continueEndless()) {
+            hasActiveRun = true
+            persistRun()
+            bump()
+        }
+    }
+
     /** Ukončí obrazovku jazdy a uloží jej štatistiky aj šrot. */
     @Synchronized
     fun finalizeRun() {
@@ -675,14 +846,21 @@ class GameViewModel(
     /** Jedna núdzová záchrana po poruche; jazda pokračuje z aktuálneho miesta. */
     @Synchronized
     fun recoverFromAd(): Boolean {
-        if (engine.phase != GamePhase.GAME_OVER) return false
         val recovered = engine.recoverFromRewardedAd()
         if (recovered) {
             recorded = false
             hasActiveRun = true
+            persistRun()
             bump()
         }
         return recovered
+    }
+
+    /** Reklama sa nenačítala – palivo sa bez odmeny neudelí. */
+    @Synchronized
+    fun markRescueAdUnavailable() {
+        engine.notePlayer(engine.copy.adNotReady)
+        bump()
     }
 
     private fun maybeRecord() {
@@ -704,7 +882,11 @@ class GameViewModel(
     /** Nová jazda od nuly – nový vrak, nový svet. */
     @Synchronized
     fun retry() {
-        if (engine.phase == GamePhase.GAME_OVER) maybeRecord()
+        steeringHeld = 0f
+        // RESTART RUN aj NEW RUN zo saved run-u sú regulárny koniec jazdy.
+        // Pred zahodením enginu zapíš vzdialenosť/čas do profilu; zmena
+        // osobného maxima následne spustí aj synchronizáciu leaderboardu.
+        if (hasActiveRun || engine.phase == GamePhase.GAME_OVER) maybeRecord()
         hasActiveRun = false
         forgetRun()
         recorded = false
@@ -714,16 +896,20 @@ class GameViewModel(
         throttleHeld = 0f
         throttle = 0f
         brake = 0f
+        disengageCruise(clearCapturedThrottle = true)
         pausedByLifecycle = false
         pausedByUser = false
         garageOpen = false
-        engine = GameEngine(Random.nextLong(), bestKm, debugOptions, relayNodes)
+        engine = GameEngine(Random.nextLong(), bestKm, debugOptions, relayNodes, garageUpgrades)
+        engine.language = language
+        checkpointAge = 0f
         hudTimer = 0f
-        idleCelestialAge = 0f
         bump()
     }
 
     companion object {
+        private const val CRUISE_CAPTURE_GRACE_S = 6f
+
         fun factory(repo: PlayerRepository, profile: PlayerProfile) =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -733,5 +919,6 @@ class GameViewModel(
             }
 
         private val META_RELAY_COUNT = Journey.goals.size
+        private const val CHECKPOINT_SECONDS = 45f
     }
 }

@@ -82,7 +82,7 @@ class SurfacePatchPlacementTest {
                 RoadSurface.WATER -> assertTrue("$where: voda je príliš krátka", patch.length >= 32f)
                 RoadSurface.GRAVEL -> assertTrue("$where: štrk je príliš krátky", patch.length >= 24f)
                 RoadSurface.ICE, RoadSurface.SLUSH ->
-                    assertTrue("$where: zimný úsek je príliš krátky", patch.length >= 28f)
+                    assertTrue("$where: zimný úsek je príliš krátky", patch.length >= 36f)
                 RoadSurface.ASPHALT -> Unit
             }
         }

@@ -16,13 +16,10 @@ import sk.kubis.endlessdrive.domain.model.ComponentSlot
 import sk.kubis.endlessdrive.domain.model.DebugOptions
 import sk.kubis.endlessdrive.domain.model.ItemCatalog
 import sk.kubis.endlessdrive.domain.model.ItemStack
+import sk.kubis.endlessdrive.domain.model.VehiclePaint
 import sk.kubis.endlessdrive.game.GameEngine
 import sk.kubis.endlessdrive.game.car.Car
-import sk.kubis.endlessdrive.ui.game.BackdropCatalog
-import sk.kubis.endlessdrive.ui.game.BodyPart
-import sk.kubis.endlessdrive.ui.game.BodyPartCatalog
 import sk.kubis.endlessdrive.ui.game.CarSection
-import sk.kubis.endlessdrive.ui.game.WheelCatalog
 
 /**
  * Stráži, že pridaný obsah je naozaj celý zapojený. Chýbajúci kus by hru
@@ -34,60 +31,19 @@ class ContentCoverageTest {
      * Regresia čakajúca na svoju chvíľu: tabuľka pozadí sa píše ručne a
      * zabudnutý bióm by hra vykreslila bez kresby, teda inak než ostatné vetvy.
      */
-    @Test
-    fun everyBiomeHasABackdrop() {
-        val missing = BiomeType.entries.filter { it !in BackdropCatalog.specs }
-        assertTrue("biómy bez pozadia: $missing", missing.isEmpty())
-    }
+
 
     /** Každý bióm má vlastnú kresbu alebo prefarbenú požičanú – nie kópiu bez rozdielu. */
-    @Test
-    fun borrowedBackdropsAreAlwaysRecoloured() {
-        val byArt = BackdropCatalog.specs.entries.groupBy { it.value.far }
-        byArt.forEach { (_, users) ->
-            if (users.size < 2) return@forEach
-            val tints = users.map { it.value.tint }
-            assertEquals(
-                "biómy ${users.map { it.key }} zdieľajú kresbu, musia sa líšiť tónovaním",
-                tints.size, tints.distinct().size
-            )
-        }
-    }
 
-    @Test
-    fun backdropVariantsAreStableAndIncludeEveryNewScene() {
-        val expectedFarLayers = mapOf(
-            BiomeType.RURAL to listOf(R.drawable.bg_rural_far),
-            BiomeType.FOREST_ALIVE to listOf(R.drawable.bg_autumn_far),
-            BiomeType.WASTELAND to listOf(R.drawable.bg_quarry_far),
-            BiomeType.FOREST to listOf(R.drawable.bg_marsh_far),
-            BiomeType.ALPINE to listOf(
-                R.drawable.bg_winter_alpine_far,
-                R.drawable.bg_winter_pines_far
-            )
-        )
-        expectedFarLayers.forEach { (biome, expected) ->
-            assertEquals(expected, BackdropCatalog.variants.getValue(biome).map { it.far })
-        }
-        BiomeType.entries.forEach { biome ->
-            val seen = mutableSetOf<Int>()
-            repeat(20) { seed ->
-                val first = BackdropCatalog.variantIndex(biome, seed.toLong())
-                val again = BackdropCatalog.variantIndex(biome, seed.toLong())
-                assertEquals(first, again)
-                assertTrue(first in BackdropCatalog.variants.getValue(biome).indices)
-                seen += first
-            }
-            assertEquals(BackdropCatalog.variants.getValue(biome).indices.toSet(), seen)
-        }
-    }
+
+
 
     /**
      * Preklep v unlockDistance by celú vetvu nenápadne skryl – hráč by o nej
      * nikdy nevedel a nič by to nenahlásilo.
      */
     @Test
-    fun everyRegionHasExactlyOneValidContinuation() {
+    fun everyRegionHasTwoValidDistinctContinuations() {
         val terrain = TerrainProfile(5L)
         BranchStyle.entries.forEachIndexed { index, style ->
             val segment = WorldGenerator.createSegment(
@@ -98,15 +54,18 @@ class ContentCoverageTest {
                 terrain = terrain,
                 isTutorial = false
             )
-            assertEquals("$style nemá jedno pokračovanie", 1, segment.choices.size)
-            val continuation = segment.choices.single().plan
-            assertTrue(continuation.length >= GameConfig.SEGMENT_LENGTH_MIN)
-            assertTrue(continuation.features.isNotEmpty())
-            assertTrue("región sa nemá opakovať bez zmeny", continuation.style != style)
-            assertFalse(
-                "$style pokračuje do ${continuation.style} s tou istou krajinou",
-                continuation.style.biome.sharesSceneryWith(style.biome)
-            )
+            assertEquals("$style nemá dve pokračovania", 2, segment.choices.size)
+            assertEquals(2, segment.choices.map { it.style }.distinct().size)
+            segment.choices.forEach { choice ->
+                val continuation = choice.plan
+                assertTrue(continuation.length >= GameConfig.SEGMENT_LENGTH_MIN)
+                assertTrue(continuation.features.isNotEmpty())
+                assertTrue("región sa nemá opakovať bez zmeny", continuation.style != style)
+                assertFalse(
+                    "$style pokračuje do ${continuation.style} s tou istou krajinou",
+                    continuation.style.biome.sharesSceneryWith(style.biome)
+                )
+            }
         }
     }
 
@@ -150,8 +109,7 @@ class ContentCoverageTest {
     }
 
     @Test
-    fun workshopsSometimesHoldScrapAndWrecksAreRare() {
-        var shopScrap = 0
+    fun workshopsHaveNoLootAndWrecksAreRare() {
         for (seed in 1L..220L) {
             val loot = LootGenerator.generate(
                 SeededRandom(seed),
@@ -159,9 +117,15 @@ class ContentCoverageTest {
                 2800f,
                 BranchStyle.INDUSTRIAL
             )
-            if (loot.any { it.defId == ItemCatalog.SCRAP_PILE.id }) shopScrap++
+            assertTrue("servis nesmie mať loot ani scrap, seed $seed má $loot", loot.isEmpty())
+            val paint = LootGenerator.generate(
+                SeededRandom(seed),
+                BuildingType.PAINT_SHOP,
+                2800f,
+                BranchStyle.INDUSTRIAL
+            )
+            assertTrue("lakovačka nesmie mať loot, seed $seed má $paint", paint.isEmpty())
         }
-        assertTrue("servis má občas dať scrap, padlo $shopScrap", shopScrap in 8..110)
 
         val terrain = TerrainProfile(19L)
         var wrecks = 0
@@ -182,33 +146,14 @@ class ContentCoverageTest {
 /** Karoséria: čo je namontované, to je na aute vidieť – a naopak. */
 class BodyPartTest {
 
-    @Test
-    fun everyBodySlotHasArtAndEveryPartHasASlot() {
-        BodyPart.entries.forEach { part ->
-            assertTrue("$part nemá kresbu", part in BodyPartCatalog.specs)
-            assertTrue(
-                "$part sa nekreslí – chýba v poradí",
-                part in BodyPartCatalog.order
-            )
-            assertTrue(
-                "$part nesedí na svojom slote",
-                part in BodyPartCatalog.partsOf(BodyPartCatalog.slotOf(part))
-            )
-        }
-    }
+
 
     /**
      * Kotva je ľavý horný roh dielu. Malý presah mimo základu je v poriadku –
      * veko kufra aj nárazníky karosériu zámerne prečnievajú –, takže sa stráži
      * len to, že diel neodletel niekam úplne mimo auta.
      */
-    @Test
-    fun anchorsStayNearTheBody() {
-        BodyPartCatalog.specs.forEach { (part, spec) ->
-            assertTrue("$part je vodorovne mimo auta (${spec.fx})", spec.fx in -0.15f..0.98f)
-            assertTrue("$part je zvisle mimo auta (${spec.fy})", spec.fy in -0.15f..0.98f)
-        }
-    }
+
 
     /**
      * Regresia na nové pravidlo: svetlo je diel ako každý iný. Bez neho sa
@@ -233,78 +178,17 @@ class BodyPartTest {
     }
 
     /** Jazda začína holou karosériou – plechy sa musia nájsť. */
-    @Test
-    fun theCarStartsAsABareShell() {
-        for (seed in 1L..40L) {
-            val car = Car()
-            car.installStarterKit(SeededRandom(seed))
-            BodyPart.entries.forEach { part ->
-                val slot = BodyPartCatalog.slotOf(part)
-                assertFalse(
-                    "seed $seed: auto začína s dielom ${slot.displayName}",
-                    car.hasPart(slot)
-                )
-            }
-            // Na kolesách ale stáť musí, inak sa nepohne.
-            assertTrue(car.hasPart(ComponentSlot.TIRE_FRONT))
-            assertTrue(car.hasPart(ComponentSlot.TIRE_REAR))
-        }
-    }
 
-    @Test
-    fun frontAndRearDoorsMountIndependentlyAndWindowsAreNotLoot() {
-        val car = Car().apply { installStarterKit(SeededRandom(4L)) }
-        car.mount(ComponentSlot.DOOR_FRONT, ItemStack(ItemCatalog.DOOR_FRONT.id))
-        assertTrue(car.hasPart(ComponentSlot.DOOR_FRONT))
-        assertFalse(car.hasPart(ComponentSlot.DOOR_REAR))
-        assertEquals(listOf(BodyPart.DOOR_FRONT), BodyPartCatalog.partsOf(ComponentSlot.DOOR_FRONT))
-        assertTrue("okná už nesmú byť samostatný predmet", ItemCatalog.ALL.none { it.id == "windows" })
-    }
 
-    @Test
-    fun headlightsAndTaillightsStayUnpainted() {
-        assertFalse(ComponentSlot.HEADLIGHT.takesBodyPaint)
-        assertFalse(ComponentSlot.TAILLIGHT.takesBodyPaint)
-        assertFalse(BodyPartCatalog.takesBodyPaint(BodyPart.HEADLIGHT))
-        assertFalse(BodyPartCatalog.takesBodyPaint(BodyPart.TAILLIGHT))
-        assertFalse(BodyPartCatalog.appliesPaintTint(BodyPart.HEADLIGHT))
-        assertFalse(BodyPartCatalog.appliesPaintTint(BodyPart.TAILLIGHT))
-        assertTrue(BodyPartCatalog.takesBodyPaint(BodyPart.DOOR_FRONT))
-        assertTrue(BodyPartCatalog.takesBodyPaint(BodyPart.HOOD))
-        assertTrue(BodyPartCatalog.takesBodyPaint(BodyPart.BUMPER_FRONT))
-        assertTrue(BodyPartCatalog.appliesPaintTint(BodyPart.ROOF_RACK))
-        assertFalse(BodyPartCatalog.takesBodyPaint(BodyPart.ROOF_RACK))
 
-        val car = Car().apply { installStarterKit(SeededRandom(4L)) }
-        car.mount(ComponentSlot.HEADLIGHT, ItemStack(ItemCatalog.HEADLIGHT.id, paintIndex = 3))
-        car.mount(ComponentSlot.TAILLIGHT, ItemStack(ItemCatalog.TAILLIGHT.id, paintIndex = 5))
-        car.mount(ComponentSlot.DOOR_FRONT, ItemStack(ItemCatalog.DOOR_FRONT.id, paintIndex = 3))
-        assertEquals(-1, car.parts[ComponentSlot.HEADLIGHT]?.paintIndex)
-        assertEquals(-1, car.parts[ComponentSlot.TAILLIGHT]?.paintIndex)
-        assertEquals(3, car.parts[ComponentSlot.DOOR_FRONT]?.paintIndex)
-    }
+
+
 }
 
 /** Ladiace prepínače z nastavení – menia výbavu, nie jazdu. */
 class DebugOptionsTest {
 
-    @Test
-    fun fullBodyMountsEveryPanelAndDefaultLeavesItBare() {
-        val bare = Car().apply { installStarterKit(SeededRandom(4L)) }
-        val full = Car().apply {
-            installStarterKit(SeededRandom(4L), DebugOptions(fullBody = true))
-        }
-        BodyPart.entries.forEach { part ->
-            val slot = BodyPartCatalog.slotOf(part)
-            assertFalse("bez prepínača musí ${slot.displayName} chýbať", bare.hasPart(slot))
-            assertTrue("s prepínačom musí ${slot.displayName} byť", full.hasPart(slot))
-        }
-        // Mechanika sa prepínačom meniť nesmie – ladí sa vzhľad, nie jazda.
-        assertEquals(
-            bare.parts[ComponentSlot.ENGINE]?.defId,
-            full.parts[ComponentSlot.ENGINE]?.defId
-        )
-    }
+
 }
 
 /** Prvé hľadanie musí dať hráčovi čo namontovať, nielen čo opraviť. */
@@ -325,8 +209,23 @@ class StarterShedTest {
                 1,
                 shed.loot.count { it.defId in showcaseIds }
             )
+            assertTrue(
+                "seed $seed: zadná sedačka musí byť v kôlni ako ukážka interiéru",
+                shed.loot.any { it.defId == ItemCatalog.SEAT_REAR.id }
+            )
+            assertTrue(
+                "seed $seed: predná sedačka už nie je loot – je permanentne vo vraku",
+                shed.loot.none { it.defId == ItemCatalog.SEAT_FRONT.id }
+            )
+            val firstHouse = engine.segment.buildings.first {
+                it.type == BuildingType.HOUSE
+            }
+            assertTrue(
+                "seed $seed: prvý dom nesmie dávať prednú sedačku",
+                firstHouse.loot.none { it.defId == ItemCatalog.SEAT_FRONT.id }
+            )
             val firstRoadGarage = engine.segment.buildings.first {
-                it.type == sk.kubis.endlessdrive.domain.model.BuildingType.GARAGE && it.localX > 100f
+                it.type == BuildingType.GARAGE && it.localX > 100f
             }
             assertEquals("prvá cestná garáž má byť stručná", 2, firstRoadGarage.loot.size)
         }
@@ -364,6 +263,20 @@ class VehiclePaintTest {
         }
         assertTrue("nájdené plechy používajú príliš málo farieb: $panelPaints", panelPaints.size >= 8)
         assertTrue("v loote musia byť aj svetlá, inak sa lak nestráži", sawLights)
+    }
+
+    @Test
+    fun resprayPaintsTheShellAndEveryFittedPanel() {
+        val car = Car().apply { installStarterKit(SeededRandom(4L)) }
+        car.mount(ComponentSlot.DOOR_FRONT, ItemStack(ItemCatalog.DOOR_FRONT.id, paintIndex = 0))
+        car.mount(ComponentSlot.HOOD, ItemStack(ItemCatalog.HOOD.id, paintIndex = 1))
+        car.mount(ComponentSlot.HEADLIGHT, ItemStack(ItemCatalog.HEADLIGHT.id, paintIndex = 4))
+        car.bodyPaintIndex = 2
+        car.applyBodyPaint(VehiclePaint.VIOLET)
+        assertEquals(VehiclePaint.VIOLET.ordinal, car.bodyPaintIndex)
+        assertEquals(VehiclePaint.VIOLET.ordinal, car.parts[ComponentSlot.DOOR_FRONT]!!.paintIndex)
+        assertEquals(VehiclePaint.VIOLET.ordinal, car.parts[ComponentSlot.HOOD]!!.paintIndex)
+        assertEquals(-1, car.parts[ComponentSlot.HEADLIGHT]!!.paintIndex)
     }
 }
 
@@ -418,23 +331,10 @@ class DebugOptionsExtraTest {
 /** Každá guma z katalógu má svoju kresbu kolesa. */
 class WheelArtTest {
 
-    @Test
-    fun everyTyreResolvesToAWheelDrawing() {
-        val tyres = ItemCatalog.ALL.filter { it.axleTire }
-        assertTrue("v katalógu musia byť gumy", tyres.size >= 4)
-        tyres.forEach { tyre ->
-            // resFor nikdy nevracia 0 – neznáma guma dostane štandardné koleso.
-            assertTrue("${tyre.id} nemá kresbu", WheelCatalog.resFor(tyre.id) != 0)
-        }
-    }
+
 
     /** Zodraté, štandardné, športové a terénne sa musia líšiť na pohľad. */
-    @Test
-    fun theFourTiersLookDifferent() {
-        val ids = listOf("tire_poor", "tire_std", "tire_sport", "tire_offroad")
-        val art = ids.map { WheelCatalog.resFor(it) }
-        assertEquals("štyri stupne musia mať štyri rôzne kresby", 4, art.distinct().size)
-    }
+
 }
 
 /** Zóny v menu CAR – klik na zadok nesmie ukázať motor. */

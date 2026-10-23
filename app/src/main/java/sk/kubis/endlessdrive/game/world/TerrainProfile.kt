@@ -44,16 +44,21 @@ class TerrainProfile(seed: Long) : Terrain {
         // Hrebene na skok – hlavne neskôr.
         h += octave(x, 0.027f / stretch, 33.4f, 0.15f * steep * (0.45f + 0.35f * difficulty))
         h += octave(x, 0.040f, 41.3f, 0.06f * steep)
-        h += style.bumpiness * noise.noise2(x * 0.048f, 9.2f) * 0.20f * intro
+        h += style.bumpiness * noise.noise2(x * 0.048f, 9.2f) * 0.20f * intro *
+            challengeMul.coerceIn(0f, 1.4f)
 
         // Jemné prekážky aj v normálnej hre: krátke hladké hrboly a občasný
         // zvlnený pás. Sú malé, no pri rýchlosti rozhýbu obe nápravy podobne
         // ako prvá časť testovacej trate.
         val detailIntro = MathX.smoothstep(28f, 85f, x)
+        // Detail povrchu musí rešpektovať typ úseku rovnako ako veľké kopce.
+        // Inak aj deklarovaná rovinka vedela pri diaľničnej rýchlosti vytvoriť
+        // krátku rampu a nečakane odhodiť auto.
+        val detailScale = challengeMul.coerceIn(0f, 1.4f)
         val patch = MathX.smoothstep(0.12f, 0.72f, noise.noise2(x * 0.0065f, 118.7f))
-        h += sin(x / 7.5f * 2f * PI.toFloat()) * 0.075f * patch * detailIntro
+        h += sin(x / 7.5f * 2f * PI.toFloat()) * 0.075f * patch * detailIntro * detailScale
         val smallBump = noise.noise2(x * 0.115f, 207.4f).coerceAtLeast(0f).pow(5)
-        h += smallBump * (0.13f + style.bumpiness * 0.12f) * detailIntro
+        h += smallBump * (0.13f + style.bumpiness * 0.12f) * detailIntro * detailScale
 
         return 3.2f + h
     }

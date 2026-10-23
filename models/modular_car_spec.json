@@ -1,0 +1,815 @@
+﻿{
+    "slots":  [
+                  "CHASSIS",
+                  "HOOD",
+                  "FRONT_BUMPER",
+                  "REAR_BUMPER",
+                  "TRUNK_LID",
+                  "DOOR_FRONT",
+                  "DOOR_REAR",
+                  "HEADLIGHT",
+                  "TAILLIGHT",
+                  "SEAT_FRONT",
+                  "SEAT_REAR",
+                  "ROOF_RACK",
+                  "ENGINE",
+                  "RADIATOR",
+                  "BATTERY",
+                  "FUEL_TANK",
+                  "SUSPENSION",
+                  "TIRE_FRONT",
+                  "TIRE_REAR"
+              ],
+    "carModel":  "SEDAN_MODULAR_MVP",
+    "referenceDimensions":  {
+                                "groundClearanceM":  0.42,
+                                "bodyWidthM":  1.84,
+                                "totalLengthM":  5.6,
+                                "wheelTrackM":  1.56,
+                                "heightM":  1.88,
+                                "wheelbaseM":  3.528,
+                                "wheelRadiusM":  0.48
+                            },
+    "parts":  [
+                  {
+                      "itemDefId":  "car_base_body",
+                      "vertexCount":  836,
+                      "slot":  "CHASSIS",
+                      "name":  "Chassis_Shell",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      -2.45,
+                                                      -0.332,
+                                                      -0.92
+                                                  ],
+                                          "size":  [
+                                                       4.6,
+                                                       1.892,
+                                                       1.862
+                                                   ],
+                                          "max":  [
+                                                      2.15,
+                                                      1.56,
+                                                      0.94200000000000006
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    0,
+                                    0,
+                                    0
+                                ],
+                      "fileObj":  "parts/chassis_shell.obj",
+                      "triangleCount":  404
+                  },
+                  {
+                      "itemDefId":  "hood",
+                      "vertexCount":  120,
+                      "slot":  "HOOD",
+                      "name":  "Hood",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      0.95,
+                                                      0.43,
+                                                      -0.78
+                                                  ],
+                                          "size":  [
+                                                       1.15,
+                                                       0.45,
+                                                       1.56
+                                                   ],
+                                          "max":  [
+                                                      2.1,
+                                                      0.88,
+                                                      0.78
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    0.98,
+                                    0.86,
+                                    0
+                                ],
+                      "fileObj":  "parts/hood.obj",
+                      "triangleCount":  60
+                  },
+                  {
+                      "itemDefId":  "bumper_f",
+                      "vertexCount":  336,
+                      "slot":  "FRONT_BUMPER",
+                      "name":  "Front_Bumper",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      2.1,
+                                                      -0.28,
+                                                      -0.84
+                                                  ],
+                                          "size":  [
+                                                       0.38,
+                                                       0.64,
+                                                       1.68
+                                                   ],
+                                          "max":  [
+                                                      2.48,
+                                                      0.36,
+                                                      0.84
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    2.15,
+                                    0.05,
+                                    0
+                                ],
+                      "fileObj":  "parts/front_bumper.obj",
+                      "triangleCount":  144
+                  },
+                  {
+                      "itemDefId":  "bumper_r",
+                      "vertexCount":  248,
+                      "slot":  "REAR_BUMPER",
+                      "name":  "Rear_Bumper",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      -2.88,
+                                                      -0.25,
+                                                      -0.85
+                                                  ],
+                                          "size":  [
+                                                       0.41,
+                                                       0.64,
+                                                       1.7
+                                                   ],
+                                          "max":  [
+                                                      -2.47,
+                                                      0.39,
+                                                      0.85
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    -2.5,
+                                    0.05,
+                                    0
+                                ],
+                      "fileObj":  "parts/rear_bumper.obj",
+                      "triangleCount":  104
+                  },
+                  {
+                      "itemDefId":  "trunk_lid",
+                      "vertexCount":  72,
+                      "slot":  "TRUNK_LID",
+                      "name":  "Trunk_Lid",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      -2.57,
+                                                      0.45,
+                                                      -0.74
+                                                  ],
+                                          "size":  [
+                                                       1.37,
+                                                       0.31,
+                                                       1.48
+                                                   ],
+                                          "max":  [
+                                                      -1.2,
+                                                      0.76,
+                                                      0.74
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    -1.22,
+                                    0.94,
+                                    0
+                                ],
+                      "fileObj":  "parts/trunk_lid.obj",
+                      "triangleCount":  36
+                  },
+                  {
+                      "itemDefId":  "door_front",
+                      "vertexCount":  268,
+                      "slot":  "DOOR_FRONT",
+                      "name":  "Door_Front_L",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      0.05,
+                                                      -0.28,
+                                                      0.75
+                                                  ],
+                                          "size":  [
+                                                       0.85,
+                                                       1.76,
+                                                       0.33
+                                                   ],
+                                          "max":  [
+                                                      0.9,
+                                                      1.48,
+                                                      1.08
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    0.86,
+                                    0.5,
+                                    0.92
+                                ],
+                      "fileObj":  "parts/door_front_l.obj",
+                      "triangleCount":  134
+                  },
+                  {
+                      "itemDefId":  "door_front",
+                      "vertexCount":  268,
+                      "slot":  "DOOR_FRONT",
+                      "name":  "Door_Front_R",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      0.05,
+                                                      -0.28,
+                                                      -1.08
+                                                  ],
+                                          "size":  [
+                                                       0.85,
+                                                       1.76,
+                                                       0.33
+                                                   ],
+                                          "max":  [
+                                                      0.9,
+                                                      1.48,
+                                                      -0.75
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    0.86,
+                                    0.5,
+                                    -0.92
+                                ],
+                      "fileObj":  "parts/door_front_r.obj",
+                      "triangleCount":  134
+                  },
+                  {
+                      "itemDefId":  "door_rear",
+                      "vertexCount":  196,
+                      "slot":  "DOOR_REAR",
+                      "name":  "Door_Rear_L",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      -0.8,
+                                                      -0.28,
+                                                      0.75
+                                                  ],
+                                          "size":  [
+                                                       0.83,
+                                                       1.78,
+                                                       0.19
+                                                   ],
+                                          "max":  [
+                                                      0.03,
+                                                      1.5,
+                                                      0.94000000000000006
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    0.02,
+                                    0.5,
+                                    0.92
+                                ],
+                      "fileObj":  "parts/door_rear_l.obj",
+                      "triangleCount":  98
+                  },
+                  {
+                      "itemDefId":  "door_rear",
+                      "vertexCount":  196,
+                      "slot":  "DOOR_REAR",
+                      "name":  "Door_Rear_R",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      -0.8,
+                                                      -0.28,
+                                                      -0.94000000000000006
+                                                  ],
+                                          "size":  [
+                                                       0.83,
+                                                       1.78,
+                                                       0.19
+                                                   ],
+                                          "max":  [
+                                                      0.03,
+                                                      1.5,
+                                                      -0.75
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    0.02,
+                                    0.5,
+                                    -0.92
+                                ],
+                      "fileObj":  "parts/door_rear_r.obj",
+                      "triangleCount":  98
+                  },
+                  {
+                      "itemDefId":  "headlight",
+                      "vertexCount":  248,
+                      "slot":  "HEADLIGHT",
+                      "name":  "Headlight_L",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      2.05,
+                                                      0.32,
+                                                      0.52
+                                                  ],
+                                          "size":  [
+                                                       0.21,
+                                                       0.22,
+                                                       0.26
+                                                   ],
+                                          "max":  [
+                                                      2.26,
+                                                      0.54,
+                                                      0.78
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    2.15,
+                                    0.43,
+                                    0.65
+                                ],
+                      "fileObj":  "parts/headlight_l.obj",
+                      "triangleCount":  104
+                  },
+                  {
+                      "itemDefId":  "headlight",
+                      "vertexCount":  248,
+                      "slot":  "HEADLIGHT",
+                      "name":  "Headlight_R",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      2.05,
+                                                      0.32,
+                                                      -0.78
+                                                  ],
+                                          "size":  [
+                                                       0.21,
+                                                       0.22,
+                                                       0.26
+                                                   ],
+                                          "max":  [
+                                                      2.26,
+                                                      0.54,
+                                                      -0.52
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    2.15,
+                                    0.43,
+                                    -0.65
+                                ],
+                      "fileObj":  "parts/headlight_r.obj",
+                      "triangleCount":  104
+                  },
+                  {
+                      "itemDefId":  "taillight",
+                      "vertexCount":  96,
+                      "slot":  "TAILLIGHT",
+                      "name":  "Taillight_L",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      -2.58,
+                                                      0.48,
+                                                      0.55
+                                                  ],
+                                          "size":  [
+                                                       0.18,
+                                                       0.24,
+                                                       0.27
+                                                   ],
+                                          "max":  [
+                                                      -2.4,
+                                                      0.72,
+                                                      0.82
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    -2.48,
+                                    0.6,
+                                    0.685
+                                ],
+                      "fileObj":  "parts/taillight_l.obj",
+                      "triangleCount":  48
+                  },
+                  {
+                      "itemDefId":  "taillight",
+                      "vertexCount":  96,
+                      "slot":  "TAILLIGHT",
+                      "name":  "Taillight_R",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      -2.58,
+                                                      0.48,
+                                                      -0.82
+                                                  ],
+                                          "size":  [
+                                                       0.18,
+                                                       0.24,
+                                                       0.27
+                                                   ],
+                                          "max":  [
+                                                      -2.4,
+                                                      0.72,
+                                                      -0.55
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    -2.48,
+                                    0.6,
+                                    -0.685
+                                ],
+                      "fileObj":  "parts/taillight_r.obj",
+                      "triangleCount":  48
+                  },
+                  {
+                      "itemDefId":  "seat_front",
+                      "vertexCount":  240,
+                      "slot":  "SEAT_FRONT",
+                      "name":  "Seat_Front_L",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      0.03,
+                                                      -0.28,
+                                                      0.13
+                                                  ],
+                                          "size":  [
+                                                       0.49,
+                                                       1.16,
+                                                       0.5
+                                                   ],
+                                          "max":  [
+                                                      0.52,
+                                                      0.88,
+                                                      0.63
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    0.28,
+                                    0.25,
+                                    0.38
+                                ],
+                      "fileObj":  "parts/seat_front_l.obj",
+                      "triangleCount":  120
+                  },
+                  {
+                      "itemDefId":  "seat_front",
+                      "vertexCount":  240,
+                      "slot":  "SEAT_FRONT",
+                      "name":  "Seat_Front_R",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      0.03,
+                                                      -0.28,
+                                                      -0.63
+                                                  ],
+                                          "size":  [
+                                                       0.49,
+                                                       1.16,
+                                                       0.5
+                                                   ],
+                                          "max":  [
+                                                      0.52,
+                                                      0.88,
+                                                      -0.13
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    0.28,
+                                    0.25,
+                                    -0.38
+                                ],
+                      "fileObj":  "parts/seat_front_r.obj",
+                      "triangleCount":  120
+                  },
+                  {
+                      "itemDefId":  "seat_rear",
+                      "vertexCount":  96,
+                      "slot":  "SEAT_REAR",
+                      "name":  "Seat_Rear",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      -0.85,
+                                                      -0.24,
+                                                      -0.68
+                                                  ],
+                                          "size":  [
+                                                       0.53,
+                                                       1.06,
+                                                       1.36
+                                                   ],
+                                          "max":  [
+                                                      -0.32,
+                                                      0.82,
+                                                      0.68
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    -0.55,
+                                    0.25,
+                                    0
+                                ],
+                      "fileObj":  "parts/seat_rear.obj",
+                      "triangleCount":  48
+                  },
+                  {
+                      "itemDefId":  "roof_rack",
+                      "vertexCount":  672,
+                      "slot":  "ROOF_RACK",
+                      "name":  "Roof_Rack",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      -0.85,
+                                                      1.52,
+                                                      -0.65
+                                                  ],
+                                          "size":  [
+                                                       1.51,
+                                                       0.2,
+                                                       1.3
+                                                   ],
+                                          "max":  [
+                                                      0.66,
+                                                      1.72,
+                                                      0.65
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    -0.15,
+                                    1.54,
+                                    0
+                                ],
+                      "fileObj":  "parts/roof_rack.obj",
+                      "triangleCount":  336
+                  },
+                  {
+                      "itemDefId":  "engine_a",
+                      "vertexCount":  644,
+                      "slot":  "ENGINE",
+                      "name":  "Engine",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      1.1,
+                                                      -0.18,
+                                                      -0.45
+                                                  ],
+                                          "size":  [
+                                                       0.68,
+                                                       0.61,
+                                                       0.8
+                                                   ],
+                                          "max":  [
+                                                      1.78,
+                                                      0.43000000000000005,
+                                                      0.35
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    1.55,
+                                    0.15,
+                                    0
+                                ],
+                      "fileObj":  "parts/engine.obj",
+                      "triangleCount":  280
+                  },
+                  {
+                      "itemDefId":  "radiator",
+                      "vertexCount":  216,
+                      "slot":  "RADIATOR",
+                      "name":  "Radiator",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      1.97,
+                                                      -0.14,
+                                                      -0.44
+                                                  ],
+                                          "size":  [
+                                                       0.11,
+                                                       0.56,
+                                                       0.88
+                                                   ],
+                                          "max":  [
+                                                      2.08,
+                                                      0.42,
+                                                      0.44
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    2.05,
+                                    0.15,
+                                    0
+                                ],
+                      "fileObj":  "parts/radiator.obj",
+                      "triangleCount":  100
+                  },
+                  {
+                      "itemDefId":  "battery_std",
+                      "vertexCount":  208,
+                      "slot":  "BATTERY",
+                      "name":  "Battery",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      1.54,
+                                                      0.22,
+                                                      -0.63
+                                                  ],
+                                          "size":  [
+                                                       0.25,
+                                                       0.275,
+                                                       0.24
+                                                   ],
+                                          "max":  [
+                                                      1.79,
+                                                      0.495,
+                                                      -0.39
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    1.66,
+                                    0.34,
+                                    -0.51
+                                ],
+                      "fileObj":  "parts/battery.obj",
+                      "triangleCount":  88
+                  },
+                  {
+                      "itemDefId":  "tank_std",
+                      "vertexCount":  172,
+                      "slot":  "FUEL_TANK",
+                      "name":  "Fuel_Tank",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      -1.45,
+                                                      -0.29,
+                                                      -0.53
+                                                  ],
+                                          "size":  [
+                                                       0.5,
+                                                       0.39,
+                                                       1.06
+                                                   ],
+                                          "max":  [
+                                                      -0.95,
+                                                      0.1,
+                                                      0.53
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    -1.2,
+                                    -0.13,
+                                    0
+                                ],
+                      "fileObj":  "parts/fuel_tank.obj",
+                      "triangleCount":  76
+                  },
+                  {
+                      "itemDefId":  "suspension_basic",
+                      "vertexCount":  1416,
+                      "slot":  "SUSPENSION",
+                      "name":  "Suspension_Drivetrain",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      -1.944,
+                                                      -0.28,
+                                                      -0.8
+                                                  ],
+                                          "size":  [
+                                                       3.868,
+                                                       0.545,
+                                                       1.6
+                                                   ],
+                                          "max":  [
+                                                      1.924,
+                                                      0.265,
+                                                      0.8
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    0,
+                                    0,
+                                    0
+                                ],
+                      "fileObj":  "parts/suspension_drivetrain.obj",
+                      "triangleCount":  596
+                  },
+                  {
+                      "itemDefId":  "tire_std",
+                      "vertexCount":  1732,
+                      "slot":  "TIRE_FRONT",
+                      "name":  "Wheel_FL",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      1.264,
+                                                      -0.5,
+                                                      0.65
+                                                  ],
+                                          "size":  [
+                                                       1,
+                                                       1,
+                                                       0.28
+                                                   ],
+                                          "max":  [
+                                                      2.2640000000000002,
+                                                      0.5,
+                                                      0.93
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    1.764,
+                                    0,
+                                    0.78
+                                ],
+                      "fileObj":  "parts/wheel_fl.obj",
+                      "triangleCount":  736
+                  },
+                  {
+                      "itemDefId":  "tire_std",
+                      "vertexCount":  1732,
+                      "slot":  "TIRE_FRONT",
+                      "name":  "Wheel_FR",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      1.264,
+                                                      -0.5,
+                                                      -0.93
+                                                  ],
+                                          "size":  [
+                                                       1,
+                                                       1,
+                                                       0.28
+                                                   ],
+                                          "max":  [
+                                                      2.2640000000000002,
+                                                      0.5,
+                                                      -0.65
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    1.764,
+                                    0,
+                                    -0.78
+                                ],
+                      "fileObj":  "parts/wheel_fr.obj",
+                      "triangleCount":  736
+                  },
+                  {
+                      "itemDefId":  "tire_std",
+                      "vertexCount":  1732,
+                      "slot":  "TIRE_REAR",
+                      "name":  "Wheel_RL",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      -2.2640000000000002,
+                                                      -0.5,
+                                                      0.65
+                                                  ],
+                                          "size":  [
+                                                       1,
+                                                       1,
+                                                       0.28
+                                                   ],
+                                          "max":  [
+                                                      -1.264,
+                                                      0.5,
+                                                      0.93
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    -1.764,
+                                    0,
+                                    0.78
+                                ],
+                      "fileObj":  "parts/wheel_rl.obj",
+                      "triangleCount":  736
+                  },
+                  {
+                      "itemDefId":  "tire_std",
+                      "vertexCount":  1732,
+                      "slot":  "TIRE_REAR",
+                      "name":  "Wheel_RR",
+                      "boundingBox":  {
+                                          "min":  [
+                                                      -2.2640000000000002,
+                                                      -0.5,
+                                                      -0.93
+                                                  ],
+                                          "size":  [
+                                                       1,
+                                                       1,
+                                                       0.28
+                                                   ],
+                                          "max":  [
+                                                      -1.264,
+                                                      0.5,
+                                                      -0.65
+                                                  ]
+                                      },
+                      "pivot":  [
+                                    -1.764,
+                                    0,
+                                    -0.78
+                                ],
+                      "fileObj":  "parts/wheel_rr.obj",
+                      "triangleCount":  736
+                  }
+              ]
+}

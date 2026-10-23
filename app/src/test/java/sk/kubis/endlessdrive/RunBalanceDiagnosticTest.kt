@@ -33,7 +33,6 @@ class RunBalanceDiagnosticTest {
 
         for (seed in seeds) {
             val engine = GameEngine(seed, 0f)
-            engine.setScreenHeight(1080f)
             engine.readyCar()
             engine.tryStartEngine()
 

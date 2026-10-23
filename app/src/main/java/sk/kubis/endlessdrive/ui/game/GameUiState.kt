@@ -1,19 +1,29 @@
 package sk.kubis.endlessdrive.ui.game
 
+import sk.kubis.endlessdrive.core.GameConfig
 import sk.kubis.endlessdrive.domain.model.ComponentSlot
 import sk.kubis.endlessdrive.domain.model.EndReason
 import sk.kubis.endlessdrive.domain.model.GamePhase
+import sk.kubis.endlessdrive.domain.model.RescueOffer
 import sk.kubis.endlessdrive.domain.model.ItemDef
 import sk.kubis.endlessdrive.domain.model.RoadFeature
 import sk.kubis.endlessdrive.domain.model.RoadSurface
 import sk.kubis.endlessdrive.game.event.RoadEvent
+import sk.kubis.endlessdrive.game.event.PursuitStormKind
 import sk.kubis.endlessdrive.game.PrepStep
+import sk.kubis.endlessdrive.game.SideMissionCompletion
 import sk.kubis.endlessdrive.game.car.Car
 import sk.kubis.endlessdrive.game.car.TireInjury
+import sk.kubis.endlessdrive.ui.l10n.Copy
+import sk.kubis.endlessdrive.ui.l10n.adLoadingQuota
+import sk.kubis.endlessdrive.ui.l10n.batteryWatchAd
+import sk.kubis.endlessdrive.ui.l10n.roadAssistWatchAd
 
 /** Stav HUD / overlayov – aktualizuje sa max ~10×/s, nie každú snímku. */
 data class GameUiState(
     val phase: GamePhase = GamePhase.PREP,
+    val safeHavenDecisionPending: Boolean = false,
+    val endlessMode: Boolean = false,
     val message: String = "",
     /** Dôvod, prečo sa auto nevie pohnúť vpred (null = ide). */
     val blockedReason: String? = null,
@@ -44,6 +54,13 @@ data class GameUiState(
     val approachingJunction: Boolean = false,
     val junctionDistanceM: Float = 0f,
     val pendingChoiceId: Int? = null,
+    val pursuitStormKind: PursuitStormKind? = null,
+    val pursuitStormGapM: Int? = null,
+    val pursuitStormCaught: Boolean = false,
+    val sideMissionTitle: String? = null,
+    val sideMissionProgress: String? = null,
+    /** Odmena čaká na prevzatie alebo zdvojnásobenie cez rewarded reklamu. */
+    val sideMissionCompletion: SideMissionCompletion? = null,
     /** Bežiace udalosti: štítok + zvyšok času v sekundách. */
     val events: List<Pair<String, Int>> = emptyList(),
     /** 0..1 – ako veľmi práve preklzávajú kolesá. */
@@ -62,14 +79,17 @@ data class GameUiState(
     val relayNodes: Int = 0,
     val overallHealth: Float = 0f,
     val batteryCharge: Float = 0f,
-    /** Výkon alternátora a maximum, na ktorom pri ňom vie batéria zostať. */
+    /** Výkon alternátora (0 = chýba / mŕtvy). Strop nabitia je zdravie batérie. */
     val alternatorOutput: Float = 0f,
     val batteryChargeCeiling: Float = 0f,
+    /** Koľko kapacity batéria ešte drží (zdravie dielu). */
+    val batteryHoldCapacity: Float = 0f,
     val engineRunning: Boolean = false,
     val headlightsOn: Boolean = false,
     val highBeamsOn: Boolean = false,
     val hasExpeditionKit: Boolean = false,
     val roofLightsOn: Boolean = false,
+    val cruiseOn: Boolean = false,
     val isNight: Boolean = false,
     val clock: String = "08:00",
     val hasNearbyBuilding: Boolean = false,
@@ -78,6 +98,13 @@ data class GameUiState(
     /** Dá sa práve prespať do rána. */
     val canRest: Boolean = false,
     val exploring: Boolean = false,
+    /** Stojí a nemá čím z ráfika/bahna/vybitej batérie von – HUD môže ponúknuť reklamu. */
+    val canRequestAssist: Boolean = false,
+    /** Parkovaná ponuka (ROAD ASSIST alebo BATTERY); null = predvolený ROAD ASSIST text. */
+    val assistOffer: RescueOffer? = null,
+    /** Koľko núdzových reklám (záchrana / ROAD ASSIST) ešte ostáva v tejto jazde. */
+    val helpAdsRemaining: Int = GameConfig.HELP_ADS_MAX,
+    val helpAdsMax: Int = GameConfig.HELP_ADS_MAX,
     /** Zásoba v stojane preskúmavanej benzínky. */
     val pumpFuelL: Float = 0f,
     val paused: Boolean = false,
@@ -115,7 +142,21 @@ data class GameUiState(
     val rearTireInjury: TireInjury = TireInjury.INFLATED,
     val frontTireHealth: Float = 1f,
     val rearTireHealth: Float = 1f
-)
+) {
+    val helpAdsQuotaLabel: String get() = "$helpAdsRemaining/$helpAdsMax"
+
+    fun roadAssistAdLabel(adReady: Boolean, copy: Copy): String {
+        val quota = helpAdsQuotaLabel
+        return if (adReady) {
+            when (assistOffer) {
+                RescueOffer.BATTERY, RescueOffer.BATTERY_FIT -> copy.batteryWatchAd(quota)
+                else -> copy.roadAssistWatchAd(quota)
+            }
+        } else {
+            copy.adLoadingQuota(quota)
+        }
+    }
+}
 
 /**
  * Riadok stavu dielu do HUD. [wearing] označuje diel, ktorý práve schytáva
@@ -130,7 +171,7 @@ data class PartStatus(
     val fitted: Boolean = true
 )
 
-/** Krátky popis dielu do HUD (bez zbytočných slov). */
+/** @deprecated Use [sk.kubis.endlessdrive.ui.l10n.itemHudLabel] with Copy. */
 fun ItemDef.hudLabel(): String {
     val raw = name
         .removePrefix("Tyres ")
@@ -142,17 +183,13 @@ fun ItemDef.hudLabel(): String {
     return raw.trim('(', ')', ' ').ifBlank { name }
 }
 
+/** @deprecated Use [sk.kubis.endlessdrive.ui.l10n.fittedHudLabel] with Copy. */
 fun Car.fittedHudLabel(slot: ComponentSlot): String =
     parts[slot]?.def?.hudLabel() ?: "—"
 
 /**
- * Čím sa namontovaný diel líši od názvu slotu – teda to, čo sa vypisuje
- * v zátvorke za „Radiator“, „Battery“ a spol.
- *
- * Zo štítku vypadnú slová, ktoré sú už v názve slotu: „Radiator (Radiator)“
- * nič nehovorí a „Fuel tank (Long-range tank 110 L)“ je taký dlhý, že
- * v riadku nezvýši miesto na percentá. Keď neostane nič, vráti prázdny
- * reťazec a zátvorka sa vôbec nekreslí.
+ * Čím sa namontovaný diel líši od názvu slotu.
+ * Preferuj [sk.kubis.endlessdrive.ui.l10n.itemSlotDetail].
  */
 fun ItemDef.slotDetail(slot: ComponentSlot): String {
     val noise = slot.displayName.split(' ', '-').map { it.lowercase() }.toSet()

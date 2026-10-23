@@ -18,13 +18,17 @@ import kotlin.math.roundToLong
 data class PlayGamesState(
     val configured: Boolean = false,
     val signedIn: Boolean = false,
+    val connecting: Boolean = false,
     val playerName: String? = null,
     val error: String? = null
 )
 
 /**
- * Play Games v2 adapter. Missing Play Console IDs deliberately degrade to
- * offline mode so local development and sideloaded builds keep working.
+ * Play Games v2 adapter.
+ *
+ * Pri štarte len [refreshAuth] (tiché overenie). Interaktívny výber konta
+ * ide cez [signIn] – až keď to hráč vedome stlačí, inak by sa picker
+ * otváral pri každom spustení.
  */
 class PlayGamesService(context: Context) {
     private val appContext = context.applicationContext
@@ -39,6 +43,8 @@ class PlayGamesService(context: Context) {
         DistanceAchievement(appContext.getString(R.string.achievement_endless_500_id), 500f)
     )
     private val requestedAchievementIds = mutableSetOf<String>()
+    private var authInFlight = false
+    private val pendingAuthCallbacks = mutableListOf<(Boolean) -> Unit>()
 
     val isConfigured: Boolean = projectId.isUsablePlayGamesValue()
     private val _state = MutableStateFlow(PlayGamesState(configured = isConfigured))
@@ -48,36 +54,114 @@ class PlayGamesService(context: Context) {
         if (isConfigured) PlayGamesSdk.initialize(appContext)
     }
 
-    fun connect(activity: Activity) {
-        if (!isConfigured || _state.value.signedIn) return
-        val signInClient = PlayGames.getGamesSignInClient(activity)
-        signInClient.isAuthenticated().addOnCompleteListener { task ->
-            val authenticated = task.isSuccessful && task.result?.isAuthenticated == true
-            if (authenticated) {
-                loadCurrentPlayer(activity)
-            } else {
-                signInClient.signIn().addOnCompleteListener { signInTask ->
-                    if (signInTask.isSuccessful && signInTask.result?.isAuthenticated == true) {
-                        loadCurrentPlayer(activity)
-                    } else {
-                        _state.value = _state.value.copy(error = "Play Games sign-in unavailable")
-                    }
-                }
-            }
-        }
+    /** Spätná kompatibilita: tiché overenie, bez account pickera. */
+    fun connect(activity: Activity, onResult: (Boolean) -> Unit = {}) {
+        refreshAuth(activity, onResult)
     }
 
-    private fun loadCurrentPlayer(activity: Activity) {
+    /** Tiché overenie po auto-auth SDK. Neotvára výber konta. */
+    fun refreshAuth(activity: Activity, onResult: (Boolean) -> Unit = {}) {
+        if (!isConfigured) {
+            onResult(false)
+            return
+        }
+        if (_state.value.signedIn) {
+            onResult(true)
+            return
+        }
+        enqueueAuth(onResult)
+        if (authInFlight) return
+        authInFlight = true
+        _state.value = _state.value.copy(connecting = true, error = null)
+        PlayGames.getGamesSignInClient(activity)
+            .isAuthenticated()
+            .addOnCompleteListener { task ->
+                val authenticated = task.isSuccessful && task.result?.isAuthenticated == true
+                if (authenticated) {
+                    loadCurrentPlayer(activity) { finishAuth(it) }
+                } else {
+                    finishAuth(false, task.exception?.localizedMessage)
+                }
+            }
+    }
+
+    /** Interaktívne prihlásenie (account picker) – volať z UI tlačidla. */
+    fun signIn(activity: Activity, onResult: (Boolean) -> Unit = {}) {
+        if (!isConfigured) {
+            onResult(false)
+            return
+        }
+        if (_state.value.signedIn) {
+            onResult(true)
+            return
+        }
+        enqueueAuth(onResult)
+        if (authInFlight) return
+        authInFlight = true
+        _state.value = _state.value.copy(connecting = true, error = null)
+        PlayGames.getGamesSignInClient(activity)
+            .signIn()
+            .addOnCompleteListener { task ->
+                val authenticated = task.isSuccessful && task.result?.isAuthenticated == true
+                if (authenticated) {
+                    // Stav hneď, meno doplníme – UI už ukáže „prihlásený“.
+                    _state.value = _state.value.copy(
+                        signedIn = true,
+                        connecting = true,
+                        error = null
+                    )
+                    loadCurrentPlayer(activity) { finishAuth(it) }
+                } else {
+                    val detail = task.exception?.localizedMessage
+                        ?: if (task.isSuccessful) "Not authenticated"
+                        else "Sign-in failed"
+                    finishAuth(false, detail)
+                }
+            }
+    }
+
+    private fun enqueueAuth(onResult: (Boolean) -> Unit) {
+        pendingAuthCallbacks += onResult
+    }
+
+    private fun finishAuth(ok: Boolean, error: String? = null) {
+        authInFlight = false
+        if (ok) {
+            _state.value = _state.value.copy(connecting = false, error = null)
+        } else {
+            _state.value = _state.value.copy(
+                connecting = false,
+                signedIn = false,
+                playerName = null,
+                error = error ?: "Play Games sign-in unavailable"
+            )
+        }
+        val callbacks = pendingAuthCallbacks.toList()
+        pendingAuthCallbacks.clear()
+        callbacks.forEach { it(ok) }
+    }
+
+    private fun loadCurrentPlayer(activity: Activity, onResult: (Boolean) -> Unit) {
         PlayGames.getPlayersClient(activity).getCurrentPlayer()
             .addOnSuccessListener { player ->
                 _state.value = PlayGamesState(
                     configured = true,
                     signedIn = true,
-                    playerName = player.displayName
+                    connecting = false,
+                    playerName = player.displayName,
+                    error = null
                 )
+                onResult(true)
             }
-            .addOnFailureListener {
-                _state.value = _state.value.copy(signedIn = true, error = "Play Games profile unavailable")
+            .addOnFailureListener { error ->
+                // Auth prešiel – meno nie je nutné pre unlocky.
+                _state.value = _state.value.copy(
+                    signedIn = true,
+                    connecting = false,
+                    playerName = _state.value.playerName,
+                    error = error.localizedMessage
+                )
+                onResult(true)
             }
     }
 
@@ -88,14 +172,12 @@ class PlayGamesService(context: Context) {
         countryCode: String
     ) {
         if (!isConfigured || !_state.value.signedIn || !distanceLeaderboardId.isUsablePlayGamesValue()) return
-        // Store tenths of a kilometre so Play Console can format the score as km.
         val rawScore = (distanceKm.coerceAtLeast(0f) * 10f).roundToLong()
         val scoreTag = "t=${timeSeconds.coerceAtLeast(0f).roundToLong()};c=${countryCode.take(2)}"
         PlayGames.getLeaderboardsClient(activity)
             .submitScoreImmediate(distanceLeaderboardId, rawScore, scoreTag)
     }
 
-    /** Unlocks every distance milestone reached by the player's best run. */
     fun unlockDistanceAchievements(activity: Activity, distanceKm: Float) {
         if (!isConfigured || !_state.value.signedIn) return
         unlockAchievements(
@@ -106,10 +188,6 @@ class PlayGamesService(context: Context) {
         )
     }
 
-    /**
-     * Unlocks distance, expedition, vehicle and event achievements. The
-     * conditions are intentionally milestone-based, not one-tap actions.
-     */
     fun unlockGameplayAchievements(
         activity: Activity,
         distanceKm: Float,
@@ -143,7 +221,6 @@ class PlayGamesService(context: Context) {
             .forEach { id -> achievementsClient.unlock(id) }
     }
 
-    /** Opens the standard Play Games achievements screen. */
     fun showAchievements(activity: Activity, onFailure: (String) -> Unit = {}) {
         if (!isConfigured || !_state.value.signedIn) {
             onFailure("Play Games is not connected")
@@ -168,11 +245,6 @@ class PlayGamesService(context: Context) {
             onResult(emptyList(), "Distance leaderboard ID is missing")
             return
         }
-        if (tab == LeaderboardTab.COUNTRY) {
-            onResult(emptyList(), "Country rankings need a country-aware backend")
-            return
-        }
-
         val collection = if (tab == LeaderboardTab.FRIENDS) {
             LeaderboardVariant.COLLECTION_FRIENDS
         } else {

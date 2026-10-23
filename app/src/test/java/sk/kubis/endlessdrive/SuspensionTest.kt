@@ -12,7 +12,6 @@ import sk.kubis.endlessdrive.game.GameEngine
 import sk.kubis.endlessdrive.game.car.Car
 import sk.kubis.endlessdrive.game.car.WHEEL_HUB_FRAC
 import sk.kubis.endlessdrive.game.world.TestTrackProfile
-import sk.kubis.endlessdrive.ui.game.SuspensionVisual
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -22,154 +21,23 @@ import kotlin.math.min
  */
 class SuspensionTest {
 
-    @Test
-    fun physicsStrokeIsLargerThanTheWheelWell() {
-        val restR = 31f
-        val travel = SuspensionVisual.travelPx(0.52f, GameConfig.CAMERA_BASE_PPM)
-        assertTrue("zdvih liftu musí byť väčší než oblúk, inak niet čo klampovať ($travel)", travel > restR * 0.7f)
-        val bounds = SuspensionVisual.wellDyBounds(restR, restR, travel)
-        assertTrue(
-            "hore nesmie koleso vliezť do karosérie (jounce=${-bounds.start})",
-            -bounds.start <= restR * SuspensionVisual.WELL_JOUNCE_FRAC + 0.05f
-        )
-        assertTrue(
-            "dole nesmie spadnúť cez podlahu sprite (droop=${bounds.endInclusive})",
-            bounds.endInclusive <= restR * SuspensionVisual.WELL_DROOP_FRAC + 0.05f
-        )
-        assertTrue(-bounds.start < travel * 0.55f)
-    }
 
-    @Test
-    fun frontAndRearShareTheSameWellLimits() {
-        val restR = 30f
-        val travel = SuspensionVisual.travelPx(0.38f, 66f)
-        val front = SuspensionVisual.wellDyBounds(restR, restR, travel)
-        val rear = SuspensionVisual.wellDyBounds(restR, restR, travel)
-        assertEquals(front.start, rear.start, 0.001f)
-        assertEquals(front.endInclusive, rear.endInclusive, 0.001f)
-    }
 
-    @Test
-    fun wheelCannotRiseThroughTheArchOnABump() {
-        val wellY = 200f
-        val restR = 31f
-        val travel = SuspensionVisual.travelPx(0.52f, 66f)
-        val bounds = SuspensionVisual.wellDyBounds(restR, restR, travel)
-        // Vozovka vysoko nad blatníkom – koleso chce ísť cez karosériu.
-        val y = SuspensionVisual.wheelCenterY(wellY, wellY - 80f, restR, restR, travel, true)
-        assertEquals(wellY + bounds.start, y, 0.05f)
-        assertTrue("stred kolesa ostane v oblúku, nie v blatníku", y >= wellY - restR * 0.35f)
-    }
 
-    @Test
-    fun puncturedWheelSitsOnSlopeWithoutTravellingAcrossTheWheelArch() {
-        val wellX = 100f
-        val wellY = 180f
-        val groundY = 210f
-        val r = 30f
-        val travel = SuspensionVisual.travelPx(0.45f, 66f)
-        val slope = (kotlin.math.PI / 5.0).toFloat()
-        val seated = SuspensionVisual.wheelOnRoad(
-            wellX, wellY, groundY, r, r, travel, true, slope, alongSlope = true
-        )
-        val vertical = SuspensionVisual.wheelOnRoad(
-            wellX, wellY, groundY, r, r, travel, true, 0f, alongSlope = true
-        )
-        assertEquals(wellX, vertical.first, 0.05f)
-        assertEquals(groundY - r, vertical.second, 0.05f)
-        assertEquals("defekt ostane na osi blatníka", wellX, seated.first, 0.05f)
-        assertTrue(
-            "na svahu je Y bližšie k vozovke než zvislý drop (${seated.second} vs ${vertical.second})",
-            seated.second > vertical.second
-        )
-    }
 
-    @Test
-    fun puncturedWheelXStaysFixedWhenSlopeChanges() {
-        val wellX = 100f
-        var minX = Float.POSITIVE_INFINITY
-        var maxX = Float.NEGATIVE_INFINITY
-        for (deg in -35..35) {
-            val seated = SuspensionVisual.wheelOnRoad(
-                wellX = wellX,
-                wellY = 180f,
-                groundY = 210f,
-                radiusPx = 30f,
-                restRadiusPx = 30f,
-                travelPx = 18f,
-                visualContact = true,
-                slopeRad = Math.toRadians(deg.toDouble()).toFloat(),
-                alongSlope = true
-            )
-            minX = min(minX, seated.first)
-            maxX = max(maxX, seated.first)
-        }
-        assertEquals("defekt nesmie cestovať do strán", 0f, maxX - minX, 0.01f)
-    }
 
-    @Test
-    fun inflatedWheelStaysUnderTheArchWhenSlopeJitters() {
-        val wellX = 100f
-        val wellY = 180f
-        val groundY = 210f
-        val r = 30f
-        val travel = SuspensionVisual.travelPx(0.45f, 66f)
-        var minX = Float.POSITIVE_INFINITY
-        var maxX = Float.NEGATIVE_INFINITY
-        for (deg in -28..28) {
-            val slope = Math.toRadians(deg.toDouble()).toFloat()
-            val seated = SuspensionVisual.wheelOnRoad(
-                wellX, wellY, groundY, r, r, travel, true, slope
-            )
-            assertEquals("koleso ostane pod blatníkom pri $deg°", wellX, seated.first, 0.05f)
-            minX = min(minX, seated.first)
-            maxX = max(maxX, seated.first)
-            assertEquals(groundY - r, seated.second, 0.05f)
-        }
-        assertEquals("vodorovný lov pri zmene sklonu", 0f, maxX - minX, 0.05f)
-    }
 
-    @Test
-    fun airborneDroopStaysInsideTheWell() {
-        val wellY = 200f
-        val restR = 31f
-        val travel = SuspensionVisual.travelPx(0.52f, 66f)
-        val bounds = SuspensionVisual.wellDyBounds(restR, restR, travel)
-        val y = SuspensionVisual.wheelCenterY(wellY, 0f, restR, restR, travel, false)
-        assertTrue("vo vzduchu kolesá visia dole", y >= wellY)
-        assertTrue(y <= wellY + bounds.endInclusive + 0.05f)
-        val unconstrained = wellY + travel * SuspensionVisual.AIR_DROOP
-        if (unconstrained > wellY + bounds.endInclusive) {
-            assertEquals(wellY + bounds.endInclusive, y, 0.05f)
-        }
-    }
 
-    @Test
-    fun shreddedHubDropsFurtherButDoesNotRiseThroughTheArch() {
-        val restR = 31f
-        val hubR = restR * WHEEL_HUB_FRAC
-        val travel = SuspensionVisual.travelPx(0.45f, 66f)
-        val inflated = SuspensionVisual.wellDyBounds(restR, restR, travel)
-        val shredded = SuspensionVisual.wellDyBounds(restR, hubR, travel)
-        assertEquals("oblúk je ten istý pre disk aj gumu", inflated.start, shredded.start, 0.05f)
-        assertTrue("ráfik smie klesnúť nižšie", shredded.endInclusive > inflated.endInclusive + 4f)
-        val wellY = 180f
-        val up = SuspensionVisual.wheelCenterY(wellY, wellY - 90f, hubR, restR, travel, true)
-        assertTrue(up >= wellY + shredded.start - 0.05f)
-        assertTrue("disk neprelezie hore cez blatník", up >= wellY - restR * 0.35f)
-    }
 
-    @Test
-    fun loweredSuspensionTravelsLessThanLifted() {
-        val ppm = GameConfig.CAMERA_BASE_PPM
-        val low = SuspensionVisual.travelPx(ItemCatalog.SUSPENSION_LOW.suspTravel, ppm)
-        val lift = SuspensionVisual.travelPx(ItemCatalog.SUSPENSION_LIFT.suspTravel, ppm)
-        assertTrue("znížený podvozok má menší vizuálny zdvih ($low vs $lift)", low < lift)
-        val restR = 31f
-        val lowWell = SuspensionVisual.wellDyBounds(restR, restR, low)
-        val liftWell = SuspensionVisual.wellDyBounds(restR, restR, lift)
-        assertTrue(-lowWell.start <= -liftWell.start + 0.05f)
-    }
+
+
+
+
+
+
+
+
+
 
     @Test
     fun oneWheelLandingDoesNotYankPitchToTheStop() {

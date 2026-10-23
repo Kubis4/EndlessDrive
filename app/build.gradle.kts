@@ -1,6 +1,16 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        load(FileInputStream(keystorePropertiesFile))
+    }
 }
 
 android {
@@ -11,10 +21,51 @@ android {
         applicationId = "sk.kubis.endlessdrive"
         minSdk = 24
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 5
+        versionName = "0.5.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
+        // Play Games / Ads native .so — Studio deployuje ABI splity.
+        // Bez filtra hlási 0 split APK a zlyhá na arm64-v8a zariadení.
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
+        }
+    }
+
+    androidResources {
+        // Ads / Play Games ťahajú desiatky prekladov. Hra má vlastný katalóg
+        // (en, de, fr, it, sk, es), ostatné locale z balíčka vypadnú.
+        localeFilters += listOf("en", "de", "fr", "it", "sk", "es")
+    }
+
+    splits {
+        abi {
+            // AAB nesmie ísť spolu s ABI split APK (AGP 9 / issuetracker 402800800).
+            isEnable = gradle.startParameter.taskNames.none {
+                it.contains("bundle", ignoreCase = true)
+            }
+            reset()
+            include("armeabi-v7a", "arm64-v8a", "x86_64")
+            isUniversalApk = true
+        }
+    }
+
+    bundle {
+        // Play doručí iba ABI a hustotu konkrétneho zariadenia. Univerzálny
+        // balík predtým niesol tri kópie natívnych knižníc a zbytočne rástol.
+        abi { enableSplit = true }
+        density { enableSplit = true }
+    }
+
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
@@ -33,6 +84,9 @@ android {
                 "proguard-rules.pro"
             )
             buildConfigField("boolean", "SHOW_FPS", "false")
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
@@ -47,7 +101,18 @@ android {
     }
 
     packaging {
-        resources.excludes += setOf("/META-INF/{AL2.0,LGPL2.1}")
+        resources.excludes += setOf(
+            "/META-INF/{AL2.0,LGPL2.1}",
+            "META-INF/*.version",
+            "META-INF/NOTICE.md",
+            "META-INF/LICENSE.md",
+            "DebugProbesKt.bin",
+            "kotlin-tooling-metadata.json"
+        )
+        jniLibs {
+            // Play stlačí download; mmap .so zmenší inštaláciu aj AAB.
+            useLegacyPackaging = false
+        }
     }
 }
 
@@ -61,7 +126,6 @@ kotlin {
 
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
-    implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.activity:activity-compose:1.9.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
@@ -72,9 +136,7 @@ dependencies {
     androidTestImplementation(composeBom)
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
-    implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-extended")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     implementation("androidx.navigation:navigation-compose:2.7.7")

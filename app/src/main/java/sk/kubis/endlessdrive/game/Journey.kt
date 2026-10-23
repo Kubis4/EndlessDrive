@@ -36,6 +36,4 @@ object Journey {
     fun relayRestoreCost(relayIndex: Int): Int =
         (6 + relayIndex.coerceAtLeast(0) * 4).coerceAtMost(36)
 
-    /** Kilometre milestoney už samy negenerujú scrap; ten pochádza z lootu. */
-    fun rewardBetween(beforeM: Float, afterM: Float): Int = 0
 }

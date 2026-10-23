@@ -106,9 +106,12 @@ enum class RoadPaving(
     DIRT("Dirt track", 0.94f, true),
     GRAVEL_ROAD("Gravel road", 0.92f, true),
     SAND_TRACK("Sand track", 0.88f, true),
-    /** Zasnežená cesta – prichádza až v neskoršej časti jazdy. */
-    SNOW("Snow", 0.40f, true),
-    PACKED_SNOW("Packed snow", 0.50f, true);
+    /**
+     * Zasnežená cesta – prichádza až v neskoršej časti jazdy.
+     * Grip musí ostať pod suchými vetvami; fyzika ho nesmie dvihnúť na 0.5.
+     */
+    SNOW("Snow", 0.38f, true),
+    PACKED_SNOW("Packed snow", 0.48f, true);
 
     /** true = mrzne; auto rieši chlad, gumy zimnú výbavu. */
     val winter: Boolean get() = this == SNOW || this == PACKED_SNOW
@@ -170,9 +173,15 @@ enum class BuildingType(val displayName: String) {
     HOUSE("House"),
     GARAGE("Garage"),
     GAS_STATION("Fuel station"),
-    AUTO_SHOP("Repair shop"),
+    AUTO_SHOP("Workshop"),
     /** Odstavené auto pri ceste – dá sa prehľadať, často je v ňom scrap. */
-    WRECK("Abandoned car")
+    WRECK("Abandoned car"),
+    /** Lakovačka – len respray, žiadny loot ani upgrade. */
+    PAINT_SHOP("Paint shop");
+
+    /** Servis predáva službu, nie hromadu dielov. */
+    val isServiceShop: Boolean
+        get() = this == AUTO_SHOP || this == PAINT_SHOP
 }
 
 enum class BiomeType(val displayName: String) {
@@ -200,6 +209,9 @@ enum class BiomeType(val displayName: String) {
 
     /** Les v ktoromkoľvek stave – hustá kulisa kmeňov po oboch stranách. */
     val wooded: Boolean get() = this == FOREST || this == FOREST_ALIVE
+
+    /** Zimná kulisa (snehová obloha a kopce) – nie močiar, jeseň ani púšť. */
+    val snowy: Boolean get() = this == ALPINE
 
     /**
      * Biómy s rovnakou kresbou oblohy. Prechod v rámci rodiny nevyzerá
@@ -306,6 +318,17 @@ enum class BranchStyle(
 
     /** Piesok si vyberá daň – vetvy, kde je vidieť horšie a všetko drie. */
     val arid: Boolean get() = biome.arid
+
+    /** Snehová vozovka patrí len k zimnému pozadiu. */
+    val snowy: Boolean get() = biome.snowy
+
+    /**
+     * Kulisa, ktorú má hráč vidieť pri tejto vozovke. Zasnežená cesta
+     * vyzerá zimne aj keď vetva vznikla ako močiar – starý save ostane
+     * konzistentný bez regenerácie segmentu.
+     */
+    fun visualBiome(paving: RoadPaving): BiomeType =
+        if (paving.winter) BiomeType.ALPINE else biome
 }
 
 /**
@@ -350,8 +373,23 @@ enum class EndReason(val message: String) {
     ENGINE_DESTROYED("Engine destroyed"),
     OVERHEAT("Engine overheated"),
     BATTERY_DEAD("The battery is dead"),
+    SHREDDED_TIRE("Tyre shredded to the rim"),
+    STUCK_TIRE("Stuck with no traction"),
     ARRIVED("Reached the safe haven"),
     MANUAL("Run over")
+}
+
+/** Odmena z rewarded reklamy, ktorá má odblokovať ďalšiu jazdu. */
+enum class RescueOffer(val adLabel: String) {
+    FUEL("FUEL +12 L · WATCH AD"),
+    BATTERY("BATTERY CHARGE +50 % · WATCH AD"),
+    BATTERY_FIT("BATTERY +50 % · WATCH AD"),
+    RADIATOR("RADIATOR + COOLANT · WATCH AD"),
+    COOLANT("COOLANT +3 L · WATCH AD"),
+    OIL("OIL +2 L · WATCH AD"),
+    ENGINE("ENGINE +50 % · WATCH AD"),
+    TOW_SHOP("TOW TO SHOP · WATCH AD"),
+    ROADSIDE_SHOP("ROADSIDE GARAGE · WATCH AD")
 }
 
 /** Plechy a interiér – to, čo na aute vidno a čo sa musí nájsť. */

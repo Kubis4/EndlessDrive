@@ -239,14 +239,21 @@ fun StatBar(
     modifier: Modifier = Modifier,
     inner: Float = -1f,
     innerColor: Color = GameColors.ok,
-    barWidth: androidx.compose.ui.unit.Dp = 54.dp
+    barWidth: androidx.compose.ui.unit.Dp? = 54.dp
 ) {
     Column(modifier) {
-        Text(label, color = GameColors.textDim, fontSize = Type.label, letterSpacing = 0.6.sp, maxLines = 1)
+        Text(
+            label,
+            color = GameColors.textDim,
+            fontSize = Type.label,
+            letterSpacing = 0.6.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
         Spacer(Modifier.height(Space.xs))
         Box(
             Modifier
-                .width(barWidth)
+                .then(if (barWidth != null) Modifier.width(barWidth) else Modifier.fillMaxWidth())
                 .height(6.dp)
                 .background(Color(0xFF2A241D), RoundedCornerShape(3.dp))
         ) {
@@ -316,6 +323,7 @@ fun GamePanel(
     subtitle: String? = null,
     onClose: (() -> Unit)? = null,
     fillHeight: Boolean = true,
+    titleFontFamily: FontFamily? = null,
     header: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
@@ -345,6 +353,7 @@ fun GamePanel(
                         title,
                         color = GameColors.text,
                         fontSize = Type.title,
+                        fontFamily = titleFontFamily,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.4.sp
                     )

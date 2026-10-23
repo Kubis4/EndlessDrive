@@ -1,6 +1,7 @@
 package sk.kubis.endlessdrive.game.save
 
 import sk.kubis.endlessdrive.domain.model.BranchStyle
+import sk.kubis.endlessdrive.domain.model.BiomeType
 import sk.kubis.endlessdrive.domain.model.BuildingType
 import sk.kubis.endlessdrive.domain.model.ComponentCondition
 import sk.kubis.endlessdrive.domain.model.ComponentSlot
@@ -10,7 +11,9 @@ import sk.kubis.endlessdrive.domain.model.ItemCatalog
 import sk.kubis.endlessdrive.domain.model.RoadFeature
 import sk.kubis.endlessdrive.domain.model.RoadPaving
 import sk.kubis.endlessdrive.game.event.RoadEvent
+import sk.kubis.endlessdrive.game.event.PursuitStormKind
 import sk.kubis.endlessdrive.game.car.TireInjury
+import sk.kubis.endlessdrive.game.SideMissionKind
 
 /**
  * Odfotená rozohraná jazda. Ukladáme len to, čo sa nedá dopočítať:
@@ -44,7 +47,43 @@ data class RunSnapshot(
     val scrap: Int = 0,
     /** Režim svetiel; false pri starom save znamená stretávacie. */
     val highBeamsOn: Boolean = false,
-    val roofLightsOn: Boolean = false
+    val roofLightsOn: Boolean = false,
+    /** Koľko núdzových reklám (záchrana / ROAD ASSIST) už táto jazda minula. */
+    val helpAdsUsed: Int = 0,
+    val safeHavenDecisionPending: Boolean = false,
+    val endlessMode: Boolean = false,
+    val utilityTrailerAttached: Boolean = false,
+    val pursuitStormKind: PursuitStormKind? = null,
+    val pursuitStormGapM: Float = 0f,
+    val pursuitStormAgeS: Float = 0f,
+    val pursuitStormExposureS: Float = 0f,
+    /** Explicitný swipe výber počas dlhého prechodu ku križovatke. */
+    val selectedBranchId: Int? = null,
+    val routeDetourOriginX: Float = Float.NaN,
+    val routeDetourDirection: Float = 0f,
+    val entryVisualBiomeFrom: BiomeType? = null,
+    val entryPavingFrom: RoadPaving? = null,
+    val entryBackdropSeed: Long = 0L,
+    val sideMissionKind: SideMissionKind? = null,
+    val sideMissionSourceBuildingId: Long = 0L,
+    val sideMissionStartWorldX: Float = 0f,
+    val sideMissionTargetWorldX: Float = 0f,
+    val sideMissionStartItemsLooted: Int = 0,
+    val sideMissionGoalCount: Int = 0,
+    val sideMissionRewardScrap: Int = 0,
+    val lastSideMissionCompletedAtM: Float = -2_500f,
+    val lastPursuitStormAtM: Float = -1f,
+    val pursuitStormsStarted: Int = 0,
+    val sideMissionTargetBuildingId: Long = 0L,
+    val sideMissionTargetBuildingType: BuildingType? = null,
+    val sideMissionBonusRewardScrap: Int = 0,
+    val sideMissionTimeRemainingS: Float = 0f,
+    val sideMissionPackageLoaded: Boolean = false,
+    val sideMissionCargoIntegrity: Float = 1f,
+    val completedSideMissionKind: SideMissionKind? = null,
+    val completedSideMissionRewardScrap: Int = 0,
+    val completedSideMissionBonusScrap: Int = 0,
+    val completedSideMissionCargoIntegrity: Float = 1f
 )
 
 data class EventState(val kind: RoadEvent, val remaining: Float)
@@ -66,7 +105,12 @@ data class CarState(
     val pitch: Float,
     /** Zloženie paliva: 0 = benzín, 1 = diesel. */
     val fuelDieselFraction: Float = 0f,
-    val bodyPaintIndex: Int = 0
+    val bodyPaintIndex: Int = 0,
+    val snowCover: Float = 0f,
+    val bodyDirt: Float = 0f,
+    val bodyRust: Float = 0f,
+    val lateralZ: Float = 0f,
+    val heading: Float = 0f
 )
 
 data class PartState(
@@ -127,7 +171,7 @@ data class BuildingState(
 object RunCodec {
     // 4: kufor auta sa ukladá zvlášť od batoha. Staršie záznamy sa zahodia
     // a hra začne novú jazdu – rozdeliť jeden inventár na dva spätne nemá zmysel.
-    private const val VERSION = 7
+    private const val VERSION = 9
 
     /**
      * Najstaršia verzia, ktorú ešte vieme prečítať.
@@ -146,7 +190,36 @@ object RunCodec {
             listOf(
                 s.seed, s.phase.name, s.distanceM, s.maxReachedX, s.elapsed,
                 s.timeOfDay, s.headlightsOn, s.fuelBurnedL, s.itemsLooted,
-                s.buildingsVisited, s.fluidRescues, s.batteryRescues, s.scrap, s.highBeamsOn, s.roofLightsOn
+                s.buildingsVisited, s.fluidRescues, s.batteryRescues, s.scrap, s.highBeamsOn, s.roofLightsOn,
+                s.helpAdsUsed, s.safeHavenDecisionPending, s.endlessMode,
+                s.utilityTrailerAttached,
+                s.pursuitStormKind?.name ?: "-", s.pursuitStormGapM,
+                s.pursuitStormAgeS, s.pursuitStormExposureS,
+                s.selectedBranchId ?: -1,
+                s.routeDetourOriginX, s.routeDetourDirection,
+                s.entryVisualBiomeFrom?.name ?: "-",
+                s.entryPavingFrom?.name ?: "-",
+                s.entryBackdropSeed,
+                s.sideMissionKind?.name ?: "-",
+                s.sideMissionSourceBuildingId,
+                s.sideMissionStartWorldX,
+                s.sideMissionTargetWorldX,
+                s.sideMissionStartItemsLooted,
+                s.sideMissionGoalCount,
+                s.sideMissionRewardScrap,
+                s.lastSideMissionCompletedAtM,
+                s.lastPursuitStormAtM,
+                s.pursuitStormsStarted,
+                s.sideMissionTargetBuildingId,
+                s.sideMissionTargetBuildingType?.name ?: "-",
+                s.sideMissionBonusRewardScrap,
+                s.sideMissionTimeRemainingS,
+                s.sideMissionPackageLoaded,
+                s.sideMissionCargoIntegrity,
+                s.completedSideMissionKind?.name ?: "-",
+                s.completedSideMissionRewardScrap,
+                s.completedSideMissionBonusScrap,
+                s.completedSideMissionCargoIntegrity
             ).joinToString("|")
         )
         val c = s.car
@@ -154,7 +227,8 @@ object RunCodec {
             listOf(
                 c.fuel, c.oil, c.coolant, c.fuelPurity, c.oilPurity, c.coolantPurity,
                 c.temperature, c.batteryCharge, c.engineRunning, c.x, c.y, c.speed, c.pitch,
-                c.fuelDieselFraction, c.bodyPaintIndex
+                c.fuelDieselFraction, c.bodyPaintIndex, c.snowCover, c.bodyDirt, c.bodyRust,
+                c.lateralZ, c.heading
             ).joinToString("|")
         )
         appendLine(c.parts.joinToString(";") {
@@ -284,7 +358,16 @@ object RunCodec {
                     val engineId = parts.firstOrNull { it.slot == ComponentSlot.ENGINE }?.defId
                     if (ItemCatalog.byId(engineId.orEmpty())?.fuelKind == FuelKind.DIESEL) 1f else 0f
                 },
-                bodyPaintIndex = c.getOrNull(14)?.toIntOrNull() ?: 0
+                bodyPaintIndex = c.getOrNull(14)?.toIntOrNull() ?: 0,
+                snowCover = c.getOrNull(15)?.toFloatOrNull()?.coerceIn(0f, 1f) ?: 0f,
+                bodyDirt = c.getOrNull(16)?.toFloatOrNull()?.coerceIn(0f, 1f) ?: 0f,
+                bodyRust = c.getOrNull(17)?.toFloatOrNull()?.coerceIn(0f, 1f) ?: 0f,
+                lateralZ = c.getOrNull(18)?.toFloatOrNull()?.takeIf(Float::isFinite)
+                    ?: sk.kubis.endlessdrive.game.world.World3D.roadCenter(c[9].toFloat()),
+                heading = c.getOrNull(19)?.toFloatOrNull()?.takeIf(Float::isFinite) ?: kotlin.math.atan(
+                    sk.kubis.endlessdrive.game.world.World3D.roadCenter(c[9].toFloat()+0.5f) -
+                    sk.kubis.endlessdrive.game.world.World3D.roadCenter(c[9].toFloat()-0.5f)
+                )
             ),
             inventory = inventory,
             boot = boot,
@@ -302,7 +385,53 @@ object RunCodec {
             events = events,
             scrap = h.getOrNull(12)?.toIntOrNull() ?: 0,
             highBeamsOn = h.getOrNull(13)?.toBooleanStrictOrNull() ?: false,
-            roofLightsOn = h.getOrNull(14)?.toBooleanStrictOrNull() ?: false
+            roofLightsOn = h.getOrNull(14)?.toBooleanStrictOrNull() ?: false,
+            helpAdsUsed = h.getOrNull(15)?.toIntOrNull() ?: 0,
+            safeHavenDecisionPending = h.getOrNull(16)?.toBooleanStrictOrNull() ?: false,
+            endlessMode = h.getOrNull(17)?.toBooleanStrictOrNull() ?: false,
+            utilityTrailerAttached = h.getOrNull(18)?.toBooleanStrictOrNull() ?: false,
+            pursuitStormKind = h.getOrNull(19)?.takeUnless { it == "-" }
+                ?.let { runCatching { PursuitStormKind.valueOf(it) }.getOrNull() },
+            pursuitStormGapM = h.getOrNull(20)?.toFloatOrNull() ?: 0f,
+            pursuitStormAgeS = h.getOrNull(21)?.toFloatOrNull() ?: 0f,
+            pursuitStormExposureS = h.getOrNull(22)?.toFloatOrNull() ?: 0f,
+            selectedBranchId = h.getOrNull(23)?.toIntOrNull()?.takeIf { it >= 0 },
+            routeDetourOriginX = h.getOrNull(24)?.toFloatOrNull() ?: Float.NaN,
+            routeDetourDirection = h.getOrNull(25)?.toFloatOrNull()?.coerceIn(-1f, 1f) ?: 0f,
+            entryVisualBiomeFrom = h.getOrNull(26)?.takeUnless { it == "-" }
+                ?.let { runCatching { BiomeType.valueOf(it) }.getOrNull() },
+            entryPavingFrom = h.getOrNull(27)?.takeUnless { it == "-" }
+                ?.let { runCatching { RoadPaving.valueOf(it) }.getOrNull() },
+            entryBackdropSeed = h.getOrNull(28)?.toLongOrNull() ?: 0L,
+            sideMissionKind = h.getOrNull(29)?.takeUnless { it == "-" }
+                ?.let { runCatching { SideMissionKind.valueOf(it) }.getOrNull() },
+            sideMissionSourceBuildingId = h.getOrNull(30)?.toLongOrNull() ?: 0L,
+            sideMissionStartWorldX = h.getOrNull(31)?.toFloatOrNull() ?: 0f,
+            sideMissionTargetWorldX = h.getOrNull(32)?.toFloatOrNull() ?: 0f,
+            sideMissionStartItemsLooted = h.getOrNull(33)?.toIntOrNull() ?: 0,
+            sideMissionGoalCount = h.getOrNull(34)?.toIntOrNull() ?: 0,
+            sideMissionRewardScrap = h.getOrNull(35)?.toIntOrNull() ?: 0,
+            lastSideMissionCompletedAtM = h.getOrNull(36)?.toFloatOrNull() ?: -2_500f,
+            lastPursuitStormAtM = h.getOrNull(37)?.toFloatOrNull() ?: -1f,
+            pursuitStormsStarted = h.getOrNull(38)?.toIntOrNull() ?: 0,
+            sideMissionTargetBuildingId = h.getOrNull(39)?.toLongOrNull() ?: 0L,
+            sideMissionTargetBuildingType = h.getOrNull(40)?.takeUnless { it == "-" }
+                ?.let { runCatching { BuildingType.valueOf(it) }.getOrNull() },
+            sideMissionBonusRewardScrap = h.getOrNull(41)?.toIntOrNull() ?: 0,
+            sideMissionTimeRemainingS = h.getOrNull(42)?.toFloatOrNull() ?: 0f,
+            // Staršie savy vznikli v čase, keď sa zásielka „naložila“
+            // automaticky a fyzický predmet ešte neexistoval.
+            sideMissionPackageLoaded = h.getOrNull(43)?.toBooleanStrictOrNull()
+                ?: (h.getOrNull(29)?.let {
+                    it != "-" && it != SideMissionKind.SALVAGE.name
+                } == true),
+            sideMissionCargoIntegrity = h.getOrNull(44)?.toFloatOrNull()?.coerceIn(0f, 1f) ?: 1f,
+            completedSideMissionKind = h.getOrNull(45)?.takeUnless { it == "-" }
+                ?.let { runCatching { SideMissionKind.valueOf(it) }.getOrNull() },
+            completedSideMissionRewardScrap = h.getOrNull(46)?.toIntOrNull() ?: 0,
+            completedSideMissionBonusScrap = h.getOrNull(47)?.toIntOrNull() ?: 0,
+            completedSideMissionCargoIntegrity = h.getOrNull(48)?.toFloatOrNull()
+                ?.coerceIn(0f, 1f) ?: 1f
         )
     }.getOrNull()
 

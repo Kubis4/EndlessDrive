@@ -22,12 +22,14 @@ enum class RoadEvent(
     ROCK_STRIKE("A rock hit the radiator.", null, 0f, 7f),
     FUEL_LEAK("Fuel leak — tank is dropping.", "FUEL LEAK", 45f, 8f),
     COOLANT_LEAK("Coolant leak — level is dropping.", "COOLANT LEAK", 40f, 7f),
-    MISFIRE("Engine misfire — less power.", "MISFIRE", 35f, 8f),
+    MISFIRE("Engine misfire — less power.", "MISFIRE", 35f, 5f),
     BELT_SNAPPED("Alternator belt snapped — battery not charging.", "NO CHARGE", 70f, 5f),
     OIL_SPLASH("Dirty puddle — oil purity dropped.", null, 0f, 6f),
 
     // --- Cesta a počasie ---
     RAIN("Rain — road is slippery.", "SLIPPERY", 55f, 9f),
+    FOG("Fog — poor visibility.", "FOG", 50f, 7f),
+    STORM("Thunderstorm — heavy rain and wind.", "STORM", 48f, 5f),
     DEBRIS("Debris on the road — tyre risk.", "DEBRIS", 22f, 8f),
     MUD("Mud — wheels digging in.", "MUD", 30f, 6f),
 

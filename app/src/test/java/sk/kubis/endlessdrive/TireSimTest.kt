@@ -124,7 +124,7 @@ class TireSimTest {
     }
 
     @Test
-    fun punctureKitClearsFlatAndLeavesWear() {
+    fun punctureKitClearsFlatAndHealsTenPercent() {
         val engine = GameEngine(seed = 12L, bestDistanceKm = 0f)
         val part = engine.car.parts[ComponentSlot.TIRE_FRONT]!!
         part.health = 0.16f
@@ -138,7 +138,7 @@ class TireSimTest {
         val wear = part.health
         assertTrue(engine.repairPuncture(ComponentSlot.TIRE_FRONT))
         assertEquals(TireInjury.INFLATED, part.injury)
-        assertEquals(wear, part.health, 0.001f)
+        assertEquals(wear + GameConfig.PUNCTURE_KIT_HEAL, part.health, 0.001f)
         assertFalse(engine.car.hasPuncturedTyre)
         assertEquals(0, engine.punctureKitCount())
     }
@@ -218,7 +218,7 @@ class TireSimTest {
         assertTrue(engine.parkedForService())
         assertTrue(engine.repairPuncture(ComponentSlot.TIRE_FRONT))
         assertEquals(TireInjury.INFLATED, part.injury)
-        assertEquals(0.38f, part.health, 0.001f)
+        assertEquals(0.38f + GameConfig.PUNCTURE_KIT_HEAL, part.health, 0.001f)
         assertEquals(0, engine.punctureKitCount())
         assertTrue(engine.car.engineRunning)
     }
@@ -237,7 +237,7 @@ class TireSimTest {
         val idx = engine.inventory.slots.indexOfFirst { it?.defId == ItemCatalog.PUNCTURE_KIT.id }
         assertTrue(engine.useInventoryItem(idx))
         assertEquals(TireInjury.INFLATED, engine.car.tireInjury(ComponentSlot.TIRE_REAR))
-        assertEquals(0.18f, engine.car.parts[ComponentSlot.TIRE_REAR]!!.health, 0.001f)
+        assertEquals(0.18f + GameConfig.PUNCTURE_KIT_HEAL, engine.car.parts[ComponentSlot.TIRE_REAR]!!.health, 0.001f)
     }
 
     private fun GameEngine.fundScrap() {

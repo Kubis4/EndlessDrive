@@ -2,7 +2,7 @@ package sk.kubis.endlessdrive.core
 
 /**
  * Centrálne konštanty. Svetové jednotky = metre / sekundy.
- * Bočný 2.5D pohľad (HillRush štýl) + arcade jazda po výškovom profile.
+ * 3D driving, suspension and mobile rendering settings.
  */
 object GameConfig {
     const val FIXED_TIME_STEP = 1f / 60f
@@ -17,29 +17,74 @@ object GameConfig {
     /** Regióny sú dosť krátke, aby sa krajina striedala každých pár kilometrov. */
     const val SEGMENT_LENGTH_MIN = 2800f
     const val SEGMENT_LENGTH_MAX = 4600f
-    const val TUTORIAL_SEGMENT_LENGTH = 1300f
-    /** Plynulé prelínanie dvoch susedných regiónov. */
-    const val BIOME_TRANSITION_MIN = 700f
-    const val BIOME_TRANSITION_MAX = 1400f
+    /** Dlhší prvý región dá novému hráčovi priestor naučiť sa jazdu pred prvou voľbou vetvy. */
+    const val TUTORIAL_SEGMENT_LENGTH = 1800f
+    /** Výber vetvy aj prvý pixel fade-u sa objavia 300 m pred križovatkou. */
+    const val JUNCTION_APPROACH = 300f
+    /** Plynulé prelínanie dvoch susedných regiónov po zobrazení voľby. */
+    const val BIOME_TRANSITION_MIN = JUNCTION_APPROACH
+    const val BIOME_TRANSITION_MAX = JUNCTION_APPROACH
+    /** Nové kulisy sa začnú presadzovať až za križovatkou. */
+    const val JUNCTION_SCENERY_TRANSITION_M = 120f
     /** Prvá budova nie hneď za štartom. */
     const val BUILDING_MIN_GAP_FROM_START = 200f
     /** Väčší odstup – viac budov celkovo cez dlhšie segmenty, nie hustá osada. */
     const val BUILDING_MIN_SPACING = 220f
     const val JUNCTION_ZONE = 22f
-    /** Ako dlho pred rozcestim sa da vetva volit za jazdy (m). */
-    const val JUNCTION_APPROACH = 220f
-    const val BUILDING_INTERACT_RANGE = 7f
+    /**
+     * Parkovanie pri budove. Po oddialení kamery musí SEARCH naskočiť,
+     * keď je budova vedľa auta na obrazovke – nie až keď auto stojí
+     * presne na jej stope.
+     */
+    const val BUILDING_INTERACT_RANGE = 14f
+    /**
+     * Ťahanie k existujúcemu servisu po reklame za ráfik (m). Ďalej sa
+     * neskáče – vedľa auta vznikne nová dielňa, aby sa nepreskočil kopec.
+     */
+    const val TIRE_RESCUE_TOW_RANGE_M = 600f
+    /** Nová dielňa pred autom (m); musí ostať v [BUILDING_INTERACT_RANGE]. */
+    const val TIRE_RESCUE_SPAWN_AHEAD_M = 5.5f
+    /**
+     * Koľko sekúnd bez pohybu pri plyne, kým jazda skončí na asiste.
+     * Krátky preklz do kopca nesmie hneď vyhodiť GAME_OVER.
+     */
+    const val TIRE_RESCUE_STUCK_S = 6f
+    /** Hľadanie roviny pre ROAD ASSIST – dopredu, nie skok celého regiónu. */
+    const val TIRE_RESCUE_FLAT_AHEAD_M = 220f
+    /** Späť len kúsok – úpätie kopca, nie návrat celej jazdy. */
+    const val TIRE_RESCUE_FLAT_BEHIND_M = 36f
+    /** |sklon| (dy/dx), pod ktorým sa dá rozbehnúť. */
+    const val TIRE_RESCUE_FLAT_SLOPE = 0.085f
+    /** Existujúci servis sa ťahá len zo sklonu pod týmto. */
+    const val TIRE_RESCUE_TOW_SLOPE = 0.12f
+    /** Po toľkých sekundách točenia na mieste sa dá asist volať ručne zo STOPPED. */
+    const val TIRE_RESCUE_LATCH_S = 0.8f
+    /** Preklz, nad ktorým sa točenie berie ako státie, nie krátky šmyk. */
+    const val TIRE_RESCUE_SPIN_SLIP = 0.48f
+    /** |rýchlosť| (m/s), pod ktorou sa kolesá točia na mieste. */
+    const val TIRE_RESCUE_SPIN_MAX_SPEED = 1.25f
+    /** Koľko metrov sa smie posunúť počas točenia, kým to ešte nie je únik. */
+    const val TIRE_RESCUE_SPIN_MAX_MOVE_M = 2.8f
+    /**
+     * Núdzové rewarded reklamy za jednu jazdu: game-over záchrana a ručný
+     * ROAD ASSIST. Lak ani dvojnásobný šrot sa sem nepočítajú.
+     */
+    const val HELP_ADS_MAX = 5
 
     // --- Jazda / fyzika auta (Hill Climb arcade) ---
     const val MAX_SPEED = 42f
-    const val REVERSE_MAX_SPEED = 8f
     /**
-     * Ťah cúvania (m/s²). Musí utiahnuť krátky kopec ako na screenshote,
-     * ale ostáva pod [ACCEL], aby na rovine nebolo cúvanie rýchlejšie ako vpred.
+     * Soft referencia pre UI/testy. Samotná fyzika už cúvanie netvrdí oreže –
+     * limituje ho [REVERSE_ACCEL] a odpor ako vpred.
      */
-    const val REVERSE_ACCEL = 11.5f
+    const val REVERSE_MAX_SPEED = 22f
+    /**
+     * Ťah cúvania (m/s²). Musí utiahnuť krátky kopec, ale ostáva pod [ACCEL],
+     * aby na rovine nebolo cúvanie rýchlejšie ako vpred.
+     */
+    const val REVERSE_ACCEL = 13.2f
     /** Cúvanie berie grip z oboch náprav – RWD inak na hrbolci zhadzuje zadok. */
-    const val REVERSE_DRIVE_GRIP = 0.92f
+    const val REVERSE_DRIVE_GRIP = 1.0f
     /**
      * Späť od najďalej dosiahnutého X (HillRush REVERSE_LIMIT).
      *
@@ -55,13 +100,25 @@ object GameConfig {
      * na rovine dostalo na 38 km/h a 25 % stúpanie ho zastavilo.
      */
     const val ACCEL = 14f
-    const val BRAKE = 18f
+    const val BRAKE = 34f
+    /**
+     * Hydraulický strop bŕzd voči [BRAKE]·hmotnosť. Nižší násobiteľ
+     * nezvládol držať auto na strmšom svahu.
+     */
+    const val BRAKE_HARDWARE_MUL = 0.88f
     /** Valivý odpor (m/s²) – veľká fixná brzda pri nízkej rýchlosti. */
     // Auto si má po pustení plynu zachovať rozbehnutú rýchlosť. Brzdenie
     // odporom ostáva citeľné, ale krátky nájazd už nezmizne pred kopcom.
     const val COAST_DRAG = 0.82f
     const val AERO_DRAG = 0.011f
     const val STOP_SPEED = 1.0f
+    /**
+     * Spätný chod sa zapne až keď auto skoro stojí. Pri [STOP_SPEED]·1.2
+     * brzda na svahu skočila do cúvania a auto sa šmýkalo celým kopcom.
+     */
+    const val REVERSE_ENGAGE_SPEED = 0.35f
+    /** Stojíme na brzde aspoň toľko, kým sa zapne cúvanie (svah inak ujde). */
+    const val REVERSE_ARM_DELAY = 0.45f
     /** Voľná výška stredu nad vozovkou pri stlačenom pružení. */
     const val CAR_RIDE_HEIGHT = 0.42f
     /** Vertikálna gravitácia (m/s²). */
@@ -72,20 +129,50 @@ object GameConfig {
     const val VEHICLE_BASE_MASS_KG = 720f
     /** Hmotnosť, pri ktorej ostáva pôvodné fyzikálne škálovanie 1.0. */
     const val VEHICLE_REFERENCE_MASS_KG = 1000f
+    /** Nad referenčnou hmotnosťou sa rozdiel zosilní, aby bol plný kufor citeľný. */
+    const val VEHICLE_WEIGHT_GAMEPLAY_GAIN = 1.55f
+    /** Dodatočná spotreba paliva za jednotku hmotnosti nad referenčné auto. */
+    const val VEHICLE_WEIGHT_FUEL_GAIN = 0.70f
+    /** Dodatočné opotrebenie pneumatík, bŕzd a pruženia pod váhou. */
+    const val VEHICLE_WEIGHT_WEAR_GAIN = 0.95f
+    /** Hmotnostné rozpätie, cez ktoré vizuálne sadnutie auta prejde 0 → 1. */
+    const val VEHICLE_VISUAL_LOAD_RANGE_KG = 260f
     /** Holá karoséria je mierne ťažšia vpredu (podiel na zadnej náprave). */
     const val VEHICLE_BASE_REAR_BIAS = 0.44f
     /** Batoh leží pri predných sedadlách, kufor/nosič za zadnou nápravou. */
     const val PACK_LOAD_REAR_BIAS = 0.38f
     const val BOOT_LOAD_REAR_BIAS = 0.88f
+    const val GARAGE_ENGINE_POWER_PER_LEVEL = 0.06f
+    const val GARAGE_SPRING_PER_LEVEL = 0.10f
+    const val GARAGE_DAMPER_PER_LEVEL = 0.08f
+    const val GARAGE_BRAKE_PER_LEVEL = 0.10f
+    /**
+     * Cruise control žerie viac než držanie plynu. Garážová efektivita
+     * znižuje tento násobiteľ o [GARAGE_CRUISE_FUEL_REDUCTION_PER_LEVEL]
+     * za úroveň (strop 1.0 = ako ručný plyn).
+     */
+    const val CRUISE_FUEL_MULT = 1.5f
+    const val GARAGE_CRUISE_FUEL_REDUCTION_PER_LEVEL = 0.15f
     /** Zotrvačnosť náklonu. */
     const val PITCH_INERTIA = 2.4f
     /** Tvrdosť pruženia (na 1 m stlačenia) – mäkšie = viditeľný bob. */
     const val SUSP_SPRING = 52f
+    /**
+     * Aj ojazdené pruženie (~20–30 % zdravia) musí obe nápravy udržať na
+     * zemi. Mäkšie by predný motor zaboril nos a zadok by visel vo vzduchu.
+     */
+    const val SUSP_WORN_SPRING_FLOOR = 0.58f
     /** Front springs support the engine; softer rear springs reduce empty-car rake. */
     const val FRONT_SPRING_MUL = 1.10f
     const val REAR_SPRING_MUL = 0.90f
     /** Tlmenie pruženia. */
     const val SUSP_DAMPER = 7.5f
+    /** Ojazdené tlmiče smú byť húpavé; podlaha je nižšia než pri pružinách. */
+    const val SUSP_WORN_DAMP_FLOOR = 0.40f
+    /** Bez namontovaného pruženia – horšie ako ojazdený kus, nie tajný upgrade. */
+    const val SUSP_MISSING_MUL = 0.16f
+    const val SUSP_MISSING_SPRING = 0.34f
+    const val SUSP_MISSING_DAMP = 0.12f
     /**
      * Extra tlmenie nad stock (susMul 0.9). Šport/lift tak neskáče karosériou
      * a zároveň základné pruženie ostane mäkké.
@@ -107,7 +194,7 @@ object GameConfig {
     /** Tvrdý kontakt nesmie premeniť sklon kopca na katapult karosérie. */
     const val ROAD_CONTACT_MAX_UP_SPEED = 3.6f
     /** Max zmena vertikálnej rýchlosti z jedného korekčného kontaktu pri 60 Hz. */
-    const val ROAD_CONTACT_MAX_VY_CORRECTION = 0.70f
+    const val ROAD_CONTACT_MAX_VY_CORRECTION = 0.40f
     /** Minimálna svetlá výška podlahy medzi nápravami na ostrých hrebeňoch. */
     const val ROAD_CHASSIS_CLEARANCE = 0.12f
     /**
@@ -118,20 +205,51 @@ object GameConfig {
     const val HIGH_SPEED_DOWNFORCE_COEFF = 0.0032f
     const val HIGH_SPEED_DOWNFORCE_MAX = 6.0f
     /** Rozsah rozdielu sklonov medzi nápravami, ktorý označuje krátky ostrý crest. */
-    const val SHARP_CREST_SLOPE_DELTA_START = 0.08f
-    const val SHARP_CREST_SLOPE_DELTA_FULL = 0.28f
+    const val SHARP_CREST_SLOPE_DELTA_START = 0.04f
+    const val SHARP_CREST_SLOPE_DELTA_FULL = 0.18f
     /** Koľko pružinovej špičky sa na ostrom creste absorbuje v pneumatike/tlmiči. */
-    const val SHARP_CREST_FORCE_RELIEF = 0.82f
+    const val SHARP_CREST_FORCE_RELIEF = 0.95f
     /** Max stlačenie pruženia (m). */
     const val SUSP_MAX_TRAVEL = 0.55f
     /** Vizuálne zosilnenie zdvihu pruženia (render). Nad 1 koleso ľahko prelezie blatník. */
     const val SUSP_VISUAL_GAIN = 1.0f
+    /** Maximálne statické sadnutie karosérie pod nákladom voči polomeru kolesa. */
+    const val VEHICLE_VISUAL_SINK_WHEEL_FRAC = 0.22f
     /** Ako silno pitch sleduje sklon (nižšie = viac voľného náklonu z váhy). */
-    const val PITCH_SLOPE_TRACK = 3.2f
+    const val PITCH_SLOPE_TRACK = 4.4f
+    /**
+     * Extra vracajúci moment, keď obe nápravy sedia na ceste a náklon
+     * ušiel od sklonu. Bez toho predný motor z kopca zaborí nos, kým
+     * hráč nestlačí brzdu (tesný clamp).
+     */
+    const val PITCH_SLOPE_RESTORE = 18f
     /** Dodatočné tlmenie náklonu pri diaľničnej rýchlosti. */
     const val HIGH_SPEED_PITCH_DAMPING = 1.6f
-    /** Náklon z plynu/brzdy na zemi (squat / dive). */
+    /** Náklon z plynu na zemi (squat). */
     const val GROUND_PITCH_TORQUE = 3.8f
+    /**
+     * Nose-dive pri brzde. Váhový prenos v pružení to urobí sám;
+     * extra moment má byť jemný, inak zadok odľahčí.
+     */
+    const val GROUND_BRAKE_DIVE_TORQUE = 0.55f
+    /**
+     * Cúvanie tlačí zadok, nie predok. Kladná hodnota = nose-up, aby sa
+     * kapota pri cúvaní nezaborila do cesty.
+     */
+    const val GROUND_REVERSE_PITCH_TORQUE = 1.15f
+    /**
+     * Extra nose-down nad sklon vozovky (rad). 0.038 rad na rázvore 3.5 m
+     * je ~7 cm – citeľný ponor, zadná náprava ostane na ceste.
+     */
+    const val BRAKE_DIVE_PITCH_LIMIT = 0.038f
+    /**
+     * Voľný jazd / plyn: nos smie ísť max ~0.06 rad pod cestu. Ďaleko
+     * tesnejšie než starý 0.16 rad, inak z kopca aj na ojazdenom pružení
+     * zadok vybehne z blatníka, kým hráč nedá brzdu.
+     */
+    const val COAST_DIVE_PITCH_LIMIT = 0.06f
+    /** Pri cúvaní držíme karosériu tesne pri sklone cesty. */
+    const val REVERSE_PITCH_LIMIT = 0.045f
     /** μ gúm pri grip=1.0 na čistom asfalte. */
     /** Základné μ. Vyššie = o rýchlosti rozhoduje výkon, nie preklz. */
     const val TIRE_MU = 1.20f
@@ -177,6 +295,9 @@ object GameConfig {
      * o kúsok viac (nižší prevod, jemnejšie dávkovanie). Bez toho sa výkon
      * nad grip iba zahodil: na zodratých gumách mal slabý motor presne tú
      * istú rýchlosť ako silný a auto sa na piesku nerozbehlo vôbec.
+     *
+     * Na snehu a ľade to neplatí – tam prebytok ide do preklzu
+     * ([SNOW_GRIP_OVERDRIVE]), inak silný motor na letných preletí kraj.
      */
     const val GRIP_OVERDRIVE = 0.32f
     /**
@@ -193,21 +314,76 @@ object GameConfig {
     /** Koleso na ráfiku sa pri preklze točí rýchlejšie (kov, nie guma). */
     const val RIM_SLIP_SPIN_BONUS = 16f
 
+    /** Lakovačka v dielni – do tejto vzdialenosti je servis len opravy. */
+    const val PAINT_SHOP_UNLOCK_M = 10_000f
+    /** Prvá dielňa a odstup medzi ďalšími (m). */
+    const val AUTO_SHOP_FIRST_M = 20_000f
+    const val AUTO_SHOP_SPACING_M = 20_000f
+    /**
+     * Prvá lakovačka o 10 km neskôr než dielňa, aby sa nestretli na tom istom
+     * úseku; potom rovnaký odstup ~20 km.
+     */
+    const val PAINT_SHOP_FIRST_M = 30_000f
+    const val PAINT_SHOP_SPACING_M = 20_000f
+    /**
+     * Scrapová oprava má ostať drahšia než nájdený diel. Násobiteľ
+     * existujúceho vzorca (základ × 0.045 za 20 % zdravia).
+     */
+    const val SCRAP_REPAIR_COST_MUL = 10f
+    /**
+     * Katalógový upgrade v dielni. Násobiteľ existujúceho vzorca
+     * (rozdiel hodnoty + 12 % cieľa, minimum 18).
+     */
+    const val SCRAP_UPGRADE_COST_MUL = 3f
+
     // --- Zima ---
     /** Od akej vzdialenosti sa môže objaviť zasnežená vetva (m). */
     const val SNOW_START_M = 11000f
     /** Odkiaľ sa dá nájsť zimná výbava – skôr, než bude treba. */
     const val WINTER_GEAR_FROM_M = 7000f
     /** Reťaze na snehu / na holom asfalte. */
-    const val CHAINS_SNOW_BONUS = 1.55f
+    const val CHAINS_SNOW_BONUS = 1.65f
+    /**
+     * Aj na letnej alebo slabej gume reťaze chytia sneh. Nie ako zimná zmes,
+     * ale dosť na to, aby boli nástroj – nie kozmetika.
+     */
+    const val CHAINS_SNOW_FLOOR = 0.62f
+    /**
+     * Ľad × snehová vozovka inak zomelie aj zimnú+reťaze. Reťaze dvíhajú
+     * povrch ľadu a podlahu dláždenia, aby kopec ostal riešením výbavy.
+     */
+    const val ICE_CHAINS_SURFACE_MUL = 0.62f
+    /** Zimná bez reťazí na ľade – plazenie, nie výjazd. */
+    const val ICE_WINTER_SURFACE_MUL = 0.46f
+    const val ICE_CHAINS_PAVING_FLOOR = 0.70f
     const val CHAINS_TARMAC_PENALTY = 0.88f
+    /**
+     * Na snehu prebytok výkonu ide do pretáčania kolies, nie do rýchlosti.
+     * Zimná guma ešte kúsok chytí; letná takmer nič.
+     */
+    const val SNOW_GRIP_OVERDRIVE = 0.05f
+    /**
+     * Reťaze na snehu/ľade už nie sú letný 0.05 – prebytok ide do ťahu,
+     * nie do obrovského pretáčania.
+     */
+    const val CHAINS_SNOW_OVERDRIVE = 0.22f
+    /** Letná guma na snehu pretáča hneď – bez rezervy ako na asfalte. */
+    const val SNOW_TRACTION_SLACK = 1.08f
+    /** S reťazami je rezerva bližšie k suchu – kolesá sa chytia skôr. */
+    const val CHAINS_TRACTION_SLACK = 1.68f
+    /** Viditeľný aj fyzický preklz s reťazami na zimnom povrchu. */
+    const val CHAINS_SLIP_SPIN_MUL = 0.42f
+    const val CHAINS_SLIP_VISUAL = 0.40f
+    /** Preklz na letných v zime uberie ťah výraznejšie, inak sa kopec vyjde výkonom. */
+    const val SNOW_TRACTION_EASE_FLOOR = 0.38f
     /** Strop rýchlosti s reťazami (m/s) – nad tým sa ničia. */
     const val CHAINS_MAX_SPEED = 12f
     /** Pod týmto zdravím je guma roztrhaná a ide sa na disku. */
     const val BLOWN_TYRE_HEALTH = 0.12f
     /** Scrap za záplatu defektu, keď hráč nemá puncture kit. */
     const val PUNCTURE_PATCH_SCRAP = 8
-    const val PUNCTURE_KIT_HEAL = 0.15f
+    /** Koľko zdravia gumy doplní puncture kit (aj scrap záplata). */
+    const val PUNCTURE_KIT_HEAL = 0.10f
     /** Strop rýchlosti na roztrhanej gume (m/s). */
     const val BLOWN_TYRE_MAX_SPEED = 7f
     /** O koľko °C nižšie drží motor v mraze. */
@@ -226,11 +402,24 @@ object GameConfig {
     const val OIL_DRAIN = 0.0015f
     const val COOLANT_DRAIN = 0.0013f
     const val OVERHEAT_THRESHOLD = 114f
+    /** Prázdny okruh: odtiaľto kvapalina prestane chladiť a motor sa začne variť. */
+    const val DRY_COOLANT_WEAR_START = 120f
+    /** Prázdny okruh: motor zhasne, aby stuhol — až po pásme poškodenia. */
+    const val DRY_COOLANT_CUTOUT = 130f
     const val NORMAL_TEMP = 82f
+    /**
+     * Prázdny okruh: koľko °C pridá chýbajúca kvapalina k cieľovej teplote.
+     * Musí pretlačiť prah prehriatia aj na rovinke s dobrým chladičom.
+     */
+    const val EMPTY_COOLANT_HEAT = 58f
+    /** Pod touto náplňou (0–1 kapacity) už chladenie slábne. */
+    const val COOLANT_EFFECTIVE_RATIO = 0.38f
     /** Ako rýchlo teplota stúpa/klesá (nižšie = stabilnejšie). */
     const val TEMP_RESPONSE = 0.12f
     const val ENGINE_WEAR_LOW_OIL = 0.012f
     const val ENGINE_WEAR_OVERHEAT = 0.012f
+    /** Opotrebenie motora bez kvapaliny v pásme 120–130 °C (za sekundu pri 130). */
+    const val ENGINE_WEAR_DRY_COOLANT = 0.038f
     /** Opotrebenie motora zo znečisteného paliva (na plnú „vodu“, za sekundu). */
     const val ENGINE_WEAR_BAD_FUEL = 0.0030f
     /** Nesprávny druh paliva ničí motor výrazne rýchlejšie než nečistoty. */
@@ -293,6 +482,23 @@ object GameConfig {
     /** Únik paliva / chladiacej za sekundu, kým udalosť trvá. */
     const val EVENT_FUEL_LEAK = 0.055f
     const val EVENT_COOLANT_LEAK = 0.022f
+    /** Pauza medzi ďalšími zásahmi kameňom pri protivetru (s). */
+    const val EVENT_HEADWIND_STRIKE_GAP = 10f
+    /** Šanca na extra zásah predku po každej pauze. */
+    const val EVENT_HEADWIND_STRIKE_CHANCE = 0.18f
+    /** Extra metre po +X pri protivetru – kameň čitateľne bije do predku. */
+    const val EVENT_HEADWIND_ROCK_EXTRA_M = 0.40f
+    /** Rovnaký rozsah ako ROCK_STRIKE na chladiči – škrabance, nie vrak. */
+    const val EVENT_ROCK_CHIP_MIN = 0.15f
+    const val EVENT_ROCK_CHIP_MAX = 0.30f
+    const val EVENT_ROCK_CHIP_FLOOR = 0.08f
+    /**
+     * Iskry a SFX pri misfire. Starý cyklus 3.7 Hz blikal ako stroboskop;
+     * motor má stále strácať výkon, len pop nech nie je každých ~270 ms.
+     */
+    const val MISFIRE_FX_HZ = 0.42f
+    /** Podiel cyklu, kedy je iskra viditeľná. */
+    const val MISFIRE_FX_DUTY = 0.16f
 
     // --- Úseky trate ---
     const val FEATURE_MIN_LENGTH = 40f
@@ -320,8 +526,10 @@ object GameConfig {
     /** Pod touto hodnotou denného svetla treba svetlá (iba skutočná tma). */
     const val NIGHT_THRESHOLD = 0.22f
     // --- Benzínová pumpa ---
-    const val PUMP_FUEL_MIN = 18f
-    const val PUMP_FUEL_MAX = 70f
+    // Opustený stojan je čiastočne vyčerpaný. Hodnota je spoločná zásoba,
+    // ktorá sa následne rozdelí medzi benzín a diesel.
+    const val PUMP_FUEL_MIN = 6f
+    const val PUMP_FUEL_MAX = 32f
 
     // --- Inventár ---
     /**
@@ -338,38 +546,28 @@ object GameConfig {
     const val BOOT_SLOTS = 10
     const val BOOT_MAX_WEIGHT = 230f
 
-    // --- Kamera (bočný pohľad, HillRush-like) ---
-    const val CAMERA_BASE_PPM = 66f
-    const val CAMERA_MIN_PPM = 50f
-    const val CAMERA_LOOK_AHEAD = 0.55f
-    const val CAMERA_SMOOTH = 7.0f
-    /**
-     * Kamera mieri nad auto – väčší bias posunie cestu nižšie a ubere zeminy.
-     * Pod cestou nie je čo ukazovať, len hnedý pás, kým hore je kreslené
-     * pozadie. Preto ide cesta až do spodnej štvrtiny obrazovky.
-     */
-     const val CAMERA_Y_BIAS = 3.75f
-    /** Kde na šírke obrazovky sedí auto (0 = vľavo, 0.5 = stred). */
-    const val CAR_SCREEN_X = 0.35f
-    const val CAMERA_SPEED_ZOOM = 0.010f
-    /** Maximálny rozkmit kamery na rozbitej ceste (m). */
-    const val CAMERA_SHAKE = 0.09f
+    // --- 3D render buffer and UI density ---
+    const val MAX_SCENE_WIDTH = 1920f
+    const val MAX_SCENE_HEIGHT = 1080f
+    const val UI_DESIGN_SHORT_DP = 720f
+    const val UI_DENSITY_SCALE_MIN = 0.85f
+    const val UI_DENSITY_SCALE_MAX = 1.25f
+    const val UI_DENSITY_GROWTH = 0.40f
+    const val UI_USER_SCALE_MIN = 0.80f
+    const val UI_USER_SCALE_MAX = 1.30f
+    const val UI_USER_SCALE_DEFAULT = 1f
 
-    // --- 2.5D depth (z HillRush) ---
-    const val DEPTH_X = 0.15f
-    const val DEPTH_Y = 0.48f
-    const val DEPTH_FOCAL = 9.5f
-    const val DEPTH_PITCH_MAX = 0.55f
-    const val DEPTH_PITCH_SMOOTH = 5.5f
-    const val DEPTH_PITCH_VP_X = 0.08f
-    const val DEPTH_PITCH_VP_Y = 0.55f
-    const val DEPTH_PITCH_SHEAR_X = 0.35f
-    const val DEPTH_PITCH_SHEAR_Y = 0.28f
-    const val DEPTH_PITCH_FOCAL = 0.45f
-    const val ROAD_DEPTH = 2.55f
-    const val VERGE_DEPTH = 0.38f
-    const val RUT_NEAR_DEPTH = 0.92f
-    const val RUT_FAR_DEPTH = 1.88f
+    /** Sneh na aute v zasneženom regióne – hneď jemná vrstva, potom pribúda. */
+    const val CAR_SNOW_AMBIENT = 0.22f
+    const val CAR_SNOW_GAIN = 0.085f
+    const val CAR_SNOW_MELT = 0.048f
+    /** Blato / prach na prahoch a blatníkoch. */
+    const val CAR_DIRT_GAIN = 0.12f
+    const val CAR_DIRT_WASH = 0.18f
+    /** Pomalý návrat špiny/hrdze aj mimo blata – po prelakovaní. */
+    const val CAR_DIRT_AMBIENT = 0.0045f
+    /** Pevná cena prelakovania v lakovačke (šrot). */
+    const val PAINT_SHOP_COST = 100
 
     // --- Sedan (z HillRush HATCHBACK) ---
     const val WHEEL_RADIUS = 0.48f
@@ -379,4 +577,34 @@ object GameConfig {
     const val BODY_VISUAL_LIFT = 0.24f
     const val HEAD_LOCAL_X = 0.45f
     const val HEAD_LOCAL_Y = 0.87f
+
+    /**
+     * Koľkokrát zmenšiť SurfaceView voči oknu, aby scéna neprekročila
+     * [MAX_SCENE_WIDTH] × [MAX_SCENE_HEIGHT]. Full HD aj 2K 16:9 dajú 1920×1080.
+     */
+    fun sceneBufferScale(viewWidthPx: Float, viewHeightPx: Float): Float {
+        if (viewWidthPx <= 0f || viewHeightPx <= 0f) return 1f
+        return minOf(1f, MAX_SCENE_WIDTH / viewWidthPx, MAX_SCENE_HEIGHT / viewHeightPx)
+    }
+
+    fun sceneBufferHeight(viewWidthPx: Float, viewHeightPx: Float): Float =
+        viewHeightPx * sceneBufferScale(viewWidthPx, viewHeightPx)
+
+    /**
+     * HUD a menu rastú na veľkej obrazovke len mierne. Škála ide z krátkej
+     * strany v dp, takže systémové DPI sa nezapočíta dvakrát. [userScale]
+     * je posuvník z nastavení.
+     */
+    fun uiDensityScale(
+        widthDp: Int,
+        heightDp: Int,
+        userScale: Float = UI_USER_SCALE_DEFAULT
+    ): Float {
+        val shortSide = minOf(widthDp, heightDp).toFloat().coerceAtLeast(1f)
+        val linear = shortSide / UI_DESIGN_SHORT_DP
+        val auto = (1f + (linear - 1f) * UI_DENSITY_GROWTH)
+            .coerceIn(UI_DENSITY_SCALE_MIN, UI_DENSITY_SCALE_MAX)
+        val user = userScale.coerceIn(UI_USER_SCALE_MIN, UI_USER_SCALE_MAX)
+        return auto * user
+    }
 }

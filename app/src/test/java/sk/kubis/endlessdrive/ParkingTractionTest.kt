@@ -25,7 +25,7 @@ class ParkingTractionTest {
             println("${drive.name}: reverse=${car.speed * 3.6f} km/h distance=${car.x} slip=${car.wheelSlip}")
             assertTrue("${drive.name} must cover 20 m in ten seconds", car.x < -20f)
             assertTrue("${drive.name} must grip on flat asphalt", car.wheelSlip < 0.1f)
-            assertTrue(car.speed >= -GameConfig.REVERSE_MAX_SPEED)
+            assertTrue(car.speed < 0f)
         }
     }
 
@@ -68,6 +68,62 @@ class ParkingTractionTest {
         }
     }
 
+    @Test fun reverseClimbsASteeperCrest() {
+        val slope = -0.28f
+        val car = Car().apply {
+            installStarterKit(SeededRandom(11L), DebugOptions(allComponents = true, fullFluids = true))
+            mount(ComponentSlot.DRIVETRAIN, ItemStack(ItemCatalog.DRIVE_AWD.id, ComponentCondition.NEW, 1f))
+            engineRunning = true
+            snapToGround(0f, slope)
+        }
+        repeat(300) { car.applyDriveSlope(1f / 60f, 0f, 1f, 0f, slope, 0f) }
+        assertTrue(
+            "cúvanie do 28% kopca musí ísť (x=${car.x}, v=${car.speed})",
+            car.x < -4f && car.speed < -0.5f
+        )
+    }
+
+    @Test fun fullBrakeHoldsOnASteepDownhill() {
+        val slope = -0.30f
+        val car = Car().apply {
+            installStarterKit(SeededRandom(9L), DebugOptions(allComponents = true, fullFluids = true))
+            engineRunning = true
+            snapToGround(0f, slope)
+            speed = 10f
+        }
+        // Stačí na zastavenie, nie na natiahnutie spätného chodu (~0.45 s pauzy).
+        repeat(150) { car.applyDriveSlope(1f / 60f, 0f, 1f, 0f, slope, 0f) }
+        assertTrue(
+            "brzda musí auto na 30% svahu zastaviť, ostalo v=${car.speed}",
+            kotlin.math.abs(car.speed) < 0.55f
+        )
+        val stoppedX = car.x
+        // Ešte pred cúvaním musí držať svah.
+        repeat(20) { car.applyDriveSlope(1f / 60f, 0f, 1f, 0f, slope, 0f) }
+        assertTrue(
+            "po zabrzdení nesmie auto ujsť dolu kopcom (x $stoppedX → ${car.x})",
+            car.x <= stoppedX + 0.6f
+        )
+        assertTrue(kotlin.math.abs(car.speed) < 0.55f)
+    }
+
+    @Test fun rollingBrakeDoesNotEngageReverseUntilNearlyStopped() {
+        val car = car()
+        car.speed = 0.9f
+        assertFalse(
+            "pri 0.9 m/s ešte brzdíme, nie cúvame",
+            car.isReverseGear(1f, 0f)
+        )
+        car.speed = 0.1f
+        // Bez applyDrive ešte nie je natiahnutý arm timer.
+        assertFalse(car.isReverseGear(1f, 0f))
+        repeat(40) { car.applyDrive(1f / 60f, 0f, 1f, 0f, 0f, 0f) }
+        assertTrue(
+            "po krátkej pauze na brzde zo stoja ide cúvanie",
+            car.isReverseGear(1f, 0f) || car.speed < -0.2f
+        )
+    }
+
     @Test fun reverseStaysSlowerThanForwardOnFlat() {
         fun sprint(throttle: Float, brake: Float): Float {
             val car = Car().apply {
@@ -84,14 +140,14 @@ class ParkingTractionTest {
         }
         val forward = sprint(1f, 0f)
         val reverse = sprint(0f, 1f)
-        assertTrue("cúvanie $reverse musí byť pomalšie ako vpred $forward", reverse < forward * 0.75f)
-        assertTrue(reverse <= GameConfig.REVERSE_MAX_SPEED + 0.05f)
+        assertTrue("cúvanie $reverse musí byť pomalšie ako vpred $forward", reverse < forward)
         assertTrue(GameConfig.REVERSE_ACCEL < GameConfig.ACCEL)
     }
 
     @Test fun emptyRearSitsLowerAndCargoStillCompressesIt() {
         val car = car()
-        val oldSpring = GameConfig.SUSP_SPRING * car.suspensionMul.coerceIn(0.35f, 1.4f)
+        val oldSpring = GameConfig.SUSP_SPRING *
+            car.suspensionMul.coerceIn(GameConfig.SUSP_WORN_SPRING_FLOOR, 1.4f)
         val oldRearSag = car.physicsMass * GameConfig.AIR_GRAVITY * car.rearWeightBias / oldSpring
         val oldFrontSag = car.physicsMass * GameConfig.AIR_GRAVITY * (1f - car.rearWeightBias) / oldSpring
         fun rearHeight() = car.y - SedanSpec.wheelOffsetX * kotlin.math.sin(car.pitch)

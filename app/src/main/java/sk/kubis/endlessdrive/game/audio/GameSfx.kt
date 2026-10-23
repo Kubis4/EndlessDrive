@@ -19,6 +19,8 @@ enum class GameSfx {
     COOLANT_LEAK,
     OIL_SPLASH,
     RAIN,
+    FOG,
+    STORM,
     MUD,
     DEBRIS,
     TAILWIND,

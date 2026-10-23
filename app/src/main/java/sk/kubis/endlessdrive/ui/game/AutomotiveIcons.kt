@@ -40,7 +40,7 @@ import kotlin.math.sin
 enum class AutomotiveIcon {
     OIL, TEMPERATURE, BATTERY, ENGINE, COOLANT, TYRE, BRAKE,
     WHEELSPIN, LOW_BEAM, HIGH_BEAM, ROOF_LIGHT, SCRAP, FUEL, PARK,
-    SUN, MOON, SPRING, SNOW
+    SUN, MOON, SPRING, SNOW, CRUISE
 }
 
 /** Akcie v pravom hornom rohu; nepoužívame emoji, aby mali stabilný vzhľad. */
@@ -179,6 +179,7 @@ private fun TelltaleGlyph(icon: AutomotiveIcon, color: Color, modifier: Modifier
             AutomotiveIcon.MOON -> drawMoon(color, w, h)
             AutomotiveIcon.SPRING -> drawSpring(color, w, h, sw)
             AutomotiveIcon.SNOW -> drawSnowflake(color, w, h, sw)
+            AutomotiveIcon.CRUISE -> drawCruise(color, w, h, sw)
             else -> Unit
         }
     }
@@ -661,6 +662,41 @@ private fun DrawScope.drawSnowflake(color: Color, w: Float, h: Float, sw: Float)
             sw * 0.7f, StrokeCap.Round
         )
     }
+}
+
+/** Tempomat podľa reálneho symbolu: rýchlomer, ihla a šípka do regulácie. */
+private fun DrawScope.drawCruise(color: Color, w: Float, h: Float, sw: Float) {
+    val s = min(w, h)
+    val cx = w * 0.56f
+    val cy = h * 0.56f
+    val r = s * 0.31f
+    val ringStroke = sw * 0.72f
+    drawCircle(color, radius = r, center = Offset(cx, cy), style = Stroke(ringStroke))
+
+    // Hrubšie značky zostanú čitateľné aj na 24 dp HUD ikone.
+    for (degrees in 0..315 step 45) {
+        val angle = Math.toRadians(degrees.toDouble()).toFloat()
+        val outer = Offset(cx + cos(angle) * r * 0.88f, cy + sin(angle) * r * 0.88f)
+        val inner = Offset(cx + cos(angle) * r * 0.68f, cy + sin(angle) * r * 0.68f)
+        drawLine(color, inner, outer, ringStroke * 0.72f, StrokeCap.Round)
+    }
+
+    val needle = Math.toRadians(225.0).toFloat()
+    drawLine(
+        color,
+        Offset(cx, cy),
+        Offset(cx + cos(needle) * r * 0.76f, cy + sin(needle) * r * 0.76f),
+        sw * 0.72f,
+        StrokeCap.Round
+    )
+    drawCircle(color, radius = sw * 0.45f, center = Offset(cx, cy))
+
+    // Šípka z predlohy: smeruje zľava hore do rýchlomera.
+    val arrowStart = Offset(w * 0.10f, h * 0.08f)
+    val arrowEnd = Offset(w * 0.30f, h * 0.28f)
+    drawLine(color, arrowStart, arrowEnd, sw * 0.76f, StrokeCap.Square)
+    drawLine(color, arrowEnd, Offset(w * 0.29f, h * 0.14f), sw * 0.76f, StrokeCap.Square)
+    drawLine(color, arrowEnd, Offset(w * 0.16f, h * 0.29f), sw * 0.76f, StrokeCap.Square)
 }
 
 private fun DrawScope.drawBang(color: Color, center: Offset, scale: Float, sw: Float) {

@@ -37,6 +37,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import sk.kubis.endlessdrive.domain.repository.PlayerProfile
+import sk.kubis.endlessdrive.ui.l10n.LocalCopy
+import sk.kubis.endlessdrive.ui.l10n.*
 import sk.kubis.endlessdrive.ui.theme.BtnStyle
 import sk.kubis.endlessdrive.ui.theme.GameButton
 import sk.kubis.endlessdrive.ui.theme.GameColors
@@ -92,39 +94,40 @@ fun PlayerProfileScreen(
     val cleanCountry = countryCode.trim().uppercase()
     val valid = cleanNickname.length in 2..18 && cleanCountry.length == 2 &&
         cleanCountry.all { it in 'A'..'Z' }
+    val copy = LocalCopy.current
 
     Box(
         Modifier.fillMaxSize().background(GameColors.panelSoft),
         contentAlignment = Alignment.Center
     ) {
         GamePanel(
-            title = "DRIVER PROFILE",
-            subtitle = if (required) "Set your identity before the first run." else "Your name and country shown on the road.",
+            title = copy.driverProfile,
+            subtitle = if (required) copy.profileRequired else copy.profileOptional,
             modifier = Modifier.widthIn(max = 520.dp).padding(20.dp),
             fillHeight = false,
             onClose = if (required) null else onBack
         ) {
-            Text("NICKNAME", color = GameColors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text(copy.nickname, color = GameColors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(6.dp))
             OutlinedTextField(
                 value = nickname,
                 onValueChange = { nickname = it.take(18) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                placeholder = { Text("e.g. ROADRUNNER") },
+                placeholder = { Text(copy.nicknameHint) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii)
             )
             if (!suggestedNickname.isNullOrBlank() && suggestedNickname != nickname) {
                 Spacer(Modifier.height(6.dp))
                 GameButton(
-                    "USE PLAY GAMES NAME",
+                    copy.usePlayGamesName,
                     { nickname = suggestedNickname.take(18) },
                     style = BtnStyle.Ghost,
                     compact = true
                 )
             }
             Spacer(Modifier.height(16.dp))
-            Text("COUNTRY", color = GameColors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text(copy.country, color = GameColors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
@@ -146,21 +149,21 @@ fun PlayerProfileScreen(
                     Text(countryFlag(cleanCountry), fontSize = 30.sp)
                 }
                 Spacer(Modifier.width(10.dp))
-                Text("Tap the flag to choose a country", color = GameColors.textDim, fontSize = 12.sp)
+                Text(copy.tapFlag, color = GameColors.textDim, fontSize = 12.sp)
             }
             Spacer(Modifier.height(14.dp))
             Text(
-                "Play Games can supply the display name after the online service is connected. Until then, this local profile is used.",
+                copy.playGamesNameHint,
                 color = GameColors.textDim,
                 fontSize = 12.sp
             )
             Spacer(Modifier.height(20.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (!required) {
-                    GameButton("CANCEL", onBack ?: {}, Modifier.weight(1f), style = BtnStyle.Ghost)
+                    GameButton(copy.cancel, onBack ?: {}, Modifier.weight(1f), style = BtnStyle.Ghost)
                 }
                 GameButton(
-                    "SAVE PROFILE",
+                    copy.saveProfile,
                     { onSave(cleanNickname, cleanCountry) },
                     Modifier.weight(1f),
                     style = BtnStyle.Primary,
@@ -173,7 +176,7 @@ fun PlayerProfileScreen(
     if (countryPickerOpen) {
         AlertDialog(
             onDismissRequest = { countryPickerOpen = false },
-            title = { Text("SELECT COUNTRY") },
+            title = { Text(copy.selectCountry) },
             text = {
                 Column(
                     Modifier
@@ -195,7 +198,7 @@ fun PlayerProfileScreen(
                         ) {
                             Text(countryFlag(option.code), fontSize = 25.sp)
                             Spacer(Modifier.width(10.dp))
-                            Text(option.name, color = GameColors.text, modifier = Modifier.weight(1f))
+                            Text(copy.countryName(option.code), color = GameColors.text, modifier = Modifier.weight(1f))
                             Text(option.code, color = GameColors.textDim, fontSize = 12.sp)
                         }
                     }
@@ -203,7 +206,7 @@ fun PlayerProfileScreen(
             },
             confirmButton = {
                 TextButton(onClick = { countryPickerOpen = false }) {
-                    Text("CANCEL")
+                    Text(copy.cancel)
                 }
             }
         )

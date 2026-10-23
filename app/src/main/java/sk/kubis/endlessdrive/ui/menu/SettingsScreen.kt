@@ -2,208 +2,318 @@ package sk.kubis.endlessdrive.ui.menu
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Text
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
+import sk.kubis.endlessdrive.core.GameConfig
+import sk.kubis.endlessdrive.domain.model.AppLanguage
 import sk.kubis.endlessdrive.domain.model.AudioSettings
-import sk.kubis.endlessdrive.domain.model.DebugOptions
+import sk.kubis.endlessdrive.domain.model.GaugeStyle
 import sk.kubis.endlessdrive.domain.model.ThrottleMode
+import sk.kubis.endlessdrive.ui.game.GaugeStylePreview
+import sk.kubis.endlessdrive.ui.game.ThrottleModePreview
+import sk.kubis.endlessdrive.ui.l10n.LocalCopy
+import sk.kubis.endlessdrive.ui.l10n.languageEnglishName
 import sk.kubis.endlessdrive.ui.theme.BtnStyle
 import sk.kubis.endlessdrive.ui.theme.GameButton
 import sk.kubis.endlessdrive.ui.theme.GameColors
 
-/**
- * Nastavenia: ovládanie plynu, zvuk a ladiace prepínače.
- */
+/** Nastavenia bez interných debug prepínačov – tie sa nesmú dostať k hráčovi. */
 @Composable
 fun SettingsScreen(
-    options: DebugOptions,
-    onChange: (DebugOptions) -> Unit,
     onBack: () -> Unit,
     audioSettings: AudioSettings = AudioSettings(),
     onAudioChange: (AudioSettings) -> Unit = {},
+    lightningFlashesEnabled: Boolean = true,
+    onLightningFlashesEnabledChange: (Boolean) -> Unit = {},
     throttleMode: ThrottleMode = ThrottleMode.BINARY,
     onThrottleModeChange: (ThrottleMode) -> Unit = {},
-    showFps: Boolean = false,
-    onShowFpsChange: (Boolean) -> Unit = {},
+    gaugeStyle: GaugeStyle = GaugeStyle.CLASSIC,
+    onGaugeStyleChange: (GaugeStyle) -> Unit = {},
+    uiScale: Float = GameConfig.UI_USER_SCALE_DEFAULT,
+    onUiScaleChange: (Float) -> Unit = {},
+    language: AppLanguage = AppLanguage.ENGLISH,
+    onLanguageChange: (AppLanguage) -> Unit = {},
     showPrivacyOptions: Boolean = false,
     onPrivacyOptions: () -> Unit = {}
 ) {
-    var debugToolsVisible by rememberSaveable { mutableStateOf(false) }
+    val copy = LocalCopy.current
     Box(
         Modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .background(
-                Brush.verticalGradient(
-                    listOf(GameColors.panelSoft, GameColors.panelHigh)
-                )
-            )
+            .background(Brush.verticalGradient(listOf(GameColors.panelSoft, GameColors.panelHigh)))
     ) {
         Column(
             Modifier
                 .align(Alignment.Center)
-                .widthIn(max = 680.dp)
+                .widthIn(max = 640.dp)
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 20.dp)
+                .padding(horizontal = 20.dp, vertical = 16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("SETTINGS", modifier = Modifier.weight(1f), color = GameColors.text,
-                    fontSize = 30.sp, fontWeight = FontWeight.Bold, letterSpacing = 3.sp)
-                GameButton("BACK", onBack, style = BtnStyle.Ghost, compact = true)
+                Text(
+                    copy.settings,
+                    modifier = Modifier.weight(1f),
+                    color = GameColors.text,
+                    fontSize = 30.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 3.sp
+                )
+                GameButton(copy.back, onBack, style = BtnStyle.Ghost, compact = true)
             }
             Spacer(Modifier.height(18.dp))
 
-            Text("CONTROLS", color = GameColors.accent, fontSize = 12.sp,
-                fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-            Text(
-                "How the right pedal works. Brake stays a hold button.",
-                color = GameColors.textDim, fontSize = 13.sp
-            )
+            SettingsSection(copy.languageSection, copy.languageDetail)
             Spacer(Modifier.height(10.dp))
-            Toggle(
-                title = "Throttle pedal",
-                detail = "Hold for full power. Same as before.",
-                checked = throttleMode == ThrottleMode.BINARY,
-                onToggle = { if (throttleMode != ThrottleMode.BINARY) onThrottleModeChange(ThrottleMode.BINARY) }
-            )
-            Toggle(
-                title = "Throttle slide",
-                detail = "Swipe up from the bottom to feather power and cut wheelspin on launch.",
-                checked = throttleMode == ThrottleMode.SLIDE,
-                onToggle = { if (throttleMode != ThrottleMode.SLIDE) onThrottleModeChange(ThrottleMode.SLIDE) }
+            LanguagePicker(language, onLanguageChange)
+            Spacer(Modifier.height(24.dp))
+
+            SettingsSection(copy.controls, copy.controlsDetail)
+            Spacer(Modifier.height(10.dp))
+            ChoiceGrid(
+                first = {
+                    PreviewChoiceCard(
+                        title = copy.throttlePedal,
+                        detail = copy.throttlePedalDetail,
+                        selected = throttleMode == ThrottleMode.BINARY,
+                        onClick = { onThrottleModeChange(ThrottleMode.BINARY) }
+                    ) {
+                        ThrottleModePreview(ThrottleMode.BINARY, Modifier.fillMaxSize())
+                    }
+                },
+                second = {
+                    PreviewChoiceCard(
+                        title = copy.throttleSlide,
+                        detail = copy.throttleSlideDetail,
+                        selected = throttleMode == ThrottleMode.SLIDE,
+                        onClick = { onThrottleModeChange(ThrottleMode.SLIDE) }
+                    ) {
+                        ThrottleModePreview(ThrottleMode.SLIDE, Modifier.fillMaxSize())
+                    }
+                }
             )
             Spacer(Modifier.height(24.dp))
 
-            Text("SOUND", color = GameColors.accent, fontSize = 12.sp,
-                fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-            Text("Tyre sounds are brief traction cues. Set them to zero for silent tyres.",
-                color = GameColors.textDim, fontSize = 13.sp)
-            AudioSlider("Master volume", audioSettings.master) { onAudioChange(audioSettings.copy(master = it)) }
-            AudioSlider("Road & weather", audioSettings.surfaces) { onAudioChange(audioSettings.copy(surfaces = it)) }
-            AudioSlider("Tyre slip", audioSettings.tyres) { onAudioChange(audioSettings.copy(tyres = it)) }
-            GameButton("RESET SOUND", { onAudioChange(AudioSettings()) }, compact = true)
-            if (showPrivacyOptions) {
-                Spacer(Modifier.height(18.dp))
-                Text("PRIVACY", color = GameColors.accent, fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-                Text(
-                    "Change how rewarded advertising uses your data.",
-                    color = GameColors.textDim, fontSize = 13.sp
-                )
-                Spacer(Modifier.height(8.dp))
-                GameButton("AD PRIVACY OPTIONS", onPrivacyOptions, compact = true)
+            SettingsSection(copy.hud, copy.hudDetail)
+            Spacer(Modifier.height(10.dp))
+            ChoiceGrid(
+                first = {
+                    PreviewChoiceCard(
+                        title = copy.gaugeName(GaugeStyle.CLASSIC),
+                        detail = copy.gaugeDetail(GaugeStyle.CLASSIC),
+                        selected = gaugeStyle == GaugeStyle.CLASSIC,
+                        onClick = { onGaugeStyleChange(GaugeStyle.CLASSIC) }
+                    ) {
+                        GaugeStylePreview(GaugeStyle.CLASSIC, Modifier.fillMaxSize())
+                    }
+                },
+                second = {
+                    PreviewChoiceCard(
+                        title = copy.gaugeName(GaugeStyle.STRIP),
+                        detail = copy.gaugeDetail(GaugeStyle.STRIP),
+                        selected = gaugeStyle == GaugeStyle.STRIP,
+                        onClick = { onGaugeStyleChange(GaugeStyle.STRIP) }
+                    ) {
+                        GaugeStylePreview(GaugeStyle.STRIP, Modifier.fillMaxSize())
+                    }
+                }
+            )
+            Spacer(Modifier.height(24.dp))
+
+            SettingsSection(copy.display, copy.displayDetail)
+            UiScaleSlider(copy.uiScale, uiScale, onUiScaleChange)
+            LightningFlashToggle(
+                enabled = lightningFlashesEnabled,
+                onEnabledChange = onLightningFlashesEnabledChange
+            )
+            Spacer(Modifier.height(24.dp))
+
+            SettingsSection(copy.sound, copy.soundDetail)
+            AudioSlider(copy.masterVolume, audioSettings.master) {
+                onAudioChange(audioSettings.copy(master = it))
             }
-            Spacer(Modifier.height(24.dp))
+            AudioSlider(copy.roadWeather, audioSettings.surfaces) {
+                onAudioChange(audioSettings.copy(surfaces = it))
+            }
+            AudioSlider(copy.tyreSlip, audioSettings.tyres) {
+                onAudioChange(audioSettings.copy(tyres = it))
+            }
+            GameButton(copy.resetSound, { onAudioChange(AudioSettings()) }, compact = true)
 
-            Text(
-                "DEBUG TOOLS",
-                color = GameColors.accent,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 2.sp
-            )
-            GameButton(
-                if (debugToolsVisible) "HIDE DEBUG TOOLS" else "SHOW DEBUG TOOLS",
-                { debugToolsVisible = !debugToolsVisible },
-                compact = true,
-                style = BtnStyle.Ghost
-            )
-            if (debugToolsVisible) {
-                Text(
-                    "These tools are for testing only and apply to the next new run.",
-                    color = GameColors.textDim,
-                    fontSize = 13.sp
-                )
-                Spacer(Modifier.height(10.dp))
-
-                Toggle(
-                    title = "FPS counter",
-                    detail = "Show the live frame-rate counter in the driving HUD.",
-                    checked = showFps,
-                    onToggle = onShowFpsChange
-                )
-
-                Toggle(
-                    title = "All components",
-                    detail = "Fills every empty slot with a basic part, so nothing is missing.",
-                    checked = options.allComponents,
-                    onToggle = { onChange(options.copy(allComponents = it)) }
-                )
-                Toggle(
-                    title = "Full upgrades",
-                    detail = "Best part in every slot — strongest engine, sport tyres, big tank.",
-                    checked = options.fullUpgrades,
-                    onToggle = { onChange(options.copy(fullUpgrades = it)) }
-                )
-                Toggle(
-                    title = "Whole body",
-                    detail = "Doors, bonnet, boot lid, bumpers, lights and seats fitted from the start.",
-                    checked = options.fullBody,
-                    // Plná výbava karosériu obsahuje tiež – samostatný prepínač
-                    // by potom nič nemenil, tak sa vypne.
-                    enabled = !options.allComponents && !options.fullUpgrades,
-                    onToggle = { onChange(options.copy(fullBody = it)) }
-                )
-                Toggle(
-                    title = "Full fluids",
-                    detail = "Clean fuel, oil and coolant to the brim, battery charged.",
-                    checked = options.fullFluids,
-                    onToggle = { onChange(options.copy(fullFluids = it)) }
-                )
-                Toggle(
-                    title = "Test track",
-                    detail = "Washboard, a sharp bump, a jump, a long climb, dips and " +
-                        "growing steps — on a loop, for tuning suspension and handling.",
-                    checked = options.testTrack,
-                    onToggle = { onChange(options.copy(testTrack = it)) }
-                )
-                Toggle(
-                    title = "Repair controls",
-                    detail = "Shows the instant REPAIR action in CAR. Debug only; normal runs hide it.",
-                    checked = options.repairControls,
-                    onToggle = { onChange(options.copy(repairControls = it)) }
-                )
-
+            if (showPrivacyOptions) {
                 Spacer(Modifier.height(20.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    GameButton("FULL CAR + TRACK", { onChange(DebugOptions.TUNE_SUSPENSION) }, compact = true)
-                    GameButton("TURN ALL OFF", { onChange(DebugOptions.OFF) })
+                SettingsSection(copy.privacy, copy.privacyDetail)
+                Spacer(Modifier.height(8.dp))
+                GameButton(copy.adPrivacyOptions, onPrivacyOptions, compact = true)
+            }
+        }
+    }
+}
+
+@Composable
+private fun LightningFlashToggle(
+    enabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit
+) {
+    val copy = LocalCopy.current
+    val shape = RoundedCornerShape(10.dp)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+            .background(GameColors.panelSoft, shape)
+            .border(1.dp, GameColors.outline, shape)
+            .toggleable(
+                value = enabled,
+                role = Role.Switch,
+                onValueChange = onEnabledChange
+            )
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(
+                copy.lightningFlashes,
+                color = GameColors.text,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                copy.lightningFlashesDetail,
+                color = GameColors.textDim,
+                fontSize = 11.sp,
+                lineHeight = 15.sp
+            )
+        }
+        Switch(checked = enabled, onCheckedChange = null)
+    }
+}
+
+@Composable
+private fun SettingsSection(title: String, detail: String) {
+    Text(
+        title,
+        color = GameColors.accent,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = 2.sp
+    )
+    Text(detail, color = GameColors.textDim, fontSize = 13.sp)
+}
+
+@Composable
+private fun LanguagePicker(
+    language: AppLanguage,
+    onLanguageChange: (AppLanguage) -> Unit
+) {
+    val copy = LocalCopy.current
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val columns = if (maxWidth < 500.dp) 2 else 3
+        val gap = 8.dp
+        val cardWidth = (maxWidth - gap * (columns - 1)) / columns.toFloat()
+        Column(verticalArrangement = Arrangement.spacedBy(gap)) {
+            AppLanguage.entries.chunked(columns).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    row.forEach { item ->
+                        val selected = language == item
+                        Row(
+                            Modifier
+                                .width(cardWidth)
+                                .heightIn(min = 58.dp)
+                                .background(
+                                    if (selected) GameColors.accent.copy(alpha = 0.16f)
+                                    else GameColors.panelSoft,
+                                    RoundedCornerShape(10.dp)
+                                )
+                                .border(
+                                    if (selected) 2.dp else 1.dp,
+                                    if (selected) GameColors.accent else GameColors.outline,
+                                    RoundedCornerShape(10.dp)
+                                )
+                                .selectable(
+                                    selected = selected,
+                                    role = Role.RadioButton,
+                                    onClick = { if (!selected) onLanguageChange(item) }
+                                )
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                Modifier
+                                    .width(34.dp)
+                                    .height(28.dp)
+                                    .background(
+                                        if (selected) GameColors.accent else Color(0xFF34383A),
+                                        RoundedCornerShape(7.dp)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    item.code.uppercase(),
+                                    color = if (selected) GameColors.panelHigh else GameColors.text,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Black
+                                )
+                            }
+                            Column(Modifier.padding(start = 9.dp).weight(1f)) {
+                                Text(
+                                    item.nativeName,
+                                    color = GameColors.text,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    copy.languageEnglishName(item),
+                                    color = GameColors.textDim,
+                                    fontSize = 10.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            if (selected) {
+                                Text("✓", color = GameColors.accent, fontWeight = FontWeight.Black)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -211,66 +321,130 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun AudioSlider(label: String, value: Float, onChange: (Float) -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(label, color = GameColors.text, fontSize = 14.sp)
-            Text(if (value <= 0f) "OFF" else "${(value * 100).toInt()}%",
-                color = GameColors.accent, fontSize = 13.sp)
+private fun ChoiceGrid(
+    first: @Composable () -> Unit,
+    second: @Composable () -> Unit
+) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        if (maxWidth >= 540.dp) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.weight(1f)) { first() }
+                Box(Modifier.weight(1f)) { second() }
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                first()
+                second()
+            }
         }
-        Slider(value = value, onValueChange = onChange,
-            modifier = Modifier.semantics { contentDescription = label },
-            colors = SliderDefaults.colors(thumbColor = GameColors.accent,
-                activeTrackColor = GameColors.accent, inactiveTrackColor = GameColors.outline))
     }
 }
 
 @Composable
-private fun Toggle(
+private fun PreviewChoiceCard(
     title: String,
     detail: String,
-    checked: Boolean,
-    onToggle: (Boolean) -> Unit,
-    enabled: Boolean = true
+    selected: Boolean,
+    onClick: () -> Unit,
+    preview: @Composable () -> Unit
 ) {
-    val accent = if (checked) GameColors.accent else GameColors.outline
-    Row(
+    val shape = RoundedCornerShape(12.dp)
+    Column(
         Modifier
             .fillMaxWidth()
-            .padding(vertical = 5.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(GameColors.panelSoft)
-            .border(1.dp, accent, RoundedCornerShape(10.dp))
-            .clickable(enabled = enabled) { onToggle(!checked) }
-            .padding(horizontal = 14.dp, vertical = 11.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                title,
-                color = if (enabled) GameColors.text else GameColors.textDim,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold
+            .heightIn(min = 180.dp)
+            .background(
+                if (selected) GameColors.accent.copy(alpha = 0.12f) else GameColors.panelSoft,
+                shape
             )
-            Text(detail, color = GameColors.textDim, fontSize = 12.sp)
-        }
-        Spacer(Modifier.width(12.dp))
-        // Prepínač ako kontrolka na palubovke – svieti, keď je zapnutý.
+            .border(
+                if (selected) 2.dp else 1.dp,
+                if (selected) GameColors.accent else GameColors.outline,
+                shape
+            )
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .padding(12.dp)
+    ) {
         Box(
             Modifier
-                .size(width = 46.dp, height = 24.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(if (checked) GameColors.accent.copy(alpha = 0.25f) else Color(0x22FFFFFF))
-                .border(1.dp, accent, RoundedCornerShape(12.dp)),
-            contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart
+                .fillMaxWidth()
+                .height(102.dp)
+                .background(Color(0xCC171A1B), RoundedCornerShape(9.dp)),
+            contentAlignment = Alignment.Center
         ) {
-            Box(
-                Modifier
-                    .padding(horizontal = 3.dp)
-                    .size(18.dp)
-                    .clip(RoundedCornerShape(9.dp))
-                    .background(if (checked) GameColors.accent else GameColors.textDim)
+            preview()
+            if (selected) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(7.dp)
+                        .width(24.dp)
+                        .height(24.dp)
+                        .background(GameColors.accent, RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("✓", color = GameColors.panelHigh, fontWeight = FontWeight.Black)
+                }
+            }
+        }
+        Spacer(Modifier.height(9.dp))
+        Text(title, color = GameColors.text, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Text(detail, color = GameColors.textDim, fontSize = 11.sp, lineHeight = 15.sp)
+    }
+}
+
+@Composable
+private fun UiScaleSlider(label: String, value: Float, onChange: (Float) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(label, color = GameColors.text, fontSize = 14.sp)
+            Text(
+                "${(value * 100f).toInt()}%",
+                color = GameColors.accent,
+                fontSize = 13.sp
             )
         }
+        Slider(
+            value = value,
+            onValueChange = {
+                val snapped = (it * 20f).roundToInt() / 20f
+                onChange(
+                    snapped.coerceIn(GameConfig.UI_USER_SCALE_MIN, GameConfig.UI_USER_SCALE_MAX)
+                )
+            },
+            valueRange = GameConfig.UI_USER_SCALE_MIN..GameConfig.UI_USER_SCALE_MAX,
+            steps = 9,
+            modifier = Modifier.semantics { contentDescription = label },
+            colors = SliderDefaults.colors(
+                thumbColor = GameColors.accent,
+                activeTrackColor = GameColors.accent,
+                inactiveTrackColor = GameColors.outline
+            )
+        )
+    }
+}
+
+@Composable
+private fun AudioSlider(label: String, value: Float, onChange: (Float) -> Unit) {
+    val copy = LocalCopy.current
+    Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(label, color = GameColors.text, fontSize = 14.sp)
+            Text(
+                if (value <= 0f) copy.off else "${(value * 100).toInt()}%",
+                color = GameColors.accent,
+                fontSize = 13.sp
+            )
+        }
+        Slider(
+            value = value,
+            onValueChange = onChange,
+            modifier = Modifier.semantics { contentDescription = label },
+            colors = SliderDefaults.colors(
+                thumbColor = GameColors.accent,
+                activeTrackColor = GameColors.accent,
+                inactiveTrackColor = GameColors.outline
+            )
+        )
     }
 }

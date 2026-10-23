@@ -14,9 +14,32 @@ import sk.kubis.endlessdrive.domain.model.FuelKind
 import sk.kubis.endlessdrive.game.GameEngine
 import sk.kubis.endlessdrive.game.car.MountedPart
 import sk.kubis.endlessdrive.game.car.TireInjury
+import sk.kubis.endlessdrive.game.event.PursuitStormKind
 import sk.kubis.endlessdrive.game.save.RunCodec
 
 class RunSaveTest {
+
+    @Test
+    fun utilityTrailerExpandsCargoAndSurvivesSave() {
+        val engine = GameEngine(801L, 0f)
+        val originalSlots = engine.boot.slots.size
+        assertTrue(engine.boot.add(ItemStack(ItemCatalog.UTILITY_TRAILER.id)))
+        val trailerIndex = engine.boot.slots.indexOfFirst {
+            it?.defId == ItemCatalog.UTILITY_TRAILER.id
+        }
+
+        assertTrue(engine.useBootItem(trailerIndex))
+        assertTrue(engine.utilityTrailerAttached)
+        assertEquals(originalSlots + 8, engine.boot.slots.size)
+        engine.forcePursuitStorm(PursuitStormKind.BLIZZARD)
+        engine.pursuitStorm!!.gapM = 321f
+
+        val restored = GameEngine.restore(RunCodec.decode(RunCodec.encode(engine.snapshot()))!!, 0f)
+        assertTrue(restored.utilityTrailerAttached)
+        assertEquals(originalSlots + 8, restored.boot.slots.size)
+        assertEquals(PursuitStormKind.BLIZZARD, restored.pursuitStormKind)
+        assertEquals(321f, restored.pursuitStormGapM!!, 0.01f)
+    }
 
     private fun playedRun(seed: Long): GameEngine {
         val engine = GameEngine(seed, 0f)
@@ -80,6 +103,11 @@ class RunSaveTest {
         assertEquals(engine.car.fuelPurity, restored.car.fuelPurity, 0.001f)
         assertEquals(engine.car.fuelDieselFraction, restored.car.fuelDieselFraction, 0.001f)
         assertEquals(engine.car.bodyPaintIndex, restored.car.bodyPaintIndex)
+        engine.car.snowCover = 0.55f
+        engine.car.bodyDirt = 0.33f
+        val weathered = GameEngine.restore(RunCodec.decode(RunCodec.encode(engine.snapshot()))!!, 0f)
+        assertEquals(0.55f, weathered.car.snowCover, 0.001f)
+        assertEquals(0.33f, weathered.car.bodyDirt, 0.001f)
         assertEquals(3, restored.car.parts[ComponentSlot.DOOR_FRONT]?.paintIndex)
         assertEquals(-1, restored.car.parts[ComponentSlot.HEADLIGHT]?.paintIndex)
         assertEquals(engine.car.x, restored.car.x, 0.01f)
@@ -185,5 +213,20 @@ class RunSaveTest {
         )
         assertTrue(restored.headlightsOn)
         assertTrue(restored.highBeamsOn)
+    }
+
+    @Test
+    fun helpAdsUsedSurvivesRoundTrip() {
+        val engine = playedRun(61L)
+        engine.car.fuel = 0f
+        engine.endRun(sk.kubis.endlessdrive.domain.model.EndReason.OUT_OF_FUEL)
+        assertTrue(engine.recoverFromRewardedAd())
+        assertEquals(1, engine.helpAdsUsed)
+        val restored = GameEngine.restore(
+            RunCodec.decode(RunCodec.encode(engine.snapshot()))!!,
+            0f
+        )
+        assertEquals(1, restored.helpAdsUsed)
+        assertEquals(4, restored.helpAdsRemaining)
     }
 }

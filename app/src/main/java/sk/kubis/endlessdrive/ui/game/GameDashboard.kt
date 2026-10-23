@@ -4,7 +4,6 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -13,12 +12,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,38 +24,46 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import sk.kubis.endlessdrive.R
 import sk.kubis.endlessdrive.core.GameConfig
 import sk.kubis.endlessdrive.domain.model.GamePhase
+import sk.kubis.endlessdrive.domain.model.GaugeStyle
 import sk.kubis.endlessdrive.game.Journey
 import sk.kubis.endlessdrive.game.car.TireInjury
+import sk.kubis.endlessdrive.ui.l10n.LocalCopy
+import sk.kubis.endlessdrive.ui.l10n.adLoadingQuota
+import sk.kubis.endlessdrive.ui.l10n.batteryWatchAd
+import sk.kubis.endlessdrive.ui.l10n.car
+import sk.kubis.endlessdrive.ui.l10n.condition
+import sk.kubis.endlessdrive.ui.l10n.drive
+import sk.kubis.endlessdrive.ui.l10n.fuel
+import sk.kubis.endlessdrive.ui.l10n.gaugeCluster
+import sk.kubis.endlessdrive.ui.l10n.kmh
+import sk.kubis.endlessdrive.ui.l10n.leave
+import sk.kubis.endlessdrive.ui.l10n.pack
+import sk.kubis.endlessdrive.ui.l10n.relayNetwork
+import sk.kubis.endlessdrive.ui.l10n.reverse
+import sk.kubis.endlessdrive.ui.l10n.roadAssistWatchAd
+import sk.kubis.endlessdrive.ui.l10n.search
+import sk.kubis.endlessdrive.ui.l10n.sleep
+import sk.kubis.endlessdrive.ui.l10n.start
+import sk.kubis.endlessdrive.ui.l10n.temp
 import sk.kubis.endlessdrive.ui.theme.BtnStyle
 import sk.kubis.endlessdrive.ui.theme.GameButton
 import sk.kubis.endlessdrive.ui.theme.GameColors
 import sk.kubis.endlessdrive.ui.theme.Space
 import sk.kubis.endlessdrive.ui.theme.Type
-import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.text.TextStyle
-import kotlin.math.cos
 import kotlin.math.min
-import kotlin.math.sin
-
-/**
- * Bez podkladového bloku môže text ležať na svetlej oblohe aj na tmavej hline.
- * Tieň ho udrží čitateľný na oboch, a pritom nezakrýva kulisu.
- */
-private val OnSceneText = TextStyle(
-    shadow = Shadow(color = Color(0xCC000000), offset = Offset(0f, 1.5f), blurRadius = 5f)
-)
 
 /** Koniec stupnice tachometra (km/h) – nad MAX_SPEED s rezervou. */
 private const val SPEEDO_MAX = 180f
@@ -80,8 +86,13 @@ fun Dashboard(
     onLeave: () -> Unit,
     onDrive: () -> Unit,
     onRest: () -> Unit,
+    onAssist: () -> Unit = {},
+    assistAdReady: Boolean = false,
+    gaugeStyle: GaugeStyle = GaugeStyle.CLASSIC,
+    compact: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    val copy = LocalCopy.current
     // Palubovka sedí priamo na scéne. Tmavý film cez spodok by zakryl cestu
     // aj hlinu; čitateľnosť drží tieň textu a vlastný podklad kontrolek.
     val driving = ui.phase == GamePhase.DRIVING
@@ -99,15 +110,16 @@ fun Dashboard(
         verticalAlignment = Alignment.Bottom
     ) {
         // --- Budíky, pod nimi kontrolky -----------------------------------
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            Modifier
+                .semantics { contentDescription = copy.gaugeCluster },
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             val diesel = ui.fuelDieselFraction.coerceIn(0f, 1f)
             val coolantWater = (1f - ui.coolantPurity).coerceIn(0f, 1f)
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(Space.m),
-                verticalAlignment = Alignment.Bottom
-            ) {
-                Gauge(
-                    label = "TEMP",
+            GaugeTrio(
+                temp = GaugeSpec(
+                    label = copy.temp,
                     ratio = ((ui.temperature - 40f) / 100f).coerceIn(0f, 1f),
                     value = "${ui.temperature.toInt()}°",
                     redFrom = (GameConfig.OVERHEAT_THRESHOLD - 40f) / 100f,
@@ -115,16 +127,14 @@ fun Dashboard(
                     mixBaseColor = GameColors.ok,
                     mixColor = GameColors.info,
                     mixLabel = "C ${(ui.coolantPurity * 100f).toInt()} · W ${(coolantWater * 100f).toInt()}"
-                )
-                // Tachometer je najväčší – tak to má auto aj tak sa to číta.
-                // Keď stojí, ten istý budík ukáže stav auta (nie 0 km/h).
-                Gauge(
+                ),
+                speed = GaugeSpec(
                     label = if (!driving) {
-                        "CONDITION"
+                        copy.condition
                     } else if (ui.speedKmh < -0.5f) {
-                        "REVERSE"
+                        copy.reverse
                     } else {
-                        "km/h"
+                        copy.kmh
                     },
                     ratio = if (!driving) {
                         ui.overallHealth.coerceIn(0f, 1f)
@@ -137,12 +147,11 @@ fun Dashboard(
                         kotlin.math.abs(ui.speedKmh).toInt().toString()
                     },
                     redFrom = 1f,
-                    diameter = 74.dp,
-                    valueSize = Type.title,
-                    accent = if (driving && ui.speedKmh < -0.5f) GameColors.warn else GameColors.accent
-                )
-                Gauge(
-                    label = "FUEL",
+                    accent = if (driving && ui.speedKmh < -0.5f) GameColors.warn else GameColors.accent,
+                    primary = true
+                ),
+                fuel = GaugeSpec(
+                    label = copy.fuel,
                     ratio = (ui.fuelL / ui.fuelCapacityL.coerceAtLeast(1f)).coerceIn(0f, 1f),
                     value = "${ui.fuelL.toInt()} L",
                     redFrom = 0f,
@@ -151,8 +160,9 @@ fun Dashboard(
                     mixBaseColor = Color(0xFFE1A84F),
                     mixColor = GameColors.info,
                     mixLabel = "P ${((1f - diesel) * 100f).toInt()} · D ${(diesel * 100f).toInt()}"
-                )
-            }
+                ),
+                style = gaugeStyle
+            )
             Spacer(Modifier.height(Space.xs))
             TellTales(ui)
         }
@@ -160,24 +170,27 @@ fun Dashboard(
         // --- Ovládanie ----------------------------------------------------
         if (!driving) {
             Column(
-                Modifier.width(420.dp),
+                Modifier.width(if (compact) 318.dp else 420.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(if (compact) 5.dp else 8.dp)
             ) {
                 // V PARK už akcie nezalamujeme podľa ich textu. Každá má
                 // rovnakú šírku a panel tak ostáva vizuálne pokojný.
                 val parkActions = buildList<Pair<String, () -> Unit>> {
-                    add("PACK" to onInventory)
-                    add("CAR" to onCar)
+                    add(copy.pack to onInventory)
+                    add(copy.car to onCar)
                     when {
-                        ui.exploring -> add("LEAVE" to onLeave)
-                        ui.hasNearbyBuilding -> add("SEARCH" to onEnter)
+                        ui.exploring -> add(copy.leave to onLeave)
+                        ui.hasNearbyBuilding -> add(copy.search to onEnter)
                     }
-                    if (ui.canRest) add("SLEEP" to onRest)
+                    if (ui.canRest) add(copy.sleep to onRest)
                 }
                 Row(
                     Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                    horizontalArrangement = Arrangement.spacedBy(
+                        if (compact) 6.dp else 8.dp,
+                        Alignment.CenterHorizontally
+                    ),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     parkActions.forEach { (label, action) ->
@@ -185,7 +198,7 @@ fun Dashboard(
                             label,
                             action,
                             compact = true,
-                            modifier = Modifier.width(94.dp)
+                            modifier = Modifier.width(if (compact) 72.dp else 94.dp)
                         )
                     }
                 }
@@ -196,28 +209,45 @@ fun Dashboard(
                 ) {
                     if (!ui.engineRunning) {
                         GameButton(
-                            "START",
+                            copy.start,
                             onStart,
                             style = BtnStyle.Primary,
                             iconRes = R.drawable.ic_start_engine,
-                            modifier = Modifier.width(144.dp)
+                            modifier = Modifier.width(if (compact) 120.dp else 144.dp)
                         )
                     } else {
                         GameButton(
-                            text = "OFF",
+                            text = copy.off,
                             onClick = onStopEngine,
                             compact = true,
                             iconRes = R.drawable.ic_stop_engine,
                             iconOnly = true,
-                            modifier = Modifier.width(64.dp),
+                            modifier = Modifier.width(if (compact) 54.dp else 64.dp),
                         )
                         GameButton(
-                            "DRIVE",
+                            copy.drive,
                             onDrive,
                             style = BtnStyle.Primary,
-                            modifier = Modifier.width(144.dp)
+                            modifier = Modifier.width(if (compact) 120.dp else 144.dp)
                         )
                     }
+                }
+                if (ui.canRequestAssist) {
+                        val quota = ui.helpAdsQuotaLabel
+                        val label = if (!assistAdReady) copy.adLoadingQuota(quota)
+                        else when (ui.assistOffer) {
+                            sk.kubis.endlessdrive.domain.model.RescueOffer.BATTERY,
+                            sk.kubis.endlessdrive.domain.model.RescueOffer.BATTERY_FIT ->
+                                copy.batteryWatchAd(quota)
+                            else -> copy.roadAssistWatchAd(quota)
+                        }
+                        GameButton(
+                        label,
+                        onAssist,
+                        style = BtnStyle.Primary,
+                        compact = true,
+                        modifier = Modifier.widthIn(min = 168.dp, max = 232.dp)
+                    )
                 }
             }
         }
@@ -229,18 +259,27 @@ fun Dashboard(
 
 /** Trasa, hodiny a počasie v hornom rohu – mimo jazdnej scény. */
 @Composable
-fun TripBadge(ui: GameUiState, showFps: Boolean, modifier: Modifier = Modifier) {
+fun TripBadge(
+    ui: GameUiState,
+    showFps: Boolean,
+    compact: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    val copy = LocalCopy.current
     Column(
         modifier
             .background(GameColors.hudBg, RoundedCornerShape(12.dp))
             .border(1.dp, GameColors.outline.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
-            .padding(horizontal = Space.m, vertical = Space.s)
+            .padding(
+                horizontal = if (compact) Space.s else Space.m,
+                vertical = if (compact) Space.xs else Space.s
+            )
     ) {
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
                 String.format("%.2f", ui.distanceKm),
                 color = GameColors.accent,
-                fontSize = Type.hero,
+                fontSize = if (compact) Type.title else Type.hero,
                 fontWeight = FontWeight.Bold
             )
             Spacer(Modifier.width(Space.xs))
@@ -248,7 +287,7 @@ fun TripBadge(ui: GameUiState, showFps: Boolean, modifier: Modifier = Modifier) 
                 "km",
                 color = GameColors.textDim,
                 fontSize = Type.label,
-                modifier = Modifier.padding(bottom = 6.dp)
+                modifier = Modifier.padding(bottom = if (compact) 3.dp else 6.dp)
             )
         }
         // Druhý riadok je výlučne pre aktuálny stav jazdy. Scrap je mena,
@@ -298,144 +337,11 @@ fun TripBadge(ui: GameUiState, showFps: Boolean, modifier: Modifier = Modifier) 
             }
         }
         Text(
-            "RELAY NETWORK  ${ui.relayNodes}/${Journey.goals.size}",
+            copy.relayNetwork(ui.relayNodes, Journey.goals.size),
             color = if (ui.relayNodes >= Journey.goals.size) GameColors.ok else GameColors.textDim,
             fontSize = Type.label,
             fontWeight = FontWeight.SemiBold
         )
-    }
-}
-
-/**
- * Okrúhly budík s ručičkou. Červená zóna je časť stupnice, nie zmena farby
- * ručičky – hráč tak vidí, ako blízko k nej je, nielen že už v nej je.
- */
-@Composable
-private fun Gauge(
-    label: String,
-    ratio: Float,
-    value: String,
-    redFrom: Float,
-    redTo: Float = 1f,
-    // Nie „size“ – to by v Canvas zatienilo DrawScope.size.
-    diameter: androidx.compose.ui.unit.Dp = 54.dp,
-    valueSize: androidx.compose.ui.unit.TextUnit = Type.body,
-    accent: Color = GameColors.accent,
-    /** Druhá zložka zmesi (diesel v palive, voda v chladiacej zmesi). */
-    mixRatio: Float? = null,
-    mixBaseColor: Color = GameColors.ok,
-    mixColor: Color = GameColors.info,
-    mixLabel: String? = null
-) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(diameter), contentAlignment = Alignment.Center) {
-            Canvas(Modifier.size(diameter)) {
-                val stroke = size.minDimension * 0.09f
-                val r = (size.minDimension - stroke) / 2f
-                val c = Offset(size.width / 2f, size.height / 2f)
-                val topLeft = Offset(c.x - r, c.y - r)
-                val arcSize = Size(r * 2f, r * 2f)
-                // Stupnica je 240° s medzerou dole – klasický budík, nie kruh.
-                val start = 150f
-                val sweep = 240f
-
-                drawArc(
-                    color = Color(0xFF2A241D),
-                    startAngle = start,
-                    sweepAngle = sweep,
-                    useCenter = false,
-                    topLeft = topLeft,
-                    size = arcSize,
-                    style = Stroke(width = stroke, cap = StrokeCap.Round)
-                )
-                // Nebezpečná zóna.
-                val redStart = start + sweep * redFrom.coerceIn(0f, 1f)
-                val redSweep = sweep * (redTo - redFrom).coerceIn(0f, 1f)
-                if (redSweep > 0.5f) {
-                    drawArc(
-                        color = GameColors.danger.copy(alpha = 0.55f),
-                        startAngle = redStart,
-                        sweepAngle = redSweep,
-                        useCenter = false,
-                        topLeft = topLeft,
-                        size = arcSize,
-                        style = Stroke(width = stroke, cap = StrokeCap.Butt)
-                    )
-                }
-                // Naplnená časť po ručičku.
-                val t = ratio.coerceIn(0f, 1f)
-                val inRed = t >= redFrom && t <= redTo
-                drawArc(
-                    color = if (inRed) GameColors.danger else accent,
-                    startAngle = start,
-                    sweepAngle = sweep * t,
-                    useCenter = false,
-                    topLeft = topLeft,
-                    size = arcSize,
-                    style = Stroke(width = stroke, cap = StrokeCap.Round)
-                )
-                // Ručička.
-                val a = Math.toRadians((start + sweep * t).toDouble())
-                drawLine(
-                    color = GameColors.text,
-                    start = c,
-                    end = Offset(
-                        c.x + (r * 0.82f) * cos(a).toFloat(),
-                        c.y + (r * 0.82f) * sin(a).toFloat()
-                    ),
-                    strokeWidth = stroke * 0.42f,
-                    cap = StrokeCap.Round
-                )
-                drawCircle(GameColors.text, radius = stroke * 0.42f, center = c)
-            }
-            // Hodnota sedí v dolnej tretine ciferníka, kde nie je ručička.
-            Text(
-                value,
-                color = GameColors.text,
-                fontSize = valueSize,
-                fontWeight = FontWeight.Bold,
-                style = OnSceneText,
-                modifier = Modifier.offset(y = diameter * 0.24f)
-            )
-        }
-        Text(
-            label,
-            color = GameColors.text.copy(alpha = 0.85f),
-            fontSize = Type.micro,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 0.8.sp,
-            style = OnSceneText
-        )
-        if (mixRatio != null && mixLabel != null) {
-            val second = mixRatio.coerceIn(0f, 1f)
-            Row(
-                Modifier
-                    .width(diameter * 0.78f)
-                    .height(3.dp)
-                    .clip(RoundedCornerShape(2.dp))
-            ) {
-                Box(
-                    Modifier
-                        .weight((1f - second).coerceAtLeast(0.001f))
-                        .fillMaxHeight()
-                        .background(mixBaseColor)
-                )
-                Box(
-                    Modifier
-                        .weight(second.coerceAtLeast(0.001f))
-                        .fillMaxHeight()
-                        .background(mixColor)
-                )
-            }
-            Text(
-                mixLabel,
-                color = GameColors.text.copy(alpha = 0.82f),
-                fontSize = 8.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.2.sp,
-                style = OnSceneText
-            )
-        }
     }
 }
 

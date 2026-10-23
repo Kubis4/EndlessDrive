@@ -1,7 +1,10 @@
 package sk.kubis.endlessdrive.ui.game
 
+import sk.kubis.endlessdrive.game.SceneEffects
+
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.MediaPlayer
 import android.media.SoundPool
 import android.os.Build
 import sk.kubis.endlessdrive.AudioAttribution
@@ -14,6 +17,7 @@ import sk.kubis.endlessdrive.game.audio.GameSfx
 import sk.kubis.endlessdrive.game.audio.SlipSoundEnvelope
 import sk.kubis.endlessdrive.domain.model.AudioSettings
 import sk.kubis.endlessdrive.game.event.RoadEvent
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.random.Random
 
 /**
@@ -25,15 +29,19 @@ class GameAudio(context: Context) {
     var settings = AudioSettings()
     private val slipEnvelope = SlipSoundEnvelope()
 
-    private val pool: SoundPool = buildPool(audioContext(context))
+    private val mediaContext = audioContext(context.applicationContext)
+    private val pool: SoundPool = buildPool(mediaContext)
 
-    private val samples = mutableMapOf<Int, Int>()
+    private val samples = ConcurrentHashMap<Int, Int>()
+    private val sampleLoadLock = Any()
+    private val sampleLoadQueue = ArrayDeque<Int>()
+    private val loadingSamples = mutableMapOf<Int, Int>()
     private var ready = false
     private var pendingLoads = 0
+    private var released = false
 
     private var idleStream = 0
     private var revStream = 0
-    private var rainStream = 0
     private var windStream = 0
     private var surfaceStream = 0
     private var brakeStream = 0
@@ -57,7 +65,12 @@ class GameAudio(context: Context) {
     private var waterSplatCooldown = 0f
     private var gravelTickCooldown = 0f
 
-    private var misfireCooldown = 0f
+    private var misfireCycle = -1
+    private var thunderBeat = -1
+    private var thunderDelay = -1f
+    private var lastThunderVariant = -1
+    private var rainPlayer: MediaPlayer? = null
+    private var thunderPlayer: MediaPlayer? = null
     private var muted = false
     private var enginePitch = 0.85f
     private var gear = 1
@@ -71,9 +84,13 @@ class GameAudio(context: Context) {
         R.raw.sfx_mud_5
     )
     private val waterSplashers = intArrayOf(
-        R.raw.sfx_splash_1,
-        R.raw.sfx_splash_2
+        R.raw.sfx_splash_1
     )
+    private val thunderVariants = intArrayOf(
+        R.raw.sfx_thunder,
+        R.raw.sfx_thunder_roll
+    )
+    private val preparedThunderPlayers = arrayOfNulls<MediaPlayer>(thunderVariants.size)
 
     init {
         val app = audioContext(context)
@@ -85,47 +102,92 @@ class GameAudio(context: Context) {
                     R.raw.sfx_engine_start,
                     R.raw.sfx_engine_stop,
                     R.raw.sfx_stall,
+                    R.raw.sfx_fail_start,
                     R.raw.sfx_brake,
                     R.raw.sfx_skid,
                     R.raw.sfx_blowout,
-                    R.raw.sfx_rock,
+                    R.raw.sfx_debris,
                     R.raw.sfx_misfire,
                     R.raw.sfx_belt,
                     R.raw.sfx_leak,
                     R.raw.sfx_coolant_hiss,
                     R.raw.sfx_oil_splash,
-                    R.raw.sfx_rain,
-                    R.raw.sfx_mud,
-                    R.raw.sfx_debris,
-                    R.raw.sfx_find,
                     R.raw.sfx_wind,
+                    R.raw.sfx_find,
+                    R.raw.sfx_radio,
+                    R.raw.sfx_surface_gravel,
                     R.raw.sfx_surface_water,
                     R.raw.sfx_surface_mud,
-                    R.raw.sfx_surface_gravel,
-                    R.raw.sfx_surface_sand,
                     R.raw.sfx_surface_ice,
-                    R.raw.sfx_surface_road,
                     R.raw.sfx_leak_loop
                 )
             )
             mudSplatters.forEach { add(it) }
             waterSplashers.forEach { add(it) }
-        }
+        }.distinct()
         pendingLoads = toLoad.size
+        sampleLoadQueue.addAll(toLoad)
         // Optimistic: hrajeme čo je načítané. Čakanie na všetky callbacky
         // (alebo zlyhaný OGG) predtým vypínalo celé audio.
         ready = true
         pool.setOnLoadCompleteListener { _, sampleId, status ->
-            pendingLoads = (pendingLoads - 1).coerceAtLeast(0)
-            if (status != 0) {
-                val dead = samples.filterValues { it == sampleId }.keys
-                dead.forEach { samples.remove(it) }
+            synchronized(sampleLoadLock) {
+                val resource = loadingSamples.remove(sampleId)
+                pendingLoads = (pendingLoads - 1).coerceAtLeast(0)
+                if (status != 0 && resource != null) {
+                    samples.remove(resource, sampleId)
+                }
+            }
+            loadNextSample(app)
+        }
+
+        // SoundPool dekóduje OGG cez systémový Codec2. Keď sa všetky súbory
+        // odošlú naraz, Pixel vytvorí desiatky dekóderov, vypíše resource
+        // warnings a krátko nato spraví veľký GC. Dve paralelné úlohy držia
+        // štart rýchly, ale bez pamäťovej špičky.
+        repeat(SAMPLE_LOAD_CONCURRENCY) { loadNextSample(app) }
+
+        // Dlhé počasie pripravíme pred prvým frameom jazdy. Pri začiatku dažďa
+        // alebo pri záblesku sa tak už nevytvára nový MediaCodec.
+        rainPlayer = createPreparedPlayer(R.raw.sfx_rain, looping = true)?.also { player ->
+            player.setOnErrorListener { failed, _, _ ->
+                if (rainPlayer === failed) rainPlayer = null
+                failed.release()
+                true
             }
         }
-        for (res in toLoad) {
-            val id = pool.load(app, res, 1)
-            if (id == 0) samples.remove(res) else samples[res] = id
+        thunderVariants.forEachIndexed { index, resource ->
+            preparedThunderPlayers[index] =
+                createPreparedPlayer(resource, looping = false)?.also { player ->
+                    player.setOnErrorListener { failed, _, _ ->
+                        if (thunderPlayer === failed) thunderPlayer = null
+                        if (preparedThunderPlayers[index] === failed) {
+                            preparedThunderPlayers[index] = null
+                        }
+                        failed.release()
+                        true
+                    }
+                }
         }
+    }
+
+    private fun loadNextSample(context: Context) {
+        var retry: Boolean
+        do {
+            retry = false
+            synchronized(sampleLoadLock) {
+                if (released || sampleLoadQueue.isEmpty()) return
+                val resource = sampleLoadQueue.removeFirst()
+                val sampleId = pool.load(context, resource, 1)
+                if (sampleId == 0) {
+                    pendingLoads = (pendingLoads - 1).coerceAtLeast(0)
+                    retry = true
+                } else {
+                    samples[resource] = sampleId
+                    loadingSamples[sampleId] = resource
+                }
+            }
+        } while (retry)
     }
 
     fun setMuted(value: Boolean) {
@@ -137,13 +199,23 @@ class GameAudio(context: Context) {
     }
 
     fun release() {
+        synchronized(sampleLoadLock) {
+            released = true
+            sampleLoadQueue.clear()
+            loadingSamples.clear()
+        }
         stopLoops()
+        releaseWeatherPlayers()
         pool.release()
         samples.clear()
         ready = false
     }
 
-    fun update(engine: GameEngine, dt: Float, paused: Boolean) {
+    /**
+     * @param cabinDuck 0–1: pri otvorenom CAR/PACK/SEARCH stlmi idle/rev,
+     * aby motor nepresekával cez panel.
+     */
+    fun update(engine: GameEngine, dt: Float, paused: Boolean, cabinDuck: Float = 0f) {
         val queued = engine.consumeSfx()
         if (!ready || muted) {
             if (muted || paused) stopLoops()
@@ -164,8 +236,6 @@ class GameAudio(context: Context) {
             return
         }
 
-        misfireCooldown = (misfireCooldown - dt).coerceAtLeast(0f)
-
         val car = engine.car
         val driving = engine.phase == GamePhase.DRIVING ||
             engine.phase == GamePhase.JUNCTION
@@ -173,13 +243,15 @@ class GameAudio(context: Context) {
         val speedAbs = kotlin.math.abs(car.speedKmh)
         val reversing = car.speed < -0.4f ||
             (engine.brakeInput > 0.05f && car.speed <= 0.35f && engine.throttleInput < 0.05f)
+        val duck = (1f - cabinDuck.coerceIn(0f, 1f) * 0.82f)
 
-        updateEngineLoops(running, speedAbs, engine.throttleInput, reversing, dt)
+        updateEngineLoops(running, speedAbs, engine.throttleInput, reversing, dt, duck)
         updateSurfaceLoop(engine, speedAbs, driving, dt)
         updateAmbientLoops(engine, dt)
         updateBrakeSkidLoops(engine, reversing, dt)
         updateLeakLoop(engine, dt)
         updateMisfire(engine)
+        updateThunder(engine, dt)
     }
 
     private fun updateEngineLoops(
@@ -187,7 +259,8 @@ class GameAudio(context: Context) {
         speedKmh: Float,
         throttle: Float,
         reversing: Boolean,
-        dt: Float
+        dt: Float,
+        cabinDuck: Float = 1f
     ) {
         if (!running) {
             idleVol = MathX.damp(idleVol, 0f, 6f, dt)
@@ -236,9 +309,9 @@ class GameAudio(context: Context) {
             MathX.lerp(0.78f, 1.55f, speedCurve * 0.7f + thr * 0.3f)
         }
 
-        idleVol = MathX.damp(idleVol, targetIdle.coerceIn(0f, 0.8f), 5f, dt)
+        idleVol = MathX.damp(idleVol, (targetIdle * cabinDuck).coerceIn(0f, 0.8f), 5f, dt)
         revVol = MathX.damp(revVol,
-            (targetRev * if (shiftRemaining > 0f) 0.48f else 0.8f).coerceIn(0f, 1f), 6f, dt)
+            (targetRev * cabinDuck * if (shiftRemaining > 0f) 0.48f else 0.8f).coerceIn(0f, 1f), 6f, dt)
         enginePitch = MathX.damp(enginePitch,
             if (reversing) revRate else 0.78f + rpm * 0.58f + thr * 0.16f, 9f, dt)
 
@@ -341,23 +414,101 @@ class GameAudio(context: Context) {
         RoadSurface.WATER -> R.raw.sfx_surface_water
         RoadSurface.MUD -> R.raw.sfx_surface_mud
         RoadSurface.GRAVEL -> R.raw.sfx_surface_gravel
-        RoadSurface.SAND -> R.raw.sfx_surface_sand
+        RoadSurface.SAND -> R.raw.sfx_surface_gravel
         RoadSurface.ICE, RoadSurface.SLUSH -> R.raw.sfx_surface_ice
-        RoadSurface.ASPHALT -> R.raw.sfx_surface_road
+        RoadSurface.ASPHALT -> R.raw.sfx_surface_gravel
     }
 
     private fun updateAmbientLoops(engine: GameEngine, dt: Float) {
         // Noc nemá cvrčky / sovy / rádio – žiadne creepy loopy.
-        val raining = engine.hasEvent(RoadEvent.RAIN)
-        val windy = engine.hasEvent(RoadEvent.TAILWIND) || engine.hasEvent(RoadEvent.HEADWIND)
-        val windStrength = if (engine.hasEvent(RoadEvent.HEADWIND)) 0.28f else 0.22f
+        val raining = engine.hasEvent(RoadEvent.RAIN) || engine.hasEvent(RoadEvent.STORM)
+        val foggy = engine.hasEvent(RoadEvent.FOG)
+        val storming = engine.hasEvent(RoadEvent.STORM)
+        val windy = foggy || storming ||
+            engine.hasEvent(RoadEvent.TAILWIND) || engine.hasEvent(RoadEvent.HEADWIND)
+        val windStrength = when {
+            storming -> 0.34f
+            foggy -> 0.16f
+            engine.hasEvent(RoadEvent.HEADWIND) -> 0.28f
+            else -> 0.22f
+        }
+        val rainTarget = when {
+            storming -> 0.48f
+            raining -> 0.30f
+            else -> 0f
+        }
 
-        rainVol = MathX.damp(rainVol, if (raining) 0.18f else 0f, 2.5f, dt)
+        rainVol = MathX.damp(rainVol, rainTarget, 2.5f, dt)
         windVol = MathX.damp(windVol, if (windy) windStrength else 0f, 2.5f, dt)
 
-        rainStream = applyLoop(rainStream, R.raw.sfx_rain, rainVol, 1f)
-        windStream = applyLoop(windStream, R.raw.sfx_wind, windVol, 1f)
+        updateRainPlayer(rainVol)
+        windStream = applyLoop(windStream, R.raw.sfx_wind, windVol, if (storming) 1.08f else 0.95f)
     }
+
+    private fun updateThunder(engine: GameEngine, dt: Float) {
+        val weatherVolume = (0.92f * weatherGain()).coerceIn(0f, 1f)
+        runCatching { thunderPlayer?.setVolume(weatherVolume, weatherVolume) }
+        if (!engine.hasEvent(RoadEvent.STORM)) {
+            thunderBeat = -1
+            thunderDelay = -1f
+            return
+        }
+
+        if (thunderDelay >= 0f) {
+            thunderDelay -= dt
+            if (thunderDelay <= 0f) {
+                thunderDelay = -1f
+                playThunder()
+            }
+        }
+
+        val beat = SceneEffects.stormFlashBeat(engine.elapsed)
+        if (beat == thunderBeat) return
+        // Reálny hrom príde po záblesku s odstupom podľa vzdialenosti búrky.
+        // Vizuálny accessibility prepínač tento časovač zámerne neovplyvňuje.
+        if (SceneEffects.stormFlash(engine.elapsed) < 0.5f) return
+        thunderBeat = beat
+        if (!isPlaying(thunderPlayer) && thunderDelay < 0f) {
+            thunderDelay = 0.25f + Random.nextFloat() * 1.10f
+        }
+    }
+
+    private fun updateRainPlayer(volume: Float) {
+        val v = (volume * weatherGain()).coerceIn(0f, 1f)
+        if (v < 0.015f) {
+            rainPlayer?.let { player ->
+                if (isPlaying(player)) runCatching { player.pause() }
+            }
+            return
+        }
+        val player = rainPlayer ?: return
+        runCatching {
+            player.setVolume(v, v)
+            if (!player.isPlaying) player.start()
+        }
+    }
+
+    private fun playThunder() {
+        if (muted || weatherGain() <= 0f || isPlaying(thunderPlayer)) return
+        lastThunderVariant = (lastThunderVariant + 1) % thunderVariants.size
+        val player = preparedThunderPlayers[lastThunderVariant] ?: return
+        thunderPlayer = player
+        val v = (0.92f * weatherGain()).coerceIn(0f, 1f)
+        player.setVolume(v, v)
+        player.setOnCompletionListener { completed ->
+            if (thunderPlayer === completed) thunderPlayer = null
+        }
+        runCatching {
+            player.seekTo(0)
+            player.start()
+        }
+    }
+
+    private fun weatherGain(): Float =
+        settings.master.coerceIn(0f, 1f) * settings.surfaces.coerceIn(0f, 1f)
+
+    private fun isPlaying(player: MediaPlayer?): Boolean =
+        player != null && runCatching { player.isPlaying }.getOrDefault(false)
 
     /** Tyre noise is a short cue on firm ground, never an endless warning loop. */
     private fun updateBrakeSkidLoops(engine: GameEngine, reversing: Boolean, dt: Float) {
@@ -380,12 +531,15 @@ class GameAudio(context: Context) {
     }
 
     private fun updateMisfire(engine: GameEngine) {
-        if (engine.hasEvent(RoadEvent.MISFIRE) &&
-            engine.car.engineRunning &&
-            misfireCooldown <= 0f
-        ) {
+        if (!engine.hasEvent(RoadEvent.MISFIRE) || !engine.car.engineRunning) {
+            misfireCycle = -1
+            return
+        }
+        val cycle = SceneEffects.misfireCycleIndex(engine.elapsed)
+        if (cycle == misfireCycle) return
+        misfireCycle = cycle
+        if (SceneEffects.misfirePopping(SceneEffects.misfireBeat(engine.elapsed))) {
             play(R.raw.sfx_misfire, 0.65f, 0.92f + Random.nextFloat() * 0.16f)
-            misfireCooldown = 0.85f + Random.nextFloat() * 1.0f
         }
     }
 
@@ -394,16 +548,17 @@ class GameAudio(context: Context) {
             GameSfx.ENGINE_START -> play(R.raw.sfx_engine_start, 0.85f, 1f)
             GameSfx.ENGINE_STOP -> play(R.raw.sfx_engine_stop, 0.7f, 1f)
             GameSfx.ENGINE_STALL -> play(R.raw.sfx_stall, 0.8f, 1f)
-            GameSfx.ENGINE_FAIL_START -> play(R.raw.sfx_stall, 0.45f, 0.85f)
+            GameSfx.ENGINE_FAIL_START -> play(R.raw.sfx_fail_start, 0.92f, 1f)
             GameSfx.BRAKE, GameSfx.SKID -> Unit
             GameSfx.BLOWOUT -> play(R.raw.sfx_blowout, 1f, 1f)
-            GameSfx.ROCK -> play(R.raw.sfx_rock, 0.95f, 1f)
-            GameSfx.MISFIRE -> play(R.raw.sfx_misfire, 0.8f, 1f)
+            GameSfx.ROCK -> play(R.raw.sfx_debris, 0.95f, 1f)
+            // Opakovaný misfire zvuk drží rovnaký rytmus ako vizuálny pop.
+            GameSfx.MISFIRE -> Unit
             GameSfx.BELT -> play(R.raw.sfx_belt, 0.95f, 1f)
             GameSfx.FUEL_LEAK -> play(R.raw.sfx_leak, 0.75f, 1f)
             GameSfx.COOLANT_LEAK -> play(R.raw.sfx_coolant_hiss, 0.8f, 1f)
             GameSfx.OIL_SPLASH -> play(R.raw.sfx_oil_splash, 0.85f, 1f)
-            GameSfx.RAIN -> Unit
+            GameSfx.RAIN, GameSfx.FOG, GameSfx.STORM -> Unit
             // Surface loop + splatters riešia bahno; krátky one-shot tu znel ako cuknutie.
             GameSfx.MUD -> Unit
             GameSfx.DEBRIS -> play(R.raw.sfx_debris, 0.75f, 1f)
@@ -418,8 +573,9 @@ class GameAudio(context: Context) {
         val category = when (res) {
             R.raw.sfx_skid, R.raw.sfx_brake -> settings.tyres
             R.raw.sfx_surface_water, R.raw.sfx_surface_mud, R.raw.sfx_surface_gravel,
-            R.raw.sfx_surface_sand, R.raw.sfx_surface_ice, R.raw.sfx_surface_road,
-            R.raw.sfx_rain, R.raw.sfx_wind, R.raw.sfx_debris -> settings.surfaces
+            R.raw.sfx_surface_ice, R.raw.sfx_rain, R.raw.sfx_wind, R.raw.sfx_thunder,
+            R.raw.sfx_thunder_roll,
+            R.raw.sfx_debris -> settings.surfaces
             else -> if (res in mudSplatters || res in waterSplashers) settings.surfaces else 1f
         }
         return settings.master.coerceIn(0f, 1f) * category.coerceIn(0f, 1f)
@@ -465,7 +621,6 @@ class GameAudio(context: Context) {
         }
         idleStream = stop(idleStream)
         revStream = stop(revStream)
-        rainStream = stop(rainStream)
         windStream = stop(windStream)
         surfaceStream = stop(surfaceStream)
         brakeStream = stop(brakeStream)
@@ -479,11 +634,36 @@ class GameAudio(context: Context) {
         brakeVol = 0f
         skidVol = 0f
         leakVol = 0f
+        rainPlayer?.let { player ->
+            if (isPlaying(player)) runCatching { player.pause() }
+        }
+        thunderPlayer?.let { player ->
+            if (isPlaying(player)) runCatching { player.pause() }
+        }
+        thunderPlayer = null
+        thunderDelay = -1f
         surfaceRes = 0
         lastSurface = null
     }
 
+    private fun releaseWeatherPlayers() {
+        rainPlayer?.let { runCatching { it.release() } }
+        preparedThunderPlayers.forEachIndexed { index, player ->
+            player?.let { runCatching { it.release() } }
+            preparedThunderPlayers[index] = null
+        }
+        rainPlayer = null
+        thunderPlayer = null
+    }
+
+    private fun createPreparedPlayer(resource: Int, looping: Boolean): MediaPlayer? =
+        MediaPlayer.create(mediaContext, resource)?.apply {
+            isLooping = looping
+        }
+
     companion object {
+        private const val SAMPLE_LOAD_CONCURRENCY = 2
+
         private fun audioContext(context: Context): Context {
             return AudioAttribution.wrap(context)
         }
@@ -497,7 +677,7 @@ class GameAudio(context: Context) {
                         .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                         .build()
                 )
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 builder.setContext(context)
             }
             return builder.build()

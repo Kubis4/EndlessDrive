@@ -32,7 +32,12 @@ data class WorldBuilding(
     /** Stav opravy v aktuálnej jazde. */
     var relayRestored: Boolean = false
 ) {
-    val looted: Boolean get() = loot.isEmpty() && pumpFuelL <= 0.05f && pumpDieselL <= 0.05f
+    /** Dielňa a lakovačka nemajú loot, ale ostávajú otvorené – nie vyrabovaný sklad. */
+    val looted: Boolean
+        get() = !type.isServiceShop &&
+            loot.isEmpty() &&
+            pumpFuelL <= 0.05f &&
+            pumpDieselL <= 0.05f
 }
 
 /**
@@ -94,6 +99,7 @@ data class BranchChoice(
     val segmentSeed: Long get() = plan.seed
     /** Zasneženú vetvu vidno už z rázcestia – biela cesta sa nedá prehliadnuť. */
     val winter: Boolean get() = plan.paving.winter
+    val visualBiome: BiomeType get() = style.visualBiome(plan.paving)
     val label: String get() = if (winter) "${style.label} ❄" else style.label
     val hint: String get() = style.hint
 }
@@ -122,6 +128,13 @@ class RoadSegment(
     private val terrain: Terrain,
     val paving: RoadPaving = RoadPaving.ASPHALT
 ) {
+    /**
+     * Vetva zvolená hráčom pre výstup z tohto segmentu. Je uložená priamo na
+     * segmente, aby fyzika, kulisy aj renderer používali rovnaký nasledujúci
+     * bióm. Null znamená najbezpečnejšiu vetvu ako plynulý fallback.
+     */
+    var selectedChoiceId: Int? = null
+
     /** Budovy sa dopĺňajú až po vzniku segmentu – potrebujú jeho výškový profil. */
     val buildings: MutableList<WorldBuilding> = mutableListOf()
 
@@ -129,21 +142,28 @@ class RoadSegment(
     val patches: MutableList<SurfacePatch> = mutableListOf()
 
     val biome: BiomeType get() = style.biome
+    /** Kulisa podľa vozovky, nie podľa toho, ako vetva vznikla. */
+    val visualBiome: BiomeType get() = style.visualBiome(paving)
     val endWorldX: Float get() = worldOrigin + length
-    val nextStyle: BranchStyle? get() = choices.firstOrNull()?.style
+    val selectedChoice: BranchChoice?
+        get() = choices.firstOrNull { it.id == selectedChoiceId }
+            ?: choices.minByOrNull { it.plan.risk }
+    val nextStyle: BranchStyle? get() = selectedChoice?.style
     val transitionLength: Float
-        get() = MathX.lerp(
-            GameConfig.BIOME_TRANSITION_MIN,
-            GameConfig.BIOME_TRANSITION_MAX,
-            MathX.hash01(seed.toInt(), TRANSITION_SALT)
-        ).coerceAtMost(length * 0.72f)
+        get() = GameConfig.JUNCTION_APPROACH.coerceAtMost(length * 0.72f)
     val transitionStartWorldX: Float get() = endWorldX - transitionLength
 
-    fun biomeBlendAtWorld(worldX: Float): BiomeBlend {
-        val next = nextStyle ?: return BiomeBlend(biome, biome, 0f)
-        val amount = MathX.smoothstep(transitionStartWorldX, endWorldX, worldX)
-        return BiomeBlend(biome, next.biome, amount)
-    }
+    /** Samotný segment nemení kulisy podľa swipe voľby pred križovatkou. */
+    fun biomeBlendAtWorld(@Suppress("UNUSED_PARAMETER") worldX: Float): BiomeBlend =
+        BiomeBlend(visualBiome, visualBiome, 0f)
+
+    /**
+     * Technické tvarovanie terénu ku zvolenej vetve ostáva pred hranicou,
+     * aby sa oba výškové profily stretli bez schodu. Nie je to vizuálny biome fade.
+     */
+    private fun outgoingTransitionAmountAtWorld(worldX: Float): Float =
+        if (selectedChoice == null) 0f
+        else MathX.smoothstep(transitionStartWorldX, endWorldX, worldX)
 
     /**
      * Hĺbka rokliny pod mostom (m). Pri 3.4 m sedela mostovka prakticky na
@@ -248,7 +268,7 @@ class RoadSegment(
     private fun blendedTerrainHeight(worldX: Float, challenge: Float): Float {
         val from = terrain.heightAt(worldX, style, challenge)
         val next = nextStyle ?: return from
-        val amount = biomeBlendAtWorld(worldX).amount
+        val amount = outgoingTransitionAmountAtWorld(worldX)
         if (amount <= 0f) return from
         val nextChallenge = MathX.lerp(challenge, RoadFeature.STRAIGHT.hillMul, amount)
         return MathX.lerp(from, terrain.heightAt(worldX, next, nextChallenge), amount)
@@ -274,7 +294,7 @@ class RoadSegment(
         val base = if (next == null) style.bumpiness else MathX.lerp(
             style.bumpiness,
             next.bumpiness,
-            biomeBlendAtWorld(worldX).amount
+            outgoingTransitionAmountAtWorld(worldX)
         )
         val sectionRoughness = sectionAtLocal(localX)?.feature?.roughness ?: 0f
         // Každý nový región začína rovinkou. Poslednú lokálnu hrboľatosť
@@ -287,6 +307,5 @@ class RoadSegment(
         const val TRANSITION = 26f
         const val SEAM_SMOOTHING = 90f
         const val BRIDGE_RAMP = 12f
-        const val TRANSITION_SALT = 0x4B10
     }
 }

@@ -13,6 +13,11 @@ local.properties
 /.gradle-local
 /.android-local
 
+# Release signing – heslá a kľúč mimo gitu.
+/keystore.properties
+*.jks
+*.keystore
+
 # Zbalené APK – build výstup, nie zdroj.
 /apk
 

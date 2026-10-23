@@ -1,6 +1,6 @@
 # Endless Drive
 
-Endless Drive is a 2.5D mobile survival-driving game about keeping an old car
+Endless Drive is a 3D mobile survival-driving game about keeping an old car
 alive on a road that never seems to end.
 
 You begin beside a badly damaged vehicle with missing parts, uncertain fluids
@@ -18,7 +18,7 @@ purpose and every decision affects the journey:
 - inspect and repair individual components,
 - manage fuel, oil, coolant and battery charge,
 - search abandoned buildings for parts, fluids and useful supplies,
-- choose between safer roads and risky shortcuts,
+- follow one continuous road as the terrain and weather change,
 - adapt to hills, rough surfaces, snow, ice, mud, water and sand,
 - keep enough space and carrying capacity for the next valuable find.
 
@@ -61,12 +61,13 @@ events develop as the journey continues. The road can include:
 - long climbs and descents,
 - winding sections and broken pavement,
 - bridges over deep ravines,
-- asphalt, concrete, gravel, dirt and sand branches,
+- asphalt, concrete, gravel, dirt and sand stretches,
 - water, mud, loose gravel, slush and ice on the road,
 - abandoned homes, garages, service stations and repair locations.
 
-Road choices are made while driving. A safer branch may cost time or fuel,
-while a rough shortcut may lead to better loot and much greater risk.
+Road forks offer different destinations, surfaces and risks. Steer into an arm
+or select a destination in the route panel. The biome blends into the chosen
+region after the junction.
 
 ## Weather, wind and time
 
@@ -139,9 +140,20 @@ https://raw.githubusercontent.com/Kubis4/EndlessDrive/master/privacy-policy.md
 
 Endless Drive is an Android Studio project written in Kotlin with Jetpack
 Compose. It uses a custom lightweight driving and world-rendering system
-designed for mobile devices, procedural Canvas scenery and local DataStore
+designed for mobile devices, an OpenGL ES world and local DataStore
 saves.
 
 To open the project, use Android Studio with JDK 17 and Android SDK API 36.
 The minimum supported Android version is API 24. The game is designed for
 landscape play.
+
+## 3D driving
+
+Gameplay uses the 3D renderer in both debug and release builds. Steer with
+the left/right arrow buttons on the left; throttle and brake/reverse are independent pedals
+on the right. Drive onto the shoulder, follow the winding road and stop
+beside buildings to use the existing search and service panels.
+
+World geometry and tyre contacts share one height field. Saves include
+lateral position and heading while retaining compatibility with older runs.
+See the [3D implementation notes](docs/3d-expedition-plan.md).

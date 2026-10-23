@@ -5,7 +5,6 @@ import sk.kubis.endlessdrive.ads.RewardedAdManager
 import sk.kubis.endlessdrive.ads.AdConsentManager
 import sk.kubis.endlessdrive.data.DataStorePlayerRepository
 import sk.kubis.endlessdrive.domain.repository.PlayerRepository
-import sk.kubis.endlessdrive.ui.game.GameAssets
 import sk.kubis.endlessdrive.playgames.PlayGamesService
 
 class AppContainer(context: Context) {
@@ -21,5 +20,4 @@ class AppContainer(context: Context) {
      * použití a potom žijú s procesom – po otočení displeja alebo návrate
      * z menu sa už nedekódujú znova.
      */
-    val gameAssets: GameAssets by lazy { GameAssets(app) }
 }

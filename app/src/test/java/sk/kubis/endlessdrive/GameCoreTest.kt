@@ -3,11 +3,13 @@ package sk.kubis.endlessdrive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import sk.kubis.endlessdrive.core.GameConfig
 import sk.kubis.endlessdrive.core.SeededRandom
+import sk.kubis.endlessdrive.domain.model.BiomeType
 import sk.kubis.endlessdrive.domain.model.BranchStyle
 import sk.kubis.endlessdrive.domain.model.ComponentCondition
 import sk.kubis.endlessdrive.domain.model.ComponentSlot
@@ -15,18 +17,24 @@ import sk.kubis.endlessdrive.domain.model.DebugOptions
 import sk.kubis.endlessdrive.domain.model.DriveLayout
 import sk.kubis.endlessdrive.domain.model.EndReason
 import sk.kubis.endlessdrive.domain.model.FluidType
+import sk.kubis.endlessdrive.domain.model.RescueOffer
 import sk.kubis.endlessdrive.domain.model.FuelKind
 import sk.kubis.endlessdrive.domain.model.GamePhase
 import sk.kubis.endlessdrive.domain.model.ItemCatalog
 import sk.kubis.endlessdrive.domain.model.ItemStack
 import sk.kubis.endlessdrive.domain.model.RoadFeature
+import sk.kubis.endlessdrive.ui.l10n.Copy
 import sk.kubis.endlessdrive.domain.model.RoadPaving
 import sk.kubis.endlessdrive.domain.model.RoadSurface
 import sk.kubis.endlessdrive.domain.model.SedanSpec
 import sk.kubis.endlessdrive.domain.model.TIRE_SLOTS
 import sk.kubis.endlessdrive.game.DayCycle
 import sk.kubis.endlessdrive.game.GameEngine
+import sk.kubis.endlessdrive.game.SideMissionKind
 import sk.kubis.endlessdrive.game.car.Car
+import sk.kubis.endlessdrive.game.car.EndCause
+import sk.kubis.endlessdrive.game.car.TireInjury
+import sk.kubis.endlessdrive.game.event.PursuitStormKind
 import sk.kubis.endlessdrive.game.world.TerrainProfile
 import sk.kubis.endlessdrive.domain.model.BuildingType
 import sk.kubis.endlessdrive.game.save.RunCodec
@@ -161,29 +169,15 @@ class GameCoreTest {
         repeat(120) { engine.advance(1f / 60f) }
         assertTrue(engine.car.batteryCharge < before)
 
-        // Vybitá batéria už jazdu nekončí na mieste. Hra najprv podstrčí
-        // náhradnú – raz do vraku pri ceste, potom do batoha – a až keď
-        // naozaj niet odkiaľ ju vziať, je koniec.
         engine.boot.clear()
+        engine.inventory.clear()
+        engine.segment.buildings.clear()
         engine.car.batteryCharge = 0.005f
-        engine.tryStartEngine()
-        assertNotEquals(
-            "prvá vybitá batéria musí ponúknuť východisko, nie koniec",
-            GamePhase.GAME_OVER, engine.phase
-        )
-
-        repeat(4) {
-            engine.inventory.clear()
-            engine.car.batteryCharge = 0.005f
-            // Neúspešný štart minie jednu ponuku.
-            engine.tryStartEngine()
-            // Hráč nemá náhradnú ani v batohu, ani nablízku.
-            engine.inventory.clear()
-            engine.segment.buildings.clear()
-            repeat(300) { engine.advance(1f / 60f) }
-        }
+        assertFalse(engine.tryStartEngine())
         assertEquals(GamePhase.GAME_OVER, engine.phase)
         assertEquals(EndReason.BATTERY_DEAD, engine.endReason)
+        assertEquals(RescueOffer.BATTERY, engine.rescueOffer)
+        assertEquals("BATTERY CHARGE +50 % · WATCH AD  5/5", engine.rescueAdLabel)
     }
 
     @Test
@@ -210,7 +204,12 @@ class GameCoreTest {
         car.batteryCharge = 1f
         repeat(600) { car.tickElectrics(1f / 60f, headlightsOn = false) }
         assertTrue("4 % alternátor musí strácať energiu", car.batteryCharge < 0.99f)
-        assertTrue(car.batteryChargeCeiling < 0.5f)
+        assertEquals(
+            "strop ostáva zdravie batérie, nie výkon alternátora",
+            1f,
+            car.batteryChargeCeiling,
+            0.001f
+        )
     }
 
     @Test
@@ -263,11 +262,12 @@ class GameCoreTest {
         assertTrue("svetlá žerú batériu, kým ide herný čas", afterDrive < 0.62f - 0.01f)
         assertTrue("20 s stretávacích nesmie zjesť väčšinu nabitia", afterDrive > 0.55f)
 
-        assertTrue(engine.unmountSlot(ComponentSlot.BATTERY))
-        assertEquals(0f, engine.car.batteryCharge, 0.001f)
-        val packed = engine.inventory.slots.first { it?.defId == ItemCatalog.BATTERY.id }!!
-        assertEquals(afterDrive, packed.heldCharge, 0.001f)
-        assertEquals(health, packed.health, 0.001f)
+        engine.car.parts.remove(ComponentSlot.BATTERY)
+        engine.car.batteryCharge = 0f
+        val packed = ItemStack(ItemCatalog.BATTERY.id, ComponentCondition.USED, health).also {
+            it.heldCharge = afterDrive
+        }
+        assertTrue(engine.inventory.add(packed))
 
         val idx = engine.inventory.slots.indexOfFirst { it?.defId == ItemCatalog.BATTERY.id }
         assertTrue(engine.useInventoryItem(idx, ComponentSlot.BATTERY))
@@ -319,8 +319,12 @@ class GameCoreTest {
         engine.prepareForDriving()
         engine.inventory.clear()
         engine.car.batteryCharge = 0f
-        engine.advance(1f / 60f)
         assertFalse("prázdne SoC nesmie naštartovať, aj keď zdravie drží", engine.car.canStart())
+        assertTrue(
+            engine.inventory.add(ItemStack(ItemCatalog.BATTERY.id, ComponentCondition.USED, 0.8f))
+        )
+        engine.advance(1f / 60f)
+        assertEquals(GamePhase.PREP, engine.phase)
         assertEquals("Battery is flat", engine.blockedReason)
 
         engine.car.mount(
@@ -340,7 +344,16 @@ class GameCoreTest {
         engine.inventory.clear()
         engine.boot.clear()
         engine.car.batteryCharge = 0.37f
-        assertTrue(engine.unmountSlot(ComponentSlot.BATTERY))
+        val health = engine.car.parts.getValue(ComponentSlot.BATTERY).health
+        engine.car.parts.remove(ComponentSlot.BATTERY)
+        engine.car.batteryCharge = 0f
+        assertTrue(
+            engine.inventory.add(
+                ItemStack(ItemCatalog.BATTERY.id, ComponentCondition.USED, health).also {
+                    it.heldCharge = 0.37f
+                }
+            )
+        )
         val restored = GameEngine.restore(
             RunCodec.decode(RunCodec.encode(engine.snapshot()))!!,
             0f
@@ -354,7 +367,7 @@ class GameCoreTest {
     }
 
     @Test
-    fun halfHealthAlternatorCannotHoldFullSoc() {
+    fun halfHealthAlternatorStillChargesTowardHold() {
         val car = drivingCar("FWD")
         car.mount(
             ComponentSlot.BATTERY,
@@ -365,23 +378,50 @@ class GameCoreTest {
             ItemStack(ItemCatalog.ALTERNATOR.id, ComponentCondition.DAMAGED, 0.50f)
         )
         car.engineRunning = true
-        assertTrue(
-            "strop má kopírovať zdravie alternátora (~50 %)",
-            car.batteryChargeCeiling in 0.48f..0.58f
+        assertEquals(
+            "strop má kopírovať zdravie batérie, nie alternátora",
+            1f,
+            car.batteryChargeCeiling,
+            0.001f
         )
-
-        car.batteryCharge = 1f
-        repeat(90) { car.tickElectrics(1f, headlightsOn = false) }
-        assertTrue(
-            "50 % alternátor nesmie udržať 100 % SoC",
-            car.batteryCharge <= car.batteryChargeCeiling + 0.02f
-        )
-        assertTrue(car.batteryCharge < 0.70f)
 
         car.batteryCharge = 0.20f
         repeat(180) { car.tickElectrics(1f, headlightsOn = false) }
+        assertTrue(
+            "50 % alternátor má nabiť k stropu batérie, má ${car.batteryCharge}",
+            car.batteryCharge > 0.70f
+        )
         assertTrue(car.batteryCharge <= car.batteryChargeCeiling + 0.02f)
-        assertTrue("slabý alternátor nesmie nabíjať na 100 %", car.batteryCharge < 0.90f)
+    }
+
+    @Test
+    fun healthyAlternatorChargesNinetyPercentBatteryFromHalfSoc() {
+        val car = drivingCar("FWD")
+        car.mount(
+            ComponentSlot.BATTERY,
+            ItemStack(ItemCatalog.BATTERY.id, ComponentCondition.USED, 0.90f)
+        )
+        car.mount(
+            ComponentSlot.ALTERNATOR,
+            ItemStack(ItemCatalog.ALTERNATOR.id, ComponentCondition.NEW, 1f)
+        )
+        car.engineRunning = true
+        car.batteryCharge = 0.50f
+        assertEquals(0.90f, car.batteryHoldCapacity, 0.001f)
+        assertEquals(0.90f, car.batteryChargeCeiling, 0.001f)
+
+        repeat(90) { car.tickElectrics(1f / 60f, headlightsOn = false) }
+        assertTrue(
+            "pri bežiacom motore SoC musí stúpať, má ${car.batteryCharge}",
+            car.batteryCharge > 0.51f
+        )
+
+        val withLightsStart = car.batteryCharge
+        repeat(180) { car.tickElectrics(1f / 60f, headlightsOn = true) }
+        assertTrue(
+            "svetlá nesmú zjesť nabíjanie zdravého setu ($withLightsStart → ${car.batteryCharge})",
+            car.batteryCharge >= withLightsStart - 0.005f
+        )
     }
 
     @Test
@@ -426,10 +466,78 @@ class GameCoreTest {
     fun unmountMovesPartToInventory() {
         val engine = GameEngine(6L, 0f)
         engine.inventory.clear()
+        engine.car.mount(
+            ComponentSlot.HEADLIGHT,
+            ItemStack(ItemCatalog.HEADLIGHT.id, ComponentCondition.USED, 1f)
+        )
+        assertTrue(engine.unmountSlot(ComponentSlot.HEADLIGHT))
+        assertFalse(engine.car.hasPart(ComponentSlot.HEADLIGHT))
+        assertTrue(engine.inventory.slots.any { it?.defId == ItemCatalog.HEADLIGHT.id })
+    }
+
+    @Test
+    fun unmountNeedsTwoConfirmsOnTheSameSlot() {
+        val engine = GameEngine(6L, 0f)
+        engine.inventory.clear()
+        engine.car.mount(
+            ComponentSlot.HEADLIGHT,
+            ItemStack(ItemCatalog.HEADLIGHT.id, ComponentCondition.USED, 1f)
+        )
+
+        assertFalse(engine.requestUnmount(ComponentSlot.HEADLIGHT))
+        assertTrue(engine.car.hasPart(ComponentSlot.HEADLIGHT))
+        assertEquals(ComponentSlot.HEADLIGHT, engine.pendingUnmountSlot)
+        assertEquals("Tap again to remove", engine.message)
+
+        assertTrue(engine.requestUnmount(ComponentSlot.HEADLIGHT))
+        assertFalse(engine.car.hasPart(ComponentSlot.HEADLIGHT))
+        assertEquals(null, engine.pendingUnmountSlot)
+    }
+
+    @Test
+    fun unmountConfirmResetsWhenAnotherSlotIsTapped() {
+        val engine = GameEngine(6L, 0f)
+        engine.inventory.clear()
+        engine.car.mount(
+            ComponentSlot.HEADLIGHT,
+            ItemStack(ItemCatalog.HEADLIGHT.id, ComponentCondition.USED, 1f)
+        )
+        engine.car.mount(
+            ComponentSlot.TAILLIGHT,
+            ItemStack(ItemCatalog.TAILLIGHT.id, ComponentCondition.USED, 1f)
+        )
+
+        assertFalse(engine.requestUnmount(ComponentSlot.HEADLIGHT))
+        assertTrue(engine.car.hasPart(ComponentSlot.HEADLIGHT))
+        assertFalse(engine.requestUnmount(ComponentSlot.TAILLIGHT))
+        assertTrue(engine.car.hasPart(ComponentSlot.HEADLIGHT))
+        assertTrue(engine.car.hasPart(ComponentSlot.TAILLIGHT))
+        assertEquals(ComponentSlot.TAILLIGHT, engine.pendingUnmountSlot)
+
+        engine.cancelPendingUnmount()
+        assertEquals(null, engine.pendingUnmountSlot)
+        assertFalse(engine.requestUnmount(ComponentSlot.HEADLIGHT))
+        assertTrue(engine.car.hasPart(ComponentSlot.HEADLIGHT))
+    }
+
+    @Test
+    fun drivingPartsCannotBeRemoved() {
+        val engine = GameEngine(8L, 0f)
+        engine.car.engineRunning = false
+        engine.inventory.clear()
+        engine.boot.clear()
+        assertFalse(engine.unmountSlot(ComponentSlot.SUSPENSION))
+        assertTrue(engine.car.hasPart(ComponentSlot.SUSPENSION))
+        assertFalse(engine.unmountSlot(ComponentSlot.ENGINE))
+        assertTrue(engine.car.hasPart(ComponentSlot.ENGINE))
+        assertFalse(engine.unmountSlot(ComponentSlot.TIRE_FRONT))
         assertTrue(engine.car.hasPart(ComponentSlot.TIRE_FRONT))
-        assertTrue(engine.unmountSlot(ComponentSlot.TIRE_FRONT))
-        assertFalse(engine.car.hasPart(ComponentSlot.TIRE_FRONT))
-        assertTrue(engine.inventory.slots.any { it?.def?.axleTire == true })
+        assertFalse(engine.canUnmount(ComponentSlot.BRAKES))
+        engine.car.mount(
+            ComponentSlot.FRONT_BUMPER,
+            ItemStack(ItemCatalog.FRONT_BUMPER.id, ComponentCondition.USED, 1f)
+        )
+        assertTrue(engine.canUnmount(ComponentSlot.FRONT_BUMPER))
     }
 
     @Test
@@ -564,9 +672,9 @@ class GameCoreTest {
     fun strandedCarAlwaysGetsAWayOut() {
         for (seed in 1L..20L) {
             val engine = GameEngine(seed, 0f)
-            // Najhorší možný stav: bez štartéra, batérie a paliva, prázdny batoh.
+            // Najhorší možný stav: bez štartéra a paliva, prázdny batoh.
+            // Batéria sa do vraku nedokladá – na ňu je GAME_OVER a reklama.
             engine.car.parts.remove(ComponentSlot.STARTER)
-            engine.car.parts.remove(ComponentSlot.BATTERY)
             engine.car.fuel = 0f
             engine.inventory.clear()
 
@@ -576,10 +684,6 @@ class GameCoreTest {
             assertTrue(
                 "vrak musí ponúknuť štartér (seed $seed)",
                 loot.any { it.def.mountsTo == ComponentSlot.STARTER }
-            )
-            assertTrue(
-                "vrak musí ponúknuť batériu (seed $seed)",
-                loot.any { it.def.mountsTo == ComponentSlot.BATTERY }
             )
             assertTrue(
                 "vrak musí ponúknuť palivo (seed $seed)",
@@ -672,6 +776,382 @@ class GameCoreTest {
     }
 
     @Test
+    fun runningDryWithoutSpareFuelEndsTheRunForAdRescue() {
+        val engine = GameEngine(24L, 0f)
+        engine.prepareForDriving()
+        engine.tryStartEngine()
+        engine.resumeDriving()
+        engine.inventory.clear()
+        engine.boot.clear()
+        engine.segment.buildings.clear()
+        engine.car.fuel = 0f
+        engine.throttleInput = 1f
+        engine.advance(1f / 60f)
+        repeat(900) { engine.advance(1f / 60f) }
+
+        assertEquals(GamePhase.GAME_OVER, engine.phase)
+        assertEquals(EndReason.OUT_OF_FUEL, engine.endReason)
+        assertEquals("FUEL +12 L · WATCH AD  5/5", engine.rescueAdLabel)
+        assertTrue(
+            "prázdna nádrž nesmie sama doložiť kanister do batoha",
+            engine.inventory.slots.none { it?.def?.fluid == FluidType.FUEL }
+        )
+        engine.recoverFromRewardedAd()
+        assertTrue("odmena z reklamy ide do nádrže", engine.car.fuel >= 11f)
+        assertEquals(GamePhase.STOPPED, engine.phase)
+        assertEquals(1, engine.helpAdsUsed)
+        assertEquals(4, engine.helpAdsRemaining)
+    }
+
+    @Test
+    fun helpAdsQuotaCountsDownThenBlocksSixthRescue() {
+        val engine = drivingEngineForRescue(88L)
+        engine.car.fuel = 0f
+        engine.endRun(EndReason.OUT_OF_FUEL)
+        assertEquals(GameConfig.HELP_ADS_MAX, engine.helpAdsRemaining)
+        assertEquals("FUEL +12 L · WATCH AD  5/5", engine.rescueAdLabel)
+
+        repeat(GameConfig.HELP_ADS_MAX) { used ->
+            engine.car.fuel = 0f
+            engine.endRun(EndReason.OUT_OF_FUEL)
+            val remaining = GameConfig.HELP_ADS_MAX - used
+            assertEquals("$remaining/${GameConfig.HELP_ADS_MAX}", engine.helpAdsQuotaLabel)
+            assertEquals("FUEL +12 L · WATCH AD  $remaining/5", engine.rescueAdLabel)
+            assertTrue(engine.recoverFromRewardedAd())
+            assertEquals(used + 1, engine.helpAdsUsed)
+            assertEquals(remaining - 1, engine.helpAdsRemaining)
+        }
+
+        assertEquals(0, engine.helpAdsRemaining)
+        engine.car.fuel = 0f
+        engine.endRun(EndReason.OUT_OF_FUEL)
+        assertEquals(GamePhase.GAME_OVER, engine.phase)
+        assertNull(engine.rescueOffer)
+        assertNull(engine.rescueAdLabel)
+        assertFalse(engine.recoverFromRewardedAd())
+        assertEquals(0f, engine.car.fuel, 0.01f)
+        assertEquals(GamePhase.GAME_OVER, engine.phase)
+        assertEquals(GameConfig.HELP_ADS_MAX, engine.helpAdsUsed)
+    }
+
+    @Test
+    fun sixthHelpAdDoesNotSpawnRoadsideShop() {
+        val engine = strandedOnRimEngine()
+        repeat(GameConfig.HELP_ADS_MAX) {
+            engine.endRun(EndReason.SHREDDED_TIRE)
+            assertTrue(engine.recoverFromRewardedAd())
+        }
+        val shops = engine.segment.buildings.count(::isRoadsideRescueGarage)
+        assertTrue("po piatich záchranách má byť aspoň jedna dielňa", shops >= 1)
+        engine.endRun(EndReason.SHREDDED_TIRE)
+        assertNull(engine.rescueOffer)
+        assertFalse(engine.recoverFromRewardedAd())
+        assertEquals(shops, engine.segment.buildings.count(::isRoadsideRescueGarage))
+        assertEquals(GamePhase.GAME_OVER, engine.phase)
+    }
+
+    @Test
+    fun helpAdsQuotaSurvivesSnapshotRestore() {
+        val engine = drivingEngineForRescue(89L)
+        engine.car.fuel = 0f
+        engine.endRun(EndReason.OUT_OF_FUEL)
+        assertTrue(engine.recoverFromRewardedAd())
+        engine.car.fuel = 0f
+        engine.endRun(EndReason.OUT_OF_FUEL)
+        assertTrue(engine.recoverFromRewardedAd())
+        assertEquals(2, engine.helpAdsUsed)
+        assertEquals(3, engine.helpAdsRemaining)
+
+        val restored = GameEngine.restore(engine.snapshot(), 0f)
+        assertEquals(2, restored.helpAdsUsed)
+        assertEquals(3, restored.helpAdsRemaining)
+        restored.car.fuel = 0f
+        restored.endRun(EndReason.OUT_OF_FUEL)
+        assertEquals("FUEL +12 L · WATCH AD  3/5", restored.rescueAdLabel)
+        assertTrue(restored.recoverFromRewardedAd())
+        assertEquals(3, restored.helpAdsUsed)
+    }
+
+    @Test
+    fun doubleScrapDoesNotConsumeHelpAdsQuota() {
+        val engine = drivingEngineForRescue(90L)
+        engine.car.fuel = 0f
+        engine.endRun(EndReason.OUT_OF_FUEL)
+        val cashed = GameEngine.restore(engine.snapshot().copy(scrap = 40), 0f)
+        assertEquals(0, cashed.helpAdsUsed)
+        assertEquals(GameConfig.HELP_ADS_MAX, cashed.helpAdsRemaining)
+        assertEquals(40, cashed.scrap)
+        cashed.car.fuel = 0f
+        cashed.endRun(EndReason.OUT_OF_FUEL)
+        assertEquals("FUEL +12 L · WATCH AD  5/5", cashed.rescueAdLabel)
+        assertEquals(40, cashed.scrap)
+    }
+
+    @Test
+    fun roadAssistLabelIncludesRemainingQuota() {
+        val ui = sk.kubis.endlessdrive.ui.game.GameUiState(
+            helpAdsRemaining = 3,
+            helpAdsMax = 5
+        )
+        assertEquals("ROAD ASSIST · WATCH AD  3/5", ui.roadAssistAdLabel(true, Copy.English))
+        assertEquals("AD LOADING · TAP TO RETRY  3/5", ui.roadAssistAdLabel(false, Copy.English))
+        val full = sk.kubis.endlessdrive.ui.game.GameUiState()
+        assertEquals("ROAD ASSIST · WATCH AD  5/5", full.roadAssistAdLabel(true, Copy.English))
+        val battery = sk.kubis.endlessdrive.ui.game.GameUiState(
+            helpAdsRemaining = 4,
+            helpAdsMax = 5,
+            assistOffer = RescueOffer.BATTERY
+        )
+        assertEquals("BATTERY · WATCH AD  4/5", battery.roadAssistAdLabel(true, Copy.English))
+        assertEquals("AD LOADING · TAP TO RETRY  4/5", battery.roadAssistAdLabel(false, Copy.English))
+    }
+
+    @Test
+    fun failedStartOnEmptyTankDoesNotSpawnAFuelCan() {
+        val engine = GameEngine(25L, 0f)
+        engine.prepareForDriving()
+        engine.inventory.clear()
+        engine.boot.clear()
+        engine.segment.buildings.clear()
+        engine.car.fuel = 0f
+        assertFalse(engine.tryStartEngine())
+        assertEquals(GamePhase.GAME_OVER, engine.phase)
+        assertEquals(EndReason.OUT_OF_FUEL, engine.endReason)
+        assertTrue(engine.inventory.slots.none { it?.def?.fluid == FluidType.FUEL })
+        assertTrue(engine.boot.slots.none { it?.def?.fluid == FluidType.FUEL })
+    }
+
+    @Test
+    fun failedStartOnDeadBatteryDoesNotSpawnABattery() {
+        val engine = GameEngine(28L, 0f)
+        engine.prepareForDriving()
+        engine.inventory.clear()
+        engine.boot.clear()
+        engine.segment.buildings.clear()
+        engine.car.batteryCharge = 0f
+        assertFalse(engine.tryStartEngine())
+        assertEquals(GamePhase.GAME_OVER, engine.phase)
+        assertEquals(EndReason.BATTERY_DEAD, engine.endReason)
+        assertEquals(RescueOffer.BATTERY, engine.rescueOffer)
+        assertEquals("BATTERY CHARGE +50 % · WATCH AD  5/5", engine.rescueAdLabel)
+        assertTrue(
+            "neúspešný štart nesmie doložiť batériu do batoha",
+            engine.inventory.slots.none { it?.def?.canMountTo(ComponentSlot.BATTERY) == true }
+        )
+        assertTrue(engine.boot.slots.none { it?.def?.canMountTo(ComponentSlot.BATTERY) == true })
+        val before = engine.car.batteryCharge
+        assertTrue(engine.recoverFromRewardedAd())
+        assertTrue("odmena z reklamy nabije batériu", engine.car.batteryCharge >= 0.49f)
+        assertTrue(engine.car.batteryCharge > before)
+        assertEquals(GamePhase.STOPPED, engine.phase)
+        assertEquals(4, engine.helpAdsRemaining)
+    }
+
+    @Test
+    fun adBatteryRescueThenChargesWhileTheEngineRuns() {
+        val engine = GameEngine(28L, 0f)
+        engine.prepareForDriving()
+        engine.inventory.clear()
+        engine.boot.clear()
+        engine.segment.buildings.clear()
+        engine.car.mount(
+            ComponentSlot.BATTERY,
+            ItemStack(ItemCatalog.BATTERY.id, ComponentCondition.DAMAGED, 0.40f)
+        )
+        engine.car.mount(
+            ComponentSlot.ALTERNATOR,
+            ItemStack(ItemCatalog.ALTERNATOR.id, ComponentCondition.NEW, 1f)
+        )
+        engine.car.batteryCharge = 0f
+        assertFalse(engine.tryStartEngine())
+        assertEquals(RescueOffer.BATTERY, engine.rescueOffer)
+        assertTrue(engine.recoverFromRewardedAd())
+        assertEquals(0.50f, engine.car.batteryCharge, 0.01f)
+        assertTrue(
+            "záchrana má nechať zdravie okolo 90 %, má ${engine.car.batteryHoldCapacity}",
+            engine.car.batteryHoldCapacity >= 0.89f
+        )
+
+        assertTrue(engine.tryStartEngine())
+        engine.resumeDriving()
+        val afterAd = engine.car.batteryCharge
+        repeat(180) { engine.advance(1f / 60f) }
+        assertTrue(
+            "po reklame musí tickElectrics nabíjať ($afterAd → ${engine.car.batteryCharge})",
+            engine.car.batteryCharge > afterAd + 0.02f
+        )
+    }
+
+    @Test
+    fun failedStartWithoutFittedBatteryOffersFitAd() {
+        val engine = GameEngine(29L, 0f)
+        engine.prepareForDriving()
+        engine.car.parts.remove(ComponentSlot.BATTERY)
+        engine.car.batteryCharge = 0f
+        engine.inventory.clear()
+        engine.boot.clear()
+        engine.segment.buildings.clear()
+        assertFalse(engine.tryStartEngine())
+        assertEquals(GamePhase.GAME_OVER, engine.phase)
+        assertEquals(EndReason.BATTERY_DEAD, engine.endReason)
+        assertEquals(RescueOffer.BATTERY_FIT, engine.rescueOffer)
+        assertTrue(engine.rescueAdLabel!!.contains("WATCH AD"))
+        assertTrue(engine.recoverFromRewardedAd())
+        assertTrue(engine.car.hasPart(ComponentSlot.BATTERY))
+        assertTrue(engine.car.batteryCharge >= 0.49f)
+    }
+
+    @Test
+    fun runningUntilBatteryDiesWithoutSpareEndsTheRunForAdRescue() {
+        val engine = drivingEngineForRescue(30L)
+        engine.car.batteryCharge = 0f
+        engine.advance(1f / 60f)
+        repeat(900) { engine.advance(1f / 60f) }
+
+        assertEquals(GamePhase.GAME_OVER, engine.phase)
+        assertEquals(EndReason.BATTERY_DEAD, engine.endReason)
+        assertEquals(RescueOffer.BATTERY, engine.rescueOffer)
+        assertEquals("BATTERY CHARGE +50 % · WATCH AD  5/5", engine.rescueAdLabel)
+        assertTrue(
+            engine.inventory.slots.none { it?.def?.canMountTo(ComponentSlot.BATTERY) == true }
+        )
+        assertTrue(engine.recoverFromRewardedAd())
+        assertTrue(engine.car.batteryCharge >= 0.49f)
+        assertEquals(GamePhase.STOPPED, engine.phase)
+        assertEquals(4, engine.helpAdsRemaining)
+    }
+
+    @Test
+    fun deadBatteryWithSpareInPackStopsButDoesNotEndTheRun() {
+        val engine = drivingEngineForRescue(31L)
+        assertTrue(
+            engine.inventory.add(ItemStack(ItemCatalog.BATTERY.id, ComponentCondition.USED, 0.85f))
+        )
+        engine.car.batteryCharge = 0f
+        engine.advance(1f / 60f)
+        repeat(900) { engine.advance(1f / 60f) }
+
+        assertTrue("náhradná batéria nesmie ukončiť jazdu", engine.phase != GamePhase.GAME_OVER)
+        assertNull(engine.endReason)
+        assertEquals(GamePhase.STOPPED, engine.phase)
+        assertNull(engine.rescueOffer)
+        assertFalse(engine.canRequestAssist)
+        assertTrue(
+            engine.inventory.slots.any { it?.def?.canMountTo(ComponentSlot.BATTERY) == true }
+        )
+    }
+
+    @Test
+    fun flatBatteryWhileStoppedOffersBatteryWatchAd() {
+        val engine = drivingEngineForRescue(32L)
+        engine.car.speed = 0f
+        assertTrue(engine.requestStop())
+        engine.car.batteryCharge = 0.05f
+        assertEquals(GamePhase.STOPPED, engine.phase)
+        assertNull(engine.endReason)
+        assertTrue(engine.canRequestAssist)
+        assertEquals(RescueOffer.BATTERY, engine.rescueOffer)
+        assertEquals("BATTERY CHARGE +50 % · WATCH AD  5/5", engine.rescueAdLabel)
+        assertTrue(engine.recoverFromRewardedAd())
+        assertTrue(engine.car.batteryCharge >= 0.49f)
+        assertEquals(GamePhase.STOPPED, engine.phase)
+        assertNull(engine.endReason)
+        assertFalse(engine.canRequestAssist)
+        assertEquals(4, engine.helpAdsRemaining)
+    }
+
+    @Test
+    fun exhaustedHelpAdsHideBatteryRescue() {
+        val engine = drivingEngineForRescue(33L)
+        engine.car.batteryCharge = 0f
+        engine.endRun(EndReason.BATTERY_DEAD)
+        val exhausted = GameEngine.restore(
+            engine.snapshot().copy(helpAdsUsed = GameConfig.HELP_ADS_MAX),
+            0f
+        )
+        exhausted.car.batteryCharge = 0f
+        exhausted.endRun(EndReason.BATTERY_DEAD)
+        assertEquals(GamePhase.GAME_OVER, exhausted.phase)
+        assertEquals(0, exhausted.helpAdsRemaining)
+        assertNull(exhausted.rescueOffer)
+        assertNull(exhausted.rescueAdLabel)
+        assertFalse(exhausted.recoverFromRewardedAd())
+        assertEquals(0f, exhausted.car.batteryCharge, 0.01f)
+        assertEquals(GamePhase.GAME_OVER, exhausted.phase)
+    }
+
+    @Test
+    fun lootedBuildingDoesNotRestockBatteryOnFailedStart() {
+        val engine = GameEngine(34L, 0f)
+        engine.prepareForDriving()
+        val shed = engine.segment.buildings.first()
+        engine.car.x = engine.segment.worldOrigin + shed.localX
+        engine.car.speed = 0f
+        assertTrue(engine.enterNearestBuilding())
+        engine.activeBuilding!!.loot.clear()
+        engine.leaveBuilding()
+        engine.inventory.clear()
+        engine.boot.clear()
+        engine.car.batteryCharge = 0f
+
+        assertFalse(engine.tryStartEngine())
+        assertTrue(
+            "vykradnutá budova sa nesmie znova naplniť batériou",
+            shed.loot.none { it.def.canMountTo(ComponentSlot.BATTERY) }
+        )
+        assertEquals(GamePhase.GAME_OVER, engine.phase)
+        assertEquals(EndReason.BATTERY_DEAD, engine.endReason)
+        assertEquals(RescueOffer.BATTERY, engine.rescueOffer)
+        assertTrue(engine.rescueAdLabel!!.contains("WATCH AD"))
+    }
+
+    @Test
+    fun lootedBuildingDoesNotRestockCoolantOnFailedStart() {
+        val engine = GameEngine(26L, 0f)
+        engine.prepareForDriving()
+        val shed = engine.segment.buildings.first()
+        engine.car.x = engine.segment.worldOrigin + shed.localX
+        engine.car.speed = 0f
+        assertTrue(engine.enterNearestBuilding())
+        engine.activeBuilding!!.loot.clear()
+        engine.leaveBuilding()
+        engine.inventory.clear()
+        engine.boot.clear()
+        engine.car.coolant = 0f
+
+        assertFalse(engine.tryStartEngine())
+        assertTrue(
+            "vykradnutá budova sa nesmie znova naplniť coolantom",
+            shed.loot.none { it.def.fluid == FluidType.COOLANT }
+        )
+        assertEquals(GamePhase.GAME_OVER, engine.phase)
+        assertEquals(EndReason.OVERHEAT, engine.endReason)
+        assertEquals(RescueOffer.COOLANT, engine.rescueOffer)
+    }
+
+    @Test
+    fun sleepDoesNotFillAnEmptyRadiatorOrRestockLoot() {
+        val original = GameEngine(27L, 0f)
+        original.prepareForDriving()
+        val shed = original.segment.buildings.first()
+        original.car.x = original.segment.worldOrigin + shed.localX
+        val engine = GameEngine.restore(original.snapshot().copy(timeOfDay = 0f), 0f)
+        val nightShed = engine.segment.buildings.first()
+        engine.car.x = engine.segment.worldOrigin + nightShed.localX
+        engine.car.speed = 0f
+        engine.car.coolant = 0f
+        assertTrue(engine.enterNearestBuilding())
+        engine.activeBuilding!!.loot.clear()
+        engine.leaveBuilding()
+
+        assertTrue(engine.canRest)
+        assertTrue(engine.restUntilDawn())
+        assertEquals(0f, engine.car.coolant, 0.001f)
+        assertTrue(engine.message.contains("Radiator is still empty"))
+        assertTrue(nightShed.loot.none { it.def.fluid == FluidType.COOLANT })
+    }
+
+    @Test
     fun deadEngineWithNoSpareEndsTheRun() {
         val engine = GameEngine(22L, 0f)
         engine.prepareForDriving()
@@ -686,6 +1166,400 @@ class GameCoreTest {
 
         assertEquals(GamePhase.GAME_OVER, engine.phase)
         assertEquals(EndReason.ENGINE_DESTROYED, engine.endReason)
+    }
+
+    @Test
+    fun cookedEngineFromADeadRadiatorOffersRadiatorRescueNotEngineBoost() {
+        val engine = drivingEngineForRescue(41L)
+        engine.car.parts[ComponentSlot.RADIATOR]?.health = 0.12f
+        engine.car.parts[ComponentSlot.ENGINE]?.health = 0.04f
+        engine.car.temperature = 145f
+        engine.throttleInput = 1f
+        repeat(30) { engine.advance(1f / 60f) }
+
+        assertEquals(GamePhase.GAME_OVER, engine.phase)
+        assertTrue(
+            "koniec má byť prehriatie alebo uvarený motor, bolo ${engine.endReason}",
+            engine.endReason == EndReason.ENGINE_DESTROYED || engine.endReason == EndReason.OVERHEAT
+        )
+        assertEquals(RescueOffer.RADIATOR, engine.rescueOffer)
+        assertEquals("RADIATOR + COOLANT · WATCH AD  5/5", engine.rescueAdLabel)
+
+        assertTrue(engine.recoverFromRewardedAd())
+        assertTrue(
+            "reklama musí opraviť chladič, nie len motor",
+            (engine.car.parts[ComponentSlot.RADIATOR]?.health ?: 0f) >= 0.54f
+        )
+        assertTrue(engine.car.coolant >= 2.5f)
+        assertTrue((engine.car.parts[ComponentSlot.ENGINE]?.health ?: 0f) >= 0.34f)
+        assertEquals(55f, engine.car.temperature, 0.01f)
+        assertEquals(GamePhase.STOPPED, engine.phase)
+    }
+
+    @Test
+    fun overheatWithADeadRadiatorAndNoSpareEndsTheRun() {
+        val engine = drivingEngineForRescue(42L)
+        engine.car.parts[ComponentSlot.RADIATOR]?.health = 0.10f
+        engine.car.parts[ComponentSlot.ENGINE]?.health = 0.80f
+        engine.car.temperature = 145f
+        engine.throttleInput = 1f
+        engine.advance(1f / 60f)
+        repeat(180) { engine.advance(1f / 60f) }
+
+        assertEquals(GamePhase.GAME_OVER, engine.phase)
+        assertEquals(EndReason.OVERHEAT, engine.endReason)
+        assertEquals(RescueOffer.RADIATOR, engine.rescueOffer)
+    }
+
+    @Test
+    fun overheatWithAWorkingRadiatorStallsInsteadOfEndingTheRun() {
+        val engine = drivingEngineForRescue(43L)
+        engine.car.parts[ComponentSlot.RADIATOR]?.health = 0.92f
+        engine.car.parts[ComponentSlot.ENGINE]?.health = 0.80f
+        engine.car.coolant = engine.car.coolantCapacity
+        engine.car.temperature = 145f
+        engine.throttleInput = 1f
+        engine.advance(1f / 60f)
+        repeat(180) { engine.advance(1f / 60f) }
+
+        assertTrue("pri funkčnom chladení sa dá počkať", engine.phase != GamePhase.GAME_OVER)
+        assertNull(engine.endReason)
+    }
+
+    @Test
+    fun shreddedRimWithNoSpareEndsTheRunAndOffersShopAd() {
+        val engine = strandedOnRimEngine()
+        engine.throttleInput = 1f
+        repeat(stuckAssistFrames()) { engine.advance(1f / 60f) }
+
+        assertEquals(GamePhase.GAME_OVER, engine.phase)
+        assertEquals(EndReason.SHREDDED_TIRE, engine.endReason)
+        assertEquals(RescueOffer.ROADSIDE_SHOP, engine.rescueOffer)
+        assertEquals("ROADSIDE GARAGE · WATCH AD  5/5", engine.rescueAdLabel)
+        assertTrue(engine.car.hasShreddedTyre)
+        assertTrue(engine.inventory.slots.none { it?.def?.axleTire == true })
+        assertTrue(engine.boot.slots.none { it?.def?.axleTire == true })
+    }
+
+    @Test
+    fun shreddedRimRescueSpawnsShopWithATyreInInteractRange() {
+        val engine = strandedOnRimEngine()
+        engine.endRun(EndReason.SHREDDED_TIRE)
+        assertEquals(RescueOffer.ROADSIDE_SHOP, engine.rescueOffer)
+        val scrapBefore = engine.scrap
+        val houseCount = engine.segment.buildings.count { it.type == BuildingType.HOUSE }
+
+        assertTrue(engine.recoverFromRewardedAd())
+        assertEquals(GamePhase.STOPPED, engine.phase)
+        assertEquals(0f, engine.car.speed, 0.01f)
+        assertFalse(engine.car.engineRunning)
+        assertEquals(scrapBefore, engine.scrap)
+        assertTrue("reklama nesmie sama nasadiť gumu", engine.car.hasShreddedTyre)
+        assertEquals(houseCount, engine.segment.buildings.count { it.type == BuildingType.HOUSE })
+
+        val shop = roadsideRescueGarage(engine)
+        val dist = kotlin.math.abs(engine.segment.worldOrigin + shop.localX - engine.car.x)
+        assertTrue("dielňa musí byť v dosahu ($dist m)", dist < GameConfig.BUILDING_INTERACT_RANGE)
+        assertTrue(
+            shop.loot.any { it.def.canMountTo(ComponentSlot.TIRE_FRONT) || it.def.canMountTo(ComponentSlot.TIRE_REAR) }
+        )
+        assertTrue(shop.loot.any { it.def.isPunctureKit })
+        assertTrue(engine.enterNearestBuilding())
+        assertEquals(BuildingType.GARAGE, engine.activeBuilding?.type)
+    }
+
+    @Test
+    fun shreddedRimRescueTowsToNearbyAutoShopInsteadOfSpawning() {
+        val engine = strandedOnRimEngine()
+        // 330 m je rovina za test-track stúpaním (255 m), nie schody na 435 m.
+        val shopWorldX = 330f
+        engine.segment.buildings += WorldBuilding(
+            id = 0x51L,
+            type = BuildingType.GARAGE,
+            localX = shopWorldX - engine.segment.worldOrigin,
+            loot = mutableListOf(
+                ItemStack(ItemCatalog.TIRE_POOR.id, ComponentCondition.USED, 0.48f)
+            )
+        )
+        engine.endRun(EndReason.SHREDDED_TIRE)
+        assertEquals(RescueOffer.TOW_SHOP, engine.rescueOffer)
+        assertEquals("TOW TO SHOP · WATCH AD  5/5", engine.rescueAdLabel)
+
+        assertTrue(engine.recoverFromRewardedAd())
+        assertEquals(GamePhase.STOPPED, engine.phase)
+        assertEquals(0f, engine.car.speed, 0.01f)
+        assertFalse(engine.car.engineRunning)
+        assertEquals(1, engine.segment.buildings.count { it.type == BuildingType.GARAGE })
+        assertTrue(
+            "auto má stáť pri existujúcom servise",
+            kotlin.math.abs(engine.car.x - shopWorldX) < GameConfig.BUILDING_INTERACT_RANGE
+        )
+        assertTrue("ešte stále na ráfiku — gumu si hráč nasadí sám", engine.car.hasShreddedTyre)
+        assertTrue(engine.enterNearestBuilding())
+        assertEquals(0x51L, engine.activeBuilding?.id)
+        assertTrue(engine.activeBuilding!!.loot.any { it.def.axleTire })
+    }
+
+    @Test
+    fun shreddedRimRescueSpawnsWhenExistingShopIsTooFarToTow() {
+        val engine = strandedOnRimEngine()
+        val farX = engine.car.x + 900f
+        engine.segment.buildings += WorldBuilding(
+            id = 0x900L,
+            type = BuildingType.GARAGE,
+            localX = farX - engine.segment.worldOrigin,
+            loot = mutableListOf(
+                ItemStack(ItemCatalog.TIRE_POOR.id, ComponentCondition.USED, 0.5f)
+            )
+        )
+        engine.endRun(EndReason.SHREDDED_TIRE)
+        assertEquals(RescueOffer.ROADSIDE_SHOP, engine.rescueOffer)
+
+        assertTrue(engine.recoverFromRewardedAd())
+        assertEquals(2, engine.segment.buildings.count { it.type == BuildingType.GARAGE })
+        assertTrue(
+            "900 m sa nesmie preskočiť ťahaním",
+            kotlin.math.abs(engine.car.x - farX) > 800f
+        )
+        val spawned = engine.segment.buildings
+            .filter { isRoadsideRescueGarage(it) && it.id != 0x900L }
+            .single()
+        val dist = kotlin.math.abs(engine.segment.worldOrigin + spawned.localX - engine.car.x)
+        assertTrue(dist < GameConfig.BUILDING_INTERACT_RANGE)
+    }
+
+    @Test
+    fun shreddedRimRescueDoesNotRestockALootedHouse() {
+        val engine = GameEngine(52L, 0f)
+        engine.prepareForDriving()
+        engine.inventory.clear()
+        engine.boot.clear()
+        engine.segment.buildings.clear()
+        val house = WorldBuilding(
+            id = 0x115EL,
+            type = BuildingType.HOUSE,
+            localX = engine.car.x - engine.segment.worldOrigin
+        )
+        engine.segment.buildings += house
+        engine.car.speed = 0f
+        assertTrue(engine.enterNearestBuilding())
+        engine.activeBuilding!!.loot.clear()
+        engine.leaveBuilding()
+        TIRE_SLOTS.forEach { slot ->
+            engine.car.parts[slot]!!.injury = TireInjury.SHREDDED
+        }
+
+        engine.endRun(EndReason.SHREDDED_TIRE)
+        assertEquals(RescueOffer.ROADSIDE_SHOP, engine.rescueOffer)
+        assertTrue(engine.recoverFromRewardedAd())
+
+        assertTrue("vykradnutý dom sa nesmie znova naplniť gumou", house.loot.isEmpty())
+        val shop = roadsideRescueGarage(engine)
+        assertNotEquals(house.id, shop.id)
+        assertTrue(shop.loot.any { it.def.axleTire })
+        val dist = kotlin.math.abs(engine.segment.worldOrigin + shop.localX - engine.car.x)
+        assertTrue(dist < GameConfig.BUILDING_INTERACT_RANGE)
+    }
+
+    @Test
+    fun shreddedRimWhileStoppedOffersManualRoadAssistWithoutEndingTheRun() {
+        val engine = strandedOnRimEngine()
+        assertTrue(engine.requestStop())
+        assertEquals(GamePhase.STOPPED, engine.phase)
+        assertNull(engine.endReason)
+        assertTrue(engine.canRequestAssist)
+        assertEquals(RescueOffer.ROADSIDE_SHOP, engine.rescueOffer)
+        assertEquals("ROADSIDE GARAGE · WATCH AD  5/5", engine.rescueAdLabel)
+
+        assertTrue(engine.recoverFromRewardedAd())
+        assertEquals(GamePhase.STOPPED, engine.phase)
+        assertNull(engine.endReason)
+        assertFalse(engine.canRequestAssist)
+        val shop = roadsideRescueGarage(engine)
+        val dist = kotlin.math.abs(engine.segment.worldOrigin + shop.localX - engine.car.x)
+        assertTrue("dielňa musí byť v dosahu ($dist m)", dist < GameConfig.BUILDING_INTERACT_RANGE)
+        assertTrue(shop.loot.any { it.def.axleTire })
+    }
+
+    @Test
+    fun spinningShreddedRimOffersAssistAutoOrManual() {
+        val engine = strandedOnRimEngine()
+        engine.throttleInput = 1f
+        repeat(stuckAssistFrames()) { engine.advance(1f / 60f) }
+
+        if (engine.phase == GamePhase.GAME_OVER) {
+            assertEquals(EndReason.SHREDDED_TIRE, engine.endReason)
+            assertEquals(RescueOffer.ROADSIDE_SHOP, engine.rescueOffer)
+        } else {
+            engine.car.speed = 0f
+            assertTrue(engine.requestStop())
+            assertTrue("po pretáčaní na ráfiku musí ísť volať asist", engine.canRequestAssist)
+            assertEquals(RescueOffer.ROADSIDE_SHOP, engine.rescueOffer)
+        }
+    }
+
+    @Test
+    fun spinningWithASpareInPackDoesNotForceGameOver() {
+        val engine = strandedOnRimEngine()
+        assertTrue(engine.inventory.add(ItemStack(ItemCatalog.TIRE.id, ComponentCondition.USED, 0.8f)))
+        engine.throttleInput = 1f
+        repeat(stuckAssistFrames()) { engine.advance(1f / 60f) }
+
+        assertTrue("náhradná guma má nechať jazdu bežať", engine.phase != GamePhase.GAME_OVER)
+        engine.car.speed = 0f
+        engine.requestStop()
+        assertFalse(engine.canRequestAssist)
+        assertNull(engine.rescueOffer)
+    }
+
+    @Test
+    fun spinningOnIceWithoutSpareOffersAssist() {
+        val engine = spinningOnIceEngine()
+        val origin = engine.car.x
+        engine.throttleInput = 1f
+        repeat(180) {
+            engine.car.x = origin
+            engine.car.speed = 0f
+            engine.advance(1f / 60f)
+        }
+
+        assertTrue(
+            "3 s pretáčania nesmie ukončiť jazdu (timer je ${GameConfig.TIRE_RESCUE_STUCK_S} s)",
+            engine.phase != GamePhase.GAME_OVER
+        )
+        engine.car.speed = 0f
+        assertTrue(engine.requestStop())
+        assertTrue(
+            "pretáčanie na ľade bez lepšej gumy musí ponúknuť asist " +
+                "(slip ${engine.car.wheelSlip}, speed ${engine.car.speed})",
+            engine.canRequestAssist
+        )
+        assertEquals(RescueOffer.ROADSIDE_SHOP, engine.rescueOffer)
+        assertTrue(engine.recoverFromRewardedAd())
+        assertEquals(GamePhase.STOPPED, engine.phase)
+        val shop = roadsideRescueGarage(engine)
+        val dist = kotlin.math.abs(engine.segment.worldOrigin + shop.localX - engine.car.x)
+        assertTrue(dist < GameConfig.BUILDING_INTERACT_RANGE)
+    }
+
+    @Test
+    fun spinningOnIceWithWinterSpareDoesNotForceGameOver() {
+        val engine = spinningOnIceEngine()
+        assertTrue(
+            engine.inventory.add(ItemStack(ItemCatalog.TIRE_WINTER.id, ComponentCondition.USED, 0.85f))
+        )
+        engine.throttleInput = 1f
+        repeat(stuckAssistFrames()) { engine.advance(1f / 60f) }
+
+        assertTrue("zimná guma v batohu je východisko", engine.phase != GamePhase.GAME_OVER)
+        engine.car.speed = 0f
+        engine.requestStop()
+        assertFalse(engine.canRequestAssist)
+        assertNull(engine.rescueOffer)
+    }
+
+    @Test
+    fun parkedRoadAssistDoesNotRestockALootedHouse() {
+        val engine = GameEngine(52L, 0f)
+        engine.prepareForDriving()
+        engine.inventory.clear()
+        engine.boot.clear()
+        engine.segment.buildings.clear()
+        val house = WorldBuilding(
+            id = 0x115FL,
+            type = BuildingType.HOUSE,
+            localX = engine.car.x - engine.segment.worldOrigin
+        )
+        engine.segment.buildings += house
+        engine.car.speed = 0f
+        assertTrue(engine.enterNearestBuilding())
+        engine.activeBuilding!!.loot.clear()
+        engine.leaveBuilding()
+        TIRE_SLOTS.forEach { slot ->
+            engine.car.parts[slot]!!.injury = TireInjury.SHREDDED
+        }
+
+        assertEquals(GamePhase.STOPPED, engine.phase)
+        assertTrue(engine.canRequestAssist)
+        assertEquals(RescueOffer.ROADSIDE_SHOP, engine.rescueOffer)
+        assertTrue(engine.recoverFromRewardedAd())
+
+        assertTrue("vykradnutý dom sa nesmie znova naplniť gumou", house.loot.isEmpty())
+        val shop = roadsideRescueGarage(engine)
+        assertNotEquals(house.id, shop.id)
+        assertTrue(shop.loot.any { it.def.axleTire })
+    }
+
+    @Test
+    fun twoSecondsOfWheelspinDoesNotEndTheRun() {
+        val engine = strandedOnRimEngine()
+        engine.throttleInput = 1f
+        repeat(120) { engine.advance(1f / 60f) }
+        assertTrue(
+            "2 s pretáčania je ešte krátky šmyk, nie GAME_OVER",
+            engine.phase != GamePhase.GAME_OVER
+        )
+        engine.car.speed = 0f
+        assertTrue(engine.requestStop())
+        assertTrue("zo STOPPED ide volať asist hneď", engine.canRequestAssist)
+    }
+
+    @Test
+    fun roadsideAssistMovesOffSteepMudInsteadOfSpawningFiveMetresAhead() {
+        val engine = strandedOnRimEngine()
+        val stuckX = engine.car.x
+        val stuckLocal = stuckX - engine.segment.worldOrigin
+        engine.segment.patches.clear()
+        engine.segment.patches += SurfacePatch(RoadSurface.MUD, stuckLocal - 20f, stuckLocal + 60f)
+        val naiveShopLocal = stuckLocal + GameConfig.TIRE_RESCUE_SPAWN_AHEAD_M
+        val slopeAtStuck = kotlin.math.abs(engine.segment.slopeAtLocal(stuckLocal))
+        engine.endRun(EndReason.SHREDDED_TIRE)
+        assertTrue(engine.recoverFromRewardedAd())
+
+        val shop = roadsideRescueGarage(engine)
+        assertTrue(
+            "dielňa nesmie spadnúť 5.5 m pred auto bez ohľadu na terén " +
+                "(shop ${shop.localX}, naive $naiveShopLocal)",
+            kotlin.math.abs(shop.localX - naiveShopLocal) > 8f
+        )
+        val slopeAtCar = kotlin.math.abs(engine.segment.slopeAtLocal(engine.localX))
+        assertTrue(
+            "auto má stáť na plytšom svahu ($slopeAtCar vs $slopeAtStuck)",
+            slopeAtCar < GameConfig.TIRE_RESCUE_FLAT_SLOPE || slopeAtCar < slopeAtStuck - 0.02f
+        )
+        val dist = kotlin.math.abs(engine.segment.worldOrigin + shop.localX - engine.car.x)
+        assertTrue("dielňa musí byť v dosahu ($dist m)", dist < GameConfig.BUILDING_INTERACT_RANGE)
+        assertTrue("preferujeme miesto pred autom", engine.car.x > stuckX)
+        assertEquals(0f, engine.car.speed, 0.01f)
+        assertFalse(engine.car.engineRunning)
+    }
+
+    @Test
+    fun shreddedRimRescueDoesNotTowOntoSteepMud() {
+        val engine = strandedOnRimEngine()
+        val stuckX = engine.car.x
+        val muddyShopX = stuckX + 40f
+        engine.segment.patches += SurfacePatch(RoadSurface.MUD, muddyShopX - 20f, muddyShopX + 20f)
+        engine.segment.buildings += WorldBuilding(
+            id = 0x51EEL,
+            type = BuildingType.GARAGE,
+            localX = muddyShopX - engine.segment.worldOrigin,
+            loot = mutableListOf(
+                ItemStack(ItemCatalog.TIRE_POOR.id, ComponentCondition.USED, 0.5f)
+            )
+        )
+        engine.endRun(EndReason.SHREDDED_TIRE)
+        assertEquals(RescueOffer.ROADSIDE_SHOP, engine.rescueOffer)
+        assertTrue(engine.recoverFromRewardedAd())
+        assertTrue(
+            "ťahať do bahna na kopci sa nesmie",
+            kotlin.math.abs(engine.car.x - muddyShopX) > 15f
+        )
+        val spawned = engine.segment.buildings
+            .filter { isRoadsideRescueGarage(it) && it.id != 0x51EEL }
+            .single()
+        val dist = kotlin.math.abs(engine.segment.worldOrigin + spawned.localX - engine.car.x)
+        assertTrue(dist < GameConfig.BUILDING_INTERACT_RANGE)
     }
 
     @Test
@@ -863,8 +1737,52 @@ class GameCoreTest {
         }
         assertEquals("skoro v jazde nesmie snežiť", 0f, winterShare(3000f), 0.001f)
         assertEquals(0f, winterShare(GameConfig.SNOW_START_M - 500f), 0.001f)
-        assertTrue("neskôr už sneh musí prísť", winterShare(25000f) > 0.15f)
+        assertEquals(
+            "snehová vozovka nesmie byť mimo zimnej kulisy",
+            0f,
+            winterShare(25000f),
+            0.001f
+        )
         assertTrue(WorldGenerator.planSegment(1L, BranchStyle.ALPINE, 15000f).paving.winter)
+        assertFalse(
+            "močiar nesmie dostať snehovú vozovku",
+            WorldGenerator.planSegment(9L, BranchStyle.FOREST, 25000f).paving.winter
+        )
+        assertFalse(
+            "jeseň nesmie dostať snehovú vozovku",
+            WorldGenerator.planSegment(9L, BranchStyle.FOREST_ALIVE, 25000f).paving.winter
+        )
+    }
+
+    @Test
+    fun snowPavingUsesSnowySceneryOnAMarshBranch() {
+        val base = WorldGenerator.planSegment(99L, BranchStyle.FOREST, 20_000f)
+        val snowed = WorldGenerator.createSegment(
+            plan = base.copy(paving = RoadPaving.SNOW),
+            worldOrigin = 0f,
+            tripDistance = 20_000f,
+            terrain = TerrainProfile(99L),
+            isTutorial = false
+        )
+        assertEquals(BranchStyle.FOREST, snowed.style)
+        assertEquals(BiomeType.FOREST, snowed.biome)
+        assertTrue(snowed.paving.winter)
+        assertEquals(BiomeType.ALPINE, snowed.visualBiome)
+        assertEquals(BiomeType.ALPINE, snowed.biomeBlendAtWorld(snowed.worldOrigin).from)
+    }
+
+    @Test
+    fun dirtMarshKeepsMarshScenery() {
+        val base = WorldGenerator.planSegment(11L, BranchStyle.FOREST, 8_000f)
+        val dirt = WorldGenerator.createSegment(
+            plan = base.copy(paving = RoadPaving.DIRT),
+            worldOrigin = 0f,
+            tripDistance = 8_000f,
+            terrain = TerrainProfile(11L),
+            isTutorial = false
+        )
+        assertEquals(BiomeType.FOREST, dirt.visualBiome)
+        assertEquals(BiomeType.FOREST, dirt.biomeBlendAtWorld(dirt.worldOrigin).from)
     }
 
     @Test
@@ -909,7 +1827,7 @@ class GameCoreTest {
             var found = 0
             for (seed in 1L..80L) {
                 val loot = LootGenerator.generate(
-                    SeededRandom(seed), BuildingType.AUTO_SHOP, distance, BranchStyle.INDUSTRIAL
+                    SeededRandom(seed), BuildingType.GARAGE, distance, BranchStyle.INDUSTRIAL
                 )
                 found += loot.count {
                     it.defId == ItemCatalog.TIRE_WINTER.id || it.defId == ItemCatalog.SNOW_CHAINS.id
@@ -934,7 +1852,7 @@ class GameCoreTest {
 
     @Test
     fun winterGearIsWhatMakesSnowDrivable() {
-        fun snowRun(tire: String, chains: Boolean): Float {
+        fun snowRun(tire: String, chains: Boolean): Car {
             val car = Car()
             car.installStarterKit()
             TIRE_SLOTS.forEach {
@@ -950,19 +1868,30 @@ class GameCoreTest {
             car.engineRunning = true
             val wb = SedanSpec.wheelOffsetX * 2f
             car.snapToGround(0f, 0.16f)
-            repeat(200) {
+            repeat(360) {
                 car.applyDrive(
                     1f / 60f, 1f, 0f, 0f, 0.16f * wb, 0f,
                     RoadSurface.ASPHALT, RoadPaving.SNOW.gripMul, winter = true
                 )
             }
-            return car.speed
+            return car
         }
         val summer = snowRun(ItemCatalog.TIRE.id, chains = false)
         val winterTyres = snowRun(ItemCatalog.TIRE_WINTER.id, chains = false)
         val chained = snowRun(ItemCatalog.TIRE_WINTER.id, chains = true)
-        assertTrue("zimné gumy musia byť na snehu lepšie ($winterTyres vs $summer)", winterTyres > summer + 1f)
-        assertTrue("reťaze pridajú ešte viac", chained > winterTyres)
+        assertTrue(
+            "zimné gumy musia byť na snehu lepšie (${winterTyres.speed} vs ${summer.speed})",
+            winterTyres.speed > summer.speed + 1f
+        )
+        assertTrue(
+            "letné gumy na snehu nesmú letieť (${summer.speed} vs ${winterTyres.speed})",
+            summer.speed < winterTyres.speed * 0.62f
+        )
+        assertTrue(
+            "letné sa na snehu musia viac pretáčať (${summer.wheelSlip} vs ${winterTyres.wheelSlip})",
+            summer.wheelSlip > winterTyres.wheelSlip + 0.12f
+        )
+        assertTrue("reťaze pridajú ešte viac", chained.speed > winterTyres.speed)
     }
 
     @Test
@@ -994,6 +1923,62 @@ class GameCoreTest {
             return h0 - car.parts[ComponentSlot.ENGINE]!!.health
         }
         assertTrue("zamrznutá voda musí ničiť motor", engineLoss(0.1f) > engineLoss(0.95f) * 1.5f)
+    }
+
+    @Test
+    fun emptyCoolantOverheatsEvenWithAHealthyRadiator() {
+        fun coolingCar(litres: Float): Car {
+            val car = Car()
+            car.installStarterKit()
+            car.mount(
+                ComponentSlot.RADIATOR,
+                ItemStack(ItemCatalog.RADIATOR.id, ComponentCondition.NEW, 1f)
+            )
+            car.mount(
+                ComponentSlot.ENGINE,
+                ItemStack(ItemCatalog.ENGINE_A.id, ComponentCondition.NEW, 1f)
+            )
+            car.fuel = 30f
+            car.oil = 4f
+            car.coolant = litres
+            car.coolantPurity = 1f
+            car.fuelPurity = 1f
+            car.oilPurity = 1f
+            car.temperature = GameConfig.NORMAL_TEMP
+            car.engineRunning = true
+            return car
+        }
+
+        val dry = coolingCar(0f)
+        var overheated = false
+        var healthAt120: Float? = null
+        repeat(2400) {
+            val before = dry.parts[ComponentSlot.ENGINE]!!.health
+            if (healthAt120 == null && dry.temperature >= GameConfig.DRY_COOLANT_WEAR_START) {
+                healthAt120 = before
+            }
+            if (dry.tickDriving(1f / 60f, 1f, 1f) == EndCause.OVERHEAT) {
+                overheated = true
+            }
+        }
+        assertTrue("prázdny okruh musí ísť cez 120 °C, má ${dry.temperature} °C", dry.temperature > GameConfig.DRY_COOLANT_WEAR_START)
+        assertTrue("bez kvapaliny motor zhasne až okolo 130 °C, má ${dry.temperature} °C", overheated)
+        assertTrue(
+            "odstavenie má prísť pri ~130 °C, bolo ${dry.temperature}",
+            dry.temperature >= GameConfig.DRY_COOLANT_CUTOUT - 0.5f
+        )
+        val cooked = healthAt120 ?: dry.parts[ComponentSlot.ENGINE]!!.health
+        assertTrue(
+            "medzi 120 a 130 °C sa má motor ničiť",
+            dry.parts[ComponentSlot.ENGINE]!!.health < cooked - 0.04f
+        )
+
+        val wet = coolingCar(5.5f)
+        repeat(1500) { wet.tickDriving(1f / 60f, 1f, 1f) }
+        assertTrue(
+            "plný okruh nesmie na rovinke uvariť motor, má ${wet.temperature} °C",
+            wet.temperature < GameConfig.OVERHEAT_THRESHOLD - 4f
+        )
     }
 
     @Test
@@ -1230,37 +2215,51 @@ class GameCoreTest {
     }
 
     @Test
-    fun continuousRegionCarriesOneRealPlanAndALongTransition() {
+    fun continuousRegionCarriesTwoPlansWithoutChangingSceneryBeforeJunction() {
         val engine = GameEngine(31L, 0f)
         val choices = engine.junctionChoices
-        assertEquals(1, choices.size)
+        assertEquals(2, choices.size)
         assertNotEquals(
             "prvý prechod musí viesť do vizuálne inej krajiny",
             engine.segment.style,
-            choices.single().style
+            choices.first().style
         )
-        assertTrue(choices.single().plan.length >= GameConfig.SEGMENT_LENGTH_MIN)
-        assertTrue(choices.single().plan.features.isNotEmpty())
-        assertTrue(choices.single().plan.risk in 0f..1f)
-        assertTrue(engine.segment.transitionLength in
-            GameConfig.BIOME_TRANSITION_MIN..GameConfig.BIOME_TRANSITION_MAX)
+        assertEquals(2, choices.map { it.style }.distinct().size)
+        choices.forEach { choice ->
+            assertTrue(choice.plan.length >= GameConfig.SEGMENT_LENGTH_MIN)
+            assertTrue(choice.plan.features.isNotEmpty())
+            assertTrue(choice.plan.risk in 0f..1f)
+        }
+        assertEquals(GameConfig.JUNCTION_APPROACH, engine.segment.transitionLength, 0.001f)
+        assertEquals(
+            0f,
+            engine.segment.biomeBlendAtWorld(
+                engine.segment.endWorldX - GameConfig.JUNCTION_APPROACH - 1f
+            ).amount,
+            0.001f
+        )
         assertEquals(0f, engine.segment.biomeBlendAtWorld(engine.segment.transitionStartWorldX).amount, 0.001f)
-        assertEquals(1f, engine.segment.biomeBlendAtWorld(engine.segment.endWorldX).amount, 0.001f)
+        assertEquals(0f, engine.segment.biomeBlendAtWorld(engine.segment.endWorldX).amount, 0.001f)
+        assertEquals(engine.segment.visualBiome, engine.segment.biomeBlendAtWorld(engine.segment.endWorldX).to)
     }
 
     @Test
-    fun regionBlendDoesNotPostBiomeAheadAdvisory() {
+    fun swipeDoesNotChangeBiomeBeforeJunction() {
         val engine = GameEngine(31L, 0f, DebugOptions(allComponents = true, fullFluids = true))
         engine.prepareForDriving()
         engine.tryStartEngine()
         engine.resumeDriving()
+        val before = engine.segment.visualBiome
+        val other = engine.junctionChoices.first { it.visualBiome != before }
+        assertTrue(engine.selectBranch(other.id))
         engine.car.x = engine.segment.transitionStartWorldX +
             engine.segment.transitionLength * 0.35f
         engine.car.speed = 8f
         engine.advance(1f / 30f)
         val blend = engine.biomeBlend
-        assertTrue("test musí stáť v prelínení, amount=${blend.amount}", blend.amount >= 0.08f)
-        assertNotEquals(blend.from, blend.to)
+        assertEquals(0f, blend.amount, 0.001f)
+        assertEquals(before, blend.from)
+        assertEquals(before, blend.to)
         sk.kubis.endlessdrive.domain.model.BiomeType.entries.forEach { biome ->
             assertNotEquals("${biome.displayName} ahead", engine.message)
         }
@@ -1318,7 +2317,7 @@ class GameCoreTest {
         val forestDestinations = (1L..80L).map { seed ->
             WorldGenerator.createSegment(
                 seed, BranchStyle.FOREST, 0f, 4_000f, terrain, false
-            ).choices.single().style
+            ).choices.first().style
         }.toSet()
         assertTrue(
             "ďalšia oblasť sa nemá opakovať v pevnom poradí: $forestDestinations",
@@ -1328,7 +2327,7 @@ class GameCoreTest {
         val earlyIndustrial = (1L..120L).map { seed ->
             WorldGenerator.createSegment(
                 seed, BranchStyle.INDUSTRIAL, 0f, 0f, terrain, false
-            ).choices.single().style
+            ).choices.first().style
         }
         assertTrue(
             "sneh nesmie prísť skôr, než má hráč čas nájsť zimnú výbavu",
@@ -1338,11 +2337,23 @@ class GameCoreTest {
         val lateIndustrial = (1L..180L).map { seed ->
             WorldGenerator.createSegment(
                 seed * 7_919L, BranchStyle.INDUSTRIAL, 0f, 15_000f, terrain, false
-            ).choices.single().style
+            ).choices.first().style
         }
         assertTrue(
             "po neskoršej vzdialenosti sa už zasnežené hory musia objaviť",
             lateIndustrial.any { it == BranchStyle.ALPINE }
+        )
+
+        val starvedIndustrial = (1L..100L).map { seed ->
+            WorldGenerator.createSegment(
+                seed * 3_331L, BranchStyle.INDUSTRIAL, 0f, 22_000f, terrain, false
+            ).choices.first().style
+        }
+        val alpineShare = starvedIndustrial.count { it == BranchStyle.ALPINE }.toFloat() /
+            starvedIndustrial.size
+        assertTrue(
+            "po ~20 km bez snehu má priemysel častejšie viesť do hôr (bolo $alpineShare)",
+            alpineShare >= 0.45f
         )
     }
 
@@ -1364,7 +2375,7 @@ class GameCoreTest {
             val destinations = (1L..120L).map { seed ->
                 WorldGenerator.createSegment(
                     seed, style, 0f, 4_000f, terrain, false
-                ).choices.single().style
+                ).choices.first().style
             }
             assertTrue(
                 "$style musí mať viac ako jedno pokračovanie: ${destinations.toSet()}",
@@ -1390,7 +2401,7 @@ class GameCoreTest {
         engine.resumeDriving()
         val forkAt = engine.segment.endWorldX
         val segmentBefore = engine.segment
-        val expected = segmentBefore.choices.single()
+        val expected = segmentBefore.selectedChoice!!
 
         // Rozbehnutý až za rázcestie, bez akejkoľvek voľby.
         engine.car.x = forkAt - 1f
@@ -1402,6 +2413,16 @@ class GameCoreTest {
         assertTrue("región sa musí automaticky prepnúť", engine.segment !== segmentBefore)
         assertEquals(expected.style, engine.segment.style)
         assertTrue(
+            "renderer musí po hranici ešte dostať starý región pre ľavú časť obrazu",
+            engine.previousSegmentForRender === segmentBefore
+        )
+        assertEquals(
+            "starý a nový profil sa musia stretnúť na rovnakej svetovej hranici",
+            segmentBefore.endWorldX,
+            engine.segment.worldOrigin,
+            0.001f
+        )
+        assertTrue(
             "technická hranica trhla rýchlosťou auta: ${engine.car.speed}",
             engine.car.speed > 10f
         )
@@ -1409,6 +2430,318 @@ class GameCoreTest {
             "technická hranica sa nemá znovu oznamovať v HUD",
             engine.message.startsWith("Entering")
         )
+    }
+
+    @Test
+    fun swipeSelectionChangesTheSeamlessContinuation() {
+        val engine = GameEngine(17L, 0f)
+        engine.prepareForDriving()
+        engine.tryStartEngine()
+        engine.resumeDriving()
+        val outgoing = engine.segment
+        val defaultId = outgoing.selectedChoice!!.id
+        val selected = outgoing.choices.first { it.id != defaultId }
+        assertTrue(engine.selectBranch(selected.id))
+        assertEquals(selected.id, engine.pendingChoiceId)
+
+        val biomeBeforeJunction = engine.biomeBlend
+        assertEquals(outgoing.visualBiome, biomeBeforeJunction.from)
+        assertEquals(outgoing.visualBiome, biomeBeforeJunction.to)
+        assertEquals(0f, biomeBeforeJunction.amount, 0.001f)
+
+        engine.car.x = outgoing.endWorldX - 1f
+        engine.car.speed = 14f
+        engine.throttleInput = 1f
+        repeat(30) { engine.advance(1f / 60f) }
+
+        assertEquals(selected.style, engine.segment.style)
+        assertEquals(outgoing.endWorldX, engine.segment.worldOrigin, 0.001f)
+        assertTrue(engine.car.speed > 10f)
+        assertEquals(selected.id, engine.previousJunctionSelectedChoiceId)
+        outgoing.choices.forEach { choice ->
+            assertNotNull(
+                "obe vetvy musia zostať rendereru dostupné aj po prejazde",
+                engine.previousContinuationForRender(choice.id)
+            )
+        }
+
+        val branchIndex=outgoing.choices.indexOfFirst { it.id==selected.id }
+        val offset=sk.kubis.endlessdrive.game.world.World3D.forkOffset(outgoing.endWorldX,outgoing.endWorldX,branchIndex,outgoing.choices.size)
+        assertTrue(kotlin.math.abs(offset)>4f)
+        val biomeAfterJunction = engine.biomeBlend
+        assertEquals(outgoing.visualBiome, biomeAfterJunction.from)
+        assertEquals(selected.visualBiome, biomeAfterJunction.to)
+        assertTrue(biomeAfterJunction.amount in 0.001f..0.999f)
+        val settledBiome = engine.visualBiomeBlendAt(
+            outgoing.endWorldX + GameConfig.JUNCTION_SCENERY_TRANSITION_M + 1f
+        )
+        assertEquals(selected.visualBiome, settledBiome.from)
+        assertEquals(selected.visualBiome, settledBiome.to)
+        assertEquals(0f, settledBiome.amount, 0.001f)
+
+        val restored = GameEngine.restore(
+            RunCodec.decode(RunCodec.encode(engine.snapshot()))!!,
+            0f
+        )
+        assertEquals(engine.biomeBlend.from, restored.biomeBlend.from)
+        assertEquals(engine.biomeBlend.to, restored.biomeBlend.to)
+        assertEquals(engine.biomeBlend.amount, restored.biomeBlend.amount, 0.001f)
+    }
+
+    @Test
+    fun pursuingStormClosesTheGapWhileTheCarIsStopped() {
+        val engine = GameEngine(73L, 0f, DebugOptions(allComponents = true, fullFluids = true))
+        engine.forcePursuitStorm(PursuitStormKind.SAND)
+        val storm = engine.pursuitStorm!!
+        storm.gapM = 20f
+
+        repeat(60) { engine.advance(1f / 60f) }
+
+        assertTrue("stojace auto musí búrka dobehnúť", storm.gapM < 6f)
+        assertTrue(engine.pursuitStormIntensity > 0.9f)
+    }
+
+    @Test
+    fun buildingPausesPursuitAndCanBeUsedAsShelter() {
+        val engine = GameEngine(7300L, 0f)
+        engine.forcePursuitStorm(PursuitStormKind.THUNDER)
+        assertTrue(engine.enterNearestBuilding())
+        val gap = engine.pursuitStormGapM!!
+
+        repeat(60) { engine.advance(1f / 60f) }
+
+        assertEquals("front nemá hráča poškodzovať počas voľby úkrytu", gap, engine.pursuitStormGapM!!, 0.01f)
+        assertTrue(engine.shelterFromPursuit())
+        assertNull(engine.pursuitStorm)
+    }
+
+    @Test
+    fun firstPursuitStormIsGuaranteedByEightKilometres() {
+        val base = GameEngine(7301L, 0f, DebugOptions(allComponents = true, fullFluids = true))
+        base.prepareForDriving()
+        base.tryStartEngine()
+        val raw = base.snapshot()
+        val snapshot = raw.copy(
+            distanceM = 8_050f,
+            maxReachedX = 8_050f,
+            car = raw.car.copy(x = 8_050f),
+            segment = raw.segment.copy(worldOrigin = 8_000f, tripDistance = 8_000f)
+        )
+        val engine = GameEngine.restore(snapshot, 0f)
+
+        assertTrue(engine.resumeDriving())
+        engine.advance(1f / 30f)
+
+        assertNotNull(engine.pursuitStorm)
+    }
+
+    @Test
+    fun trailerAtRoadsideBuildingHitchesDirectlyWithoutCargoSpace() {
+        val engine = GameEngine(7302L, 0f)
+        engine.inventory.clear()
+        engine.boot.clear()
+        val host = engine.buildingNear()!!
+        host.loot.clear()
+        host.loot += ItemStack(ItemCatalog.UTILITY_TRAILER.id)
+        val originalSlots = engine.boot.slots.size
+
+        assertTrue(engine.enterNearestBuilding())
+        assertTrue(engine.takeLoot(0))
+
+        assertTrue(engine.utilityTrailerAttached)
+        assertEquals(originalSlots + 8, engine.boot.slots.size)
+    }
+
+    @Test
+    fun roadsideSalvageMissionCanStartCompleteAndSurviveSave() {
+        val base = GameEngine(7303L, 0f)
+        val engine = GameEngine.restore(
+            base.snapshot().copy(distanceM = 1_500f, maxReachedX = 1_500f),
+            0f
+        )
+        engine.segment.buildings.clear()
+        val wreck = WorldBuilding(
+            id = 0x7303L,
+            type = BuildingType.WRECK,
+            localX = engine.car.x - engine.segment.worldOrigin,
+            loot = MutableList(3) { ItemStack(ItemCatalog.OIL_BOTTLE.id) }
+        )
+        engine.segment.buildings += wreck
+        engine.inventory.clear()
+        engine.boot.clear()
+
+        assertTrue(engine.enterNearestBuilding())
+        assertEquals(SideMissionKind.SALVAGE, engine.sideMissionOffer()!!.kind)
+        assertTrue(engine.startSideMission())
+        val restored = GameEngine.restore(RunCodec.decode(RunCodec.encode(engine.snapshot()))!!, 0f)
+        assertEquals(SideMissionKind.SALVAGE, restored.sideMission?.kind)
+
+        repeat(3) { assertTrue(engine.takeLoot(0)) }
+        assertNull(engine.sideMission)
+        assertTrue(engine.scrap >= 6)
+    }
+
+    @Test
+    fun deliveryMissionTargetsADistantRealBuildingAndRequiresPackageLoot() {
+        val base = GameEngine(7304L, 0f)
+        val engine = GameEngine.restore(
+            base.snapshot().copy(distanceM = 1_500f, maxReachedX = 1_500f),
+            0f
+        )
+        engine.segment.buildings.clear()
+        val sourceX = engine.car.x - engine.segment.worldOrigin
+        val source = WorldBuilding(0x7304L, BuildingType.HOUSE, sourceX)
+        val destination = WorldBuilding(0x7305L, BuildingType.GAS_STATION, sourceX + 900f)
+        engine.segment.buildings += source
+        engine.segment.buildings += destination
+        engine.inventory.clear()
+        engine.boot.clear()
+
+        assertTrue(engine.enterNearestBuilding())
+        val offer = engine.sideMissionOffer()!!
+        assertNotEquals(SideMissionKind.SALVAGE, offer.kind)
+        assertEquals(destination.id, offer.targetBuildingId)
+        assertEquals(900, offer.targetDistanceM)
+        assertTrue(engine.startSideMission())
+        assertEquals(GamePhase.EXPLORING, engine.phase)
+        assertFalse(engine.sideMission!!.packageLoaded)
+        assertEquals(ItemCatalog.MISSION_PACKAGE.id, source.loot.first().defId)
+
+        // Bez fyzického balíka sa nedá odísť a „START“ ho nenaloží potichu.
+        engine.leaveBuilding()
+        assertEquals(GamePhase.EXPLORING, engine.phase)
+        assertTrue(engine.takeLoot(source.loot.indexOfFirst { it.defId == ItemCatalog.MISSION_PACKAGE.id }))
+        assertTrue(engine.sideMission!!.packageLoaded)
+        assertTrue(engine.inventory.slots.any { it?.defId == ItemCatalog.MISSION_PACKAGE.id })
+        engine.leaveBuilding()
+        assertEquals(GamePhase.STOPPED, engine.phase)
+
+        val restored = GameEngine.restore(RunCodec.decode(RunCodec.encode(engine.snapshot()))!!, 0f)
+        assertEquals(destination.id, restored.sideMission?.targetBuildingId)
+        assertTrue(restored.sideMission?.packageLoaded == true)
+
+        engine.car.x = engine.segment.worldOrigin + destination.localX
+        assertTrue(engine.enterNearestBuilding())
+        assertNull(engine.sideMission)
+        assertNotNull(engine.completedSideMission)
+        assertTrue(engine.inventory.slots.none { it?.defId == ItemCatalog.MISSION_PACKAGE.id })
+
+        val beforeDouble = engine.scrap
+        val reward = engine.completedSideMission!!.rewardScrap
+        assertTrue(engine.claimDoubleSideMissionReward())
+        assertEquals(beforeDouble + reward, engine.scrap)
+        assertNull(engine.completedSideMission)
+    }
+
+    @Test
+    fun expressAndFragileDeliveriesCalculateDifferentRewards() {
+        fun completionFor(kind: SideMissionKind, time: Float, integrity: Float) : Pair<Int, Int> {
+            val base = GameEngine(7306L + kind.ordinal, 0f)
+            val destinationId = 0x7310L + kind.ordinal
+            val restored = GameEngine.restore(
+                base.snapshot().copy(
+                    phase = GamePhase.STOPPED,
+                    distanceM = 1_500f,
+                    sideMissionKind = kind,
+                    sideMissionSourceBuildingId = 1L,
+                    sideMissionStartWorldX = base.car.x,
+                    sideMissionTargetWorldX = base.car.x,
+                    sideMissionTargetBuildingId = destinationId,
+                    sideMissionTargetBuildingType = BuildingType.HOUSE,
+                    sideMissionRewardScrap = 20,
+                    sideMissionBonusRewardScrap = 12,
+                    sideMissionTimeRemainingS = time,
+                    sideMissionPackageLoaded = true,
+                    sideMissionCargoIntegrity = integrity
+                ),
+                0f
+            )
+            restored.segment.buildings.clear()
+            restored.segment.buildings += WorldBuilding(
+                destinationId,
+                BuildingType.HOUSE,
+                restored.car.x - restored.segment.worldOrigin
+            )
+            assertTrue(restored.enterNearestBuilding())
+            return restored.completedSideMission!!.let { it.rewardScrap to it.bonusScrap }
+        }
+
+        assertEquals(32 to 12, completionFor(SideMissionKind.EXPRESS_DELIVERY, 15f, 1f))
+        assertEquals(20 to 0, completionFor(SideMissionKind.EXPRESS_DELIVERY, 0f, 1f))
+        assertEquals(13 to 0, completionFor(SideMissionKind.FRAGILE_DELIVERY, 0f, 0.5f))
+    }
+
+    @Test
+    fun expressTimerRunsWhileParkedAndHardLandingDamagesFragileCargo() {
+        val base = GameEngine(7309L, 0f, DebugOptions(allComponents = true, fullFluids = true))
+        base.prepareForDriving()
+        base.tryStartEngine()
+        base.resumeDriving()
+
+        val express = GameEngine.restore(
+            base.snapshot().copy(
+                phase = GamePhase.STOPPED,
+                sideMissionKind = SideMissionKind.EXPRESS_DELIVERY,
+                sideMissionSourceBuildingId = 1L,
+                sideMissionTargetWorldX = base.car.x + 900f,
+                sideMissionRewardScrap = 12,
+                sideMissionBonusRewardScrap = 8,
+                sideMissionTimeRemainingS = 10f,
+                sideMissionPackageLoaded = true
+            ),
+            0f
+        )
+        repeat(60) { express.advance(1f / 60f) }
+        assertTrue(express.sideMission!!.timeRemainingS < 9.1f)
+
+        val fragile = GameEngine.restore(
+            base.snapshot().copy(
+                sideMissionKind = SideMissionKind.FRAGILE_DELIVERY,
+                sideMissionSourceBuildingId = 1L,
+                sideMissionTargetWorldX = base.car.x + 900f,
+                sideMissionRewardScrap = 20,
+                sideMissionPackageLoaded = true,
+                sideMissionCargoIntegrity = 1f
+            ),
+            0f
+        )
+        assertTrue(fragile.applyFragileCargoShock(1f))
+        assertTrue(
+            "tvrdý dopad musí poškodiť krehký balík",
+            fragile.sideMission!!.cargoIntegrity < 1f
+        )
+    }
+
+    /**
+     * Renderer kreslí budovy aj zo susedného regiónu. SEARCH musí nájsť
+     * tú istú budovu, inak hráč vidí dom, ku ktorému sa nedá vojsť.
+     */
+    @Test
+    fun buildingOnThePreviousSegmentStaysSearchable() {
+        val engine = GameEngine(17L, 0f)
+        engine.prepareForDriving()
+        engine.tryStartEngine()
+        engine.resumeDriving()
+        engine.car.x = engine.segment.endWorldX - 1f
+        engine.car.speed = 14f
+        engine.throttleInput = 1f
+        repeat(30) { engine.advance(1f / 60f) }
+
+        val prev = engine.previousSegmentForRender
+        assertTrue("po hranici musí ostať starý región", prev != null)
+        val localX = engine.car.x - prev!!.worldOrigin - 4f
+        prev.buildings += WorldBuilding(
+            id = 0xB01_1D1L,
+            type = BuildingType.HOUSE,
+            localX = localX,
+            loot = mutableListOf(ItemStack(ItemCatalog.OIL_BOTTLE.id))
+        )
+        engine.car.speed = 0f
+        engine.requestStop()
+        val near = engine.buildingNear()
+        assertTrue("dom za hranicou regiónu musí ísť prehľadať", near != null)
+        assertEquals(0xB01_1D1L, near!!.id)
+        assertTrue(engine.enterNearestBuilding())
     }
 
     /**
@@ -1480,7 +2813,7 @@ class GameCoreTest {
     fun adjacentRegionsMeetWithoutATerrainStep() {
         val engine = GameEngine(11L, 0f)
         val current = engine.segment
-        val continuation = current.choices.single()
+        val continuation = current.choices.first()
         val boundary = current.endWorldX
         val next = WorldGenerator.createSegment(
             plan = continuation.plan,
@@ -1528,7 +2861,7 @@ class GameCoreTest {
     fun inventoryTireFitsEmptyAxleFirst() {
         val engine = GameEngine(12L, 0f)
         engine.inventory.clear()
-        assertTrue(engine.unmountSlot(ComponentSlot.TIRE_FRONT))
+        engine.car.parts.remove(ComponentSlot.TIRE_FRONT)
         assertFalse(engine.car.hasPart(ComponentSlot.TIRE_FRONT))
         assertTrue(engine.car.hasPart(ComponentSlot.TIRE_REAR))
         assertTrue(engine.inventory.add(ItemStack(ItemCatalog.TIRE.id, ComponentCondition.USED, 0.8f)))
@@ -1580,3 +2913,70 @@ private fun GameEngine.prepareForDriving() {
     car.oilPurity = 1f
     car.coolantPurity = 1f
 }
+
+private fun drivingEngineForRescue(seed: Long): GameEngine {
+    val engine = GameEngine(seed, 0f)
+    engine.prepareForDriving()
+    engine.tryStartEngine()
+    engine.resumeDriving()
+    engine.inventory.clear()
+    engine.boot.clear()
+    engine.segment.buildings.clear()
+    return engine
+}
+
+private fun spinningOnIceEngine(): GameEngine {
+    val engine = GameEngine(
+        55L,
+        0f,
+        DebugOptions(testTrack = true, fullFluids = true, allComponents = true)
+    )
+    engine.prepareForDriving()
+    engine.tryStartEngine()
+    engine.resumeDriving()
+    engine.inventory.clear()
+    engine.boot.clear()
+    engine.segment.buildings.clear()
+    TIRE_SLOTS.forEach { slot ->
+        engine.car.mount(slot, ItemStack(ItemCatalog.TIRE_POOR.id, ComponentCondition.USED, 0.40f))
+    }
+    val local = engine.car.x - engine.segment.worldOrigin
+    engine.segment.patches.clear()
+    engine.segment.patches += SurfacePatch(RoadSurface.ICE, local - 30f, local + 140f)
+    engine.car.speed = 0f
+    engine.advance(1f / 60f)
+    return engine
+}
+
+private fun strandedOnRimEngine(): GameEngine {
+    val engine = GameEngine(
+        44L,
+        0f,
+        DebugOptions(testTrack = true, fullFluids = true, allComponents = true)
+    )
+    engine.prepareForDriving()
+    engine.tryStartEngine()
+    engine.resumeDriving()
+    engine.inventory.clear()
+    engine.boot.clear()
+    engine.segment.buildings.clear()
+    TIRE_SLOTS.forEach { slot ->
+        engine.car.parts[slot]!!.injury = TireInjury.SHREDDED
+    }
+    engine.car.x = 255f
+    engine.car.speed = 0f
+    return engine
+}
+
+private fun isRoadsideRescueGarage(b: WorldBuilding): Boolean =
+    b.type == BuildingType.GARAGE &&
+        b.loot.size == 2 &&
+        b.loot.any { it.def.isPunctureKit } &&
+        b.loot.any { it.def.axleTire }
+
+private fun roadsideRescueGarage(engine: GameEngine): WorldBuilding =
+    engine.segment.buildings.single(::isRoadsideRescueGarage)
+
+/** 6 s pretáčania + rezerva, kým auto GAME_OVER na asiste. */
+private fun stuckAssistFrames(): Int =
+    (GameConfig.TIRE_RESCUE_STUCK_S * 60f).toInt() + 12

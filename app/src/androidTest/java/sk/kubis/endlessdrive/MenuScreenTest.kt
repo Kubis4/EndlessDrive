@@ -17,7 +17,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import sk.kubis.endlessdrive.domain.model.AudioSettings
-import sk.kubis.endlessdrive.domain.model.DebugOptions
 import sk.kubis.endlessdrive.domain.repository.PlayerProfile
 import sk.kubis.endlessdrive.ui.menu.MenuScreen
 import sk.kubis.endlessdrive.ui.menu.MENU_ROAD_LOOP_MS
@@ -71,8 +70,10 @@ class MenuScreenTest {
         }
         compose.mainClock.advanceTimeBy(300)
         compose.onNodeWithText("CONTINUE").assertIsDisplayed()
-        compose.onNodeWithText("SETTINGS").assertIsDisplayed()
-        compose.onNodeWithText("LEADERBOARD").assertIsDisplayed()
+        compose.onNodeWithContentDescription("SETTINGS").assertIsDisplayed()
+        compose.onNodeWithText("RECORDS").assertIsDisplayed()
+        compose.onNodeWithText("GARAGE").assertIsDisplayed()
+        compose.onNodeWithText("HOW TO PLAY").assertIsDisplayed()
         compose.onNodeWithText("NEW RUN").performClick()
         compose.mainClock.advanceTimeBy(100)
         assertEquals(0, replacements)
@@ -89,7 +90,11 @@ class MenuScreenTest {
         val settings = mutableStateOf(AudioSettings())
         compose.setContent {
             EndlessDriveTheme {
-                SettingsScreen(DebugOptions.OFF, {}, {}, settings.value, { settings.value = it })
+                SettingsScreen(
+                    onBack = {},
+                    audioSettings = settings.value,
+                    onAudioChange = { settings.value = it }
+                )
             }
         }
         compose.onNodeWithContentDescription("Tyre slip").performScrollTo()
@@ -97,5 +102,21 @@ class MenuScreenTest {
         assertEquals(0f, settings.value.tyres, 0f)
         assertEquals(0.8f, settings.value.master, 0f)
         assertEquals(0.65f, settings.value.surfaces, 0f)
+    }
+
+    @Test fun uiScaleCanBeRaised() {
+        val scale = mutableStateOf(1f)
+        compose.setContent {
+            EndlessDriveTheme {
+                SettingsScreen(
+                    onBack = {},
+                    uiScale = scale.value,
+                    onUiScaleChange = { scale.value = it }
+                )
+            }
+        }
+        compose.onNodeWithContentDescription("UI scale").performScrollTo()
+            .performSemanticsAction(SemanticsActions.SetProgress) { it(1.2f) }
+        assertEquals(1.2f, scale.value, 0.001f)
     }
 }

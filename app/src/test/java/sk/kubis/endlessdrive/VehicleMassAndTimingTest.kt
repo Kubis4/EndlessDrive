@@ -116,6 +116,79 @@ class VehicleMassAndTimingTest {
     }
 
     @Test
+    fun cargoMassAlsoRaisesFuelUseWearAndBrakingDistance() {
+        fun makeCar(): Car = Car().apply {
+            installStarterKit(
+                SeededRandom(221L),
+                DebugOptions(fullUpgrades = true, fullBody = true, fullFluids = true)
+            )
+            engineRunning = true
+            speed = 20f
+            snapToGround(0f)
+        }
+
+        val empty = makeCar()
+        val loaded = makeCar().apply {
+            setCargoLoad(packKg = 55f, bootKg = 190f)
+            snapToGround(0f)
+        }
+        val emptyFuel = empty.fuel
+        val loadedFuel = loaded.fuel
+        empty.tickDriving(12f, 0.85f, 1f)
+        loaded.tickDriving(12f, 0.85f, 1f)
+        assertTrue(
+            "naložené auto musí pri rovnakom plyne spáliť viac",
+            loadedFuel - loaded.fuel > emptyFuel - empty.fuel
+        )
+
+        val emptySuspension = empty.parts.getValue(ComponentSlot.SUSPENSION).health
+        val loadedSuspension = loaded.parts.getValue(ComponentSlot.SUSPENSION).health
+        empty.tickWear(20f, bumpMul = 0.8f, brake = 0.6f)
+        loaded.tickWear(20f, bumpMul = 0.8f, brake = 0.6f)
+        assertTrue(
+            "váha musí viac opotrebovať podvozok",
+            loadedSuspension - loaded.parts.getValue(ComponentSlot.SUSPENSION).health >
+                emptySuspension - empty.parts.getValue(ComponentSlot.SUSPENSION).health
+        )
+
+        repeat(24) {
+            empty.applyDrive(1f / 60f, 0f, 1f, 0f, 0f, 0f)
+            loaded.applyDrive(1f / 60f, 0f, 1f, 0f, 0f, 0f)
+        }
+        assertTrue(
+            "rovnaké brzdy musia naloženému autu nechať dlhšiu brzdnú dráhu",
+            loaded.speed > empty.speed + 0.25f
+        )
+    }
+
+
+
+    @Test
+    fun garageBrakePackageShortensLoadedCarStoppingDistance() {
+        fun loadedCar(brakeLevel: Int): Car = Car().apply {
+            installStarterKit(
+                SeededRandom(552L),
+                DebugOptions(fullUpgrades = true, fullBody = true, fullFluids = true)
+            )
+            setGaragePerformance(engineTune = 0, loadSuspension = 0, brakePackage = brakeLevel)
+            setCargoLoad(packKg = 55f, bootKg = 190f)
+            speed = 20f
+            snapToGround(0f)
+        }
+
+        val standard = loadedCar(0)
+        val upgraded = loadedCar(3)
+        repeat(18) {
+            standard.applyDrive(1f / 60f, 0f, 1f, 0f, 0f, 0f)
+            upgraded.applyDrive(1f / 60f, 0f, 1f, 0f, 0f, 0f)
+        }
+        assertTrue(
+            "garážové brzdy sa musia prejaviť aj vo fyzike, nie iba v profile (std=${standard.speed}, up=${upgraded.speed})",
+            upgraded.speed < standard.speed - 0.08f
+        )
+    }
+
+    @Test
     fun newRunsUseSeveralSafeStartingLandscapes() {
         val starts = (1L..120L).map { WorldGenerator.startingStyle(it * 7_919L) }.toSet()
         assertTrue("štartovacia krajina sa musí meniť: $starts", starts.size >= 3)

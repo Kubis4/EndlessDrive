@@ -41,13 +41,42 @@ class HudAlertsTest {
         val ui = healthyUi().copy(
             events = listOf("NO CHARGE" to 40),
             message = "Alternator belt snapped — battery not charging.",
-            engineRunning = true
+            engineRunning = true,
+            batteryHoldCapacity = 0.9f
         )
         val alerts = composeHudAlerts(ui)
         assertNull(alerts.block)
         assertNull(alerts.message)
         assertTrue(alerts.events.isEmpty())
-        assertNull(alerts.message)
+        assertEquals(listOf("NOT CHARGING"), alerts.chips.map { it.text })
+    }
+
+    @Test
+    fun tinyBatteryHoldShowsReplaceMessage() {
+        val ui = healthyUi().copy(
+            engineRunning = true,
+            batteryHoldCapacity = 0.12f,
+            alternatorOutput = 1f,
+            batteryCharge = 0.50f
+        )
+        val alerts = composeHudAlerts(ui)
+        assertEquals(
+            listOf("The battery will not hold a charge — fit another."),
+            alerts.chips.map { it.text }
+        )
+    }
+
+    @Test
+    fun healthyChargingSetupDoesNotWarnAboutHoldingCharge() {
+        val ui = healthyUi().copy(
+            engineRunning = true,
+            batteryHoldCapacity = 0.90f,
+            alternatorOutput = 0.85f,
+            batteryCharge = 0.50f
+        )
+        val alerts = composeHudAlerts(ui)
+        assertTrue(alerts.chips.none { it.text.contains("hold", ignoreCase = true) })
+        assertTrue(alerts.chips.none { it.text.contains("CHARGING") })
     }
 
     @Test

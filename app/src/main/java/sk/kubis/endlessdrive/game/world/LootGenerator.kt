@@ -16,28 +16,37 @@ import sk.kubis.endlessdrive.domain.model.VehiclePaint
 object LootGenerator {
     private data class Entry(val def: ItemDef, val weight: Float)
 
+    // Motorový progres: základný motor sa dá nájsť ako náhrada, úsporný
+    // diesel je prvý sidegrade a výkonové motory prichádzajú až neskôr.
+    private const val DIESEL_LOOT_FROM_M = 3_000f
+    private const val ENGINE_B_FROM_M = 10_000f
+    private const val ENGINE_E_FROM_M = 25_000f
+    private const val TRAILER_FROM_M = 4_000f
+
     fun generate(
         rng: SeededRandom,
         type: BuildingType,
         distance: Float,
         style: BranchStyle
     ): List<ItemStack> {
+        // Dielňa a lakovačka predávajú službu, nie náhradné diely.
+        if (type.isServiceShop) return emptyList()
         val table = tableFor(type)
         // Bez stropu: aj na 30. km je nález o kúsok lepší než na 10.
         val distNorm = MathX.growth(distance, 3500f)
         val distBonus = distNorm * style.lootBias
-        // Miernejšia lotéria: väčšina budov má 1–3 veci, prázdne / jackpoty sú vzácne.
+        // Miernejšia lotéria: väčšina budov má 1–3 veci, jackpoty sú vzácne.
+        // Prázdny dom / garáž vyzerá ako už vyrabovaná budova – hráč pri nej
+        // zastaví a SEARCH nemá čo hľadať. Vraky ostanú občas prázdne.
         val luck = rng.nextFloat()
         val baseCount = when (type) {
             BuildingType.HOUSE -> when {
-                luck < 0.05f -> 0
                 luck < 0.28f -> 1
                 luck < 0.72f -> 2
                 luck < 0.92f -> 3
                 else -> 4
             }
             BuildingType.GARAGE -> when {
-                luck < 0.04f -> 0
                 luck < 0.22f -> 1
                 luck < 0.62f -> 2
                 luck < 0.88f -> 3
@@ -49,24 +58,19 @@ object LootGenerator {
                 luck < 0.82f -> 3
                 else -> 4
             }
-            BuildingType.AUTO_SHOP -> when {
-                luck < 0.02f -> 1
-                luck < 0.35f -> 2
-                luck < 0.75f -> 3
-                luck < 0.92f -> 4
-                else -> 5
-            }
+            BuildingType.AUTO_SHOP, BuildingType.PAINT_SHOP -> 0
             BuildingType.WRECK -> when {
                 luck < 0.48f -> 0
                 luck < 0.82f -> 1
                 else -> 2
             }
         }
-        // Na začiatku cesty budovy nie sú prázdne – hráč musí mať čo nájsť.
-        val earlyFloor = when {
-            distance < 500f -> 1
-            distance < 1200f && type != BuildingType.HOUSE -> 1
-            else -> 0
+        // Dom, garáž a pumpa musia dať aspoň jednu vec. Inak budova svieti
+        // v noci ako vyrabovaná a nedá sa lootnúť. Servis loot nemá.
+        val earlyFloor = when (type) {
+            BuildingType.WRECK -> if (distance < 1200f) 1 else 0
+            BuildingType.AUTO_SHOP, BuildingType.PAINT_SHOP -> 0
+            else -> 1
         }
         val count = (baseCount + (distBonus * 0.35f).toInt())
             .coerceAtLeast(earlyFloor)
@@ -92,7 +96,7 @@ object LootGenerator {
             val spotlightPool = when (type) {
                 BuildingType.HOUSE -> listOf(
                     ItemCatalog.SEAT_REAR, ItemCatalog.DOOR_REAR, ItemCatalog.TRUNK_LID,
-                    ItemCatalog.BACKPACK, ItemCatalog.SEAT_FRONT, ItemCatalog.HEADLIGHT,
+                    ItemCatalog.BACKPACK, ItemCatalog.HEADLIGHT,
                     ItemCatalog.REAR_BUMPER, ItemCatalog.ROOF_RACK
                 )
                 BuildingType.GARAGE -> listOf(
@@ -100,18 +104,12 @@ object LootGenerator {
                     ItemCatalog.SUSPENSION_LOW, ItemCatalog.TIRE_OFFROAD, ItemCatalog.BOOT_CRATE,
                     ItemCatalog.ALTERNATOR, ItemCatalog.ROOF_RACK
                 )
-                BuildingType.AUTO_SHOP -> listOf(
-                    ItemCatalog.SNOW_CHAINS, ItemCatalog.TIRE_WINTER, ItemCatalog.SEAT_REAR,
-                    ItemCatalog.DRIVE_AWD, ItemCatalog.SUSPENSION_LIFT, ItemCatalog.BRAKES_GOOD,
-                    ItemCatalog.BATTERY_GOOD, ItemCatalog.TIRE_SPORT
-                )
+                BuildingType.AUTO_SHOP, BuildingType.PAINT_SHOP -> emptyList()
                 BuildingType.GAS_STATION -> emptyList()
                 BuildingType.WRECK -> emptyList()
             }
             var spotlight = spotlightPool.getOrNull((bucket + type.ordinal) % spotlightPool.size.coerceAtLeast(1))
-            if (spotlight?.let { it.id == ItemCatalog.SNOW_CHAINS.id || it.id == ItemCatalog.TIRE_WINTER.id } == true &&
-                distance < GameConfig.WINTER_GEAR_FROM_M
-            ) {
+            if (spotlight != null && distance < minimumDistance(spotlight)) {
                 spotlight = ItemCatalog.SEAT_REAR
             }
             val useSpotlight = spotlight != null && spotlight.id !in seen &&
@@ -127,8 +125,7 @@ object LootGenerator {
                 BuildingType.HOUSE, BuildingType.GARAGE ->
                     listOf(ItemCatalog.OIL_BOTTLE, ItemCatalog.FUEL_CAN, ItemCatalog.DIESEL_CAN, ItemCatalog.COOLANT_BOTTLE)
                 BuildingType.GAS_STATION -> listOf(ItemCatalog.FUEL_CAN, ItemCatalog.DIESEL_CAN)
-                BuildingType.AUTO_SHOP ->
-                    listOf(ItemCatalog.TIRE, ItemCatalog.BATTERY, ItemCatalog.OIL_BOTTLE)
+                BuildingType.AUTO_SHOP, BuildingType.PAINT_SHOP -> emptyList()
                 BuildingType.WRECK -> listOf(ItemCatalog.SCRAP_PILE)
             }
             result += makeStack(rng, type, rng.pick(fallback), distance)
@@ -140,7 +137,11 @@ object LootGenerator {
         if (type == BuildingType.GAS_STATION &&
             result.none { it.def.fluid == FluidType.FUEL }
         ) {
-            val fuel = if (rng.chance(0.42f)) ItemCatalog.DIESEL_CAN else ItemCatalog.FUEL_CAN
+            val fuel = if (distance >= DIESEL_LOOT_FROM_M && rng.chance(0.42f)) {
+                ItemCatalog.DIESEL_CAN
+            } else {
+                ItemCatalog.FUEL_CAN
+            }
             result.add(
                 ItemStack(
                     defId = fuel.id,
@@ -209,7 +210,7 @@ object LootGenerator {
             BuildingType.HOUSE -> rng.nextFloat(0.40f, 0.88f)
             BuildingType.GARAGE -> rng.nextFloat(0.55f, 0.95f)
             BuildingType.GAS_STATION -> rng.nextFloat(0.70f, 1.0f)
-            BuildingType.AUTO_SHOP -> rng.nextFloat(0.75f, 1.0f)
+            BuildingType.AUTO_SHOP, BuildingType.PAINT_SHOP -> rng.nextFloat(0.75f, 1.0f)
             BuildingType.WRECK -> rng.nextFloat(0.40f, 0.80f)
         }
         return if (rng.chance(0.08f)) base * rng.nextFloat(0.4f, 0.7f) else base
@@ -232,13 +233,12 @@ object LootGenerator {
             Entry(ItemCatalog.BOOT_CRATE, 5f),
             Entry(ItemCatalog.ROOF_RACK, 4f),
             Entry(ItemCatalog.EXPEDITION_RACK, 2f),
-            Entry(ItemCatalog.FRONT_BUMPER, 7f),
+            Entry(ItemCatalog.FRONT_BUMPER, 2f),
             Entry(ItemCatalog.TRUNK_LID, 7f),
             Entry(ItemCatalog.HEADLIGHT, 6f),
-            Entry(ItemCatalog.TAILLIGHT, 7f),
-            Entry(ItemCatalog.SEAT_FRONT, 6f),
-            Entry(ItemCatalog.SEAT_REAR, 10f),
-            Entry(ItemCatalog.REAR_BUMPER, 7f),
+            Entry(ItemCatalog.TAILLIGHT, 2f),
+            Entry(ItemCatalog.SEAT_REAR, 5f),
+            Entry(ItemCatalog.REAR_BUMPER, 2f),
             Entry(ItemCatalog.TIRE_POOR, 8f),
             Entry(ItemCatalog.TIRE, 5f),
             Entry(ItemCatalog.BATTERY, 5f),
@@ -262,6 +262,7 @@ object LootGenerator {
             Entry(ItemCatalog.BOOT_CRATE, 6f),
             Entry(ItemCatalog.ROOF_RACK, 4f),
             Entry(ItemCatalog.EXPEDITION_RACK, 2f),
+            Entry(ItemCatalog.UTILITY_TRAILER, 1.2f),
             Entry(ItemCatalog.SUSPENSION, 4f),
             Entry(ItemCatalog.SUSPENSION_LOW, 2f),
             Entry(ItemCatalog.DRIVE_RWD, 3f),
@@ -275,9 +276,8 @@ object LootGenerator {
             Entry(ItemCatalog.HOOD, 10f),
             Entry(ItemCatalog.TRUNK_LID, 8f),
             Entry(ItemCatalog.HEADLIGHT, 7f),
-            Entry(ItemCatalog.TAILLIGHT, 8f),
-            Entry(ItemCatalog.SEAT_FRONT, 7f),
-            Entry(ItemCatalog.SEAT_REAR, 10f),
+            Entry(ItemCatalog.TAILLIGHT, 3f),
+            Entry(ItemCatalog.SEAT_REAR, 6f),
             Entry(ItemCatalog.ENGINE_A, 2f)
         )
         BuildingType.GAS_STATION -> listOf(
@@ -291,49 +291,7 @@ object LootGenerator {
             Entry(ItemCatalog.PUNCTURE_KIT, 10f),
             Entry(ItemCatalog.FUEL_TANK, 3f)
         )
-        BuildingType.AUTO_SHOP -> listOf(
-            Entry(ItemCatalog.FUEL_CAN, 6f),
-            Entry(ItemCatalog.DIESEL_CAN, 7f),
-            Entry(ItemCatalog.ENGINE_A, 8f),
-            Entry(ItemCatalog.ENGINE_D, 6f),
-            Entry(ItemCatalog.ENGINE_B, 4f),
-            Entry(ItemCatalog.ENGINE_E, 3f),
-            Entry(ItemCatalog.RADIATOR, 12f),
-            Entry(ItemCatalog.RADIATOR_GOOD, 5f),
-            Entry(ItemCatalog.BRAKES, 12f),
-            Entry(ItemCatalog.BRAKES_GOOD, 5f),
-            Entry(ItemCatalog.BATTERY, 10f),
-            Entry(ItemCatalog.BATTERY_GOOD, 4f),
-            Entry(ItemCatalog.ALTERNATOR, 8f),
-            Entry(ItemCatalog.TIRE_POOR, 3f),
-            Entry(ItemCatalog.TIRE, 7f),
-            Entry(ItemCatalog.TIRE_SPORT, 5f),
-            Entry(ItemCatalog.TIRE_OFFROAD, 5f),
-            Entry(ItemCatalog.TIRE_WINTER, 6f),
-            Entry(ItemCatalog.SNOW_CHAINS, 8f),
-            Entry(ItemCatalog.PUNCTURE_KIT, 11f),
-            Entry(ItemCatalog.BOOT_CRATE, 5f),
-            Entry(ItemCatalog.ROOF_RACK, 5f),
-            Entry(ItemCatalog.EXPEDITION_RACK, 3f),
-            Entry(ItemCatalog.SUSPENSION_GOOD, 4f),
-            Entry(ItemCatalog.SUSPENSION_LIFT, 3f),
-            Entry(ItemCatalog.SUSPENSION_LOW, 3f),
-            Entry(ItemCatalog.DRIVE_AWD, 3f),
-            Entry(ItemCatalog.DRIVE_FWD, 3f),
-            Entry(ItemCatalog.FUEL_TANK_BIG, 3f),
-            Entry(ItemCatalog.DOOR_FRONT, 6f),
-            Entry(ItemCatalog.DOOR_REAR, 7f),
-            Entry(ItemCatalog.HOOD, 8f),
-            Entry(ItemCatalog.FRONT_BUMPER, 7f),
-            Entry(ItemCatalog.TRUNK_LID, 7f),
-            Entry(ItemCatalog.HEADLIGHT, 6f),
-            Entry(ItemCatalog.TAILLIGHT, 7f),
-            Entry(ItemCatalog.SEAT_FRONT, 6f),
-            Entry(ItemCatalog.SEAT_REAR, 9f),
-            Entry(ItemCatalog.REAR_BUMPER, 7f),
-            Entry(ItemCatalog.OIL_BOTTLE, 8f),
-            Entry(ItemCatalog.SCRAP_PILE, 9f)
-        )
+        BuildingType.AUTO_SHOP, BuildingType.PAINT_SHOP -> emptyList()
         BuildingType.WRECK -> listOf(
             Entry(ItemCatalog.SCRAP_PILE, 18f),
             Entry(ItemCatalog.TIRE_POOR, 6f),
@@ -369,11 +327,9 @@ object LootGenerator {
             if (e.def.id == ItemCatalog.DRIVE_AWD.id) {
                 rarityBoost *= MathX.growth(distance, 2800f).coerceIn(0.02f, 1.6f)
             }
-            // Silný motor má byť cieľ za servisom a kilometrami, nie náhoda
-            // v prvom meste. Výnimkou je iba garantovaný poškodený kus pri
-            // štarte, ktorý dodáva GameEngine.
-            if (e.def.id == ItemCatalog.ENGINE_E.id && distance < 15_000f) rarityBoost = 0f
-            if (e.def.id == ItemCatalog.ENGINE_B.id && distance < 6_000f) rarityBoost *= 0.12f
+            // Tvrdé brány držia progres čitateľný. Rarity modifier sám o sebe
+            // stále dovolil jackpot v prvých budovách.
+            if (distance < minimumDistance(e.def)) rarityBoost = 0f
             // Zimná výbava sa objaví o kúsok skôr, než začne mrznúť – aby sa
             // hráč stihol pripraviť, nie aby ju zháňal už v snehu.
             if (e.def.id == ItemCatalog.TIRE_WINTER.id || e.def.id == ItemCatalog.SNOW_CHAINS.id) {
@@ -417,5 +373,15 @@ object LootGenerator {
             def.mountsTo == sk.kubis.endlessdrive.domain.model.ComponentSlot.SEAT_REAR -> "interior"
         def.extraSlots > 0 -> "storage"
         else -> "mechanical"
+    }
+
+    private fun minimumDistance(def: ItemDef): Float = when (def.id) {
+        ItemCatalog.DIESEL_CAN.id, ItemCatalog.ENGINE_D.id -> DIESEL_LOOT_FROM_M
+        ItemCatalog.ENGINE_B.id -> ENGINE_B_FROM_M
+        ItemCatalog.DRIVE_AWD.id -> 12_000f
+        ItemCatalog.ENGINE_E.id -> ENGINE_E_FROM_M
+        ItemCatalog.UTILITY_TRAILER.id -> TRAILER_FROM_M
+        ItemCatalog.TIRE_WINTER.id, ItemCatalog.SNOW_CHAINS.id -> GameConfig.WINTER_GEAR_FROM_M
+        else -> 0f
     }
 }

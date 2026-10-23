@@ -33,10 +33,10 @@ data class ItemDef(
     /** Odolnosť gúm voči hrboľom (vyššie = menej straty gripu). */
     val bumpResist: Float = 1f,
     /**
-     * Ako guma drží na snehu a ľade. 1 = zimná zmes, 0.45 = letná guma,
-     * ktorá sa na snehu len točí.
+     * Ako guma drží na snehu a ľade. 1 = zimná zmes, ~0.26 = letná guma,
+     * ktorá sa na snehu len točí. Šport je ešte horší; off-road kúsok lepší.
      */
-    val snowGrip: Float = 0.45f,
+    val snowGrip: Float = 0.26f,
     /** Vizuálny / fyzikálny násobiteľ polomeru kolesa. */
     val wheelScale: Float = 1f,
     /** Svetlá výška stredu (m). 0 = predvolená z GameConfig. */
@@ -57,6 +57,7 @@ data class ItemDef(
     val hasDurability: Boolean get() = extraSlots <= 0
 
     val isPunctureKit: Boolean get() = id == "puncture_kit"
+    val isUtilityTrailer: Boolean get() = id == "utility_trailer"
 
     /** Sloty, do ktorých sa dá namontovať (1 alebo 2 pre pneumatiky). */
     fun mountTargets(): List<ComponentSlot> = when {
@@ -114,17 +115,18 @@ object ItemCatalog {
     val TIRE_POOR = ItemDef(
         id = "tire_poor", name = "Tyre (poor)", rarity = ItemRarity.COMMON,
         weight = 6f, axleTire = true, reliability = 0.55f, grip = 0.68f,
-        bumpResist = 0.75f, wheelScale = 0.96f, baseValue = 8
+        bumpResist = 0.75f, wheelScale = 0.96f, snowGrip = 0.22f, baseValue = 8
     )
     val TIRE = ItemDef(
         id = "tire_std", name = "Tyre (standard)", rarity = ItemRarity.COMMON,
         weight = 7f, axleTire = true, reliability = 0.85f, grip = 0.90f,
-        bumpResist = 1f, wheelScale = 1f, baseValue = 22
+        bumpResist = 1f, wheelScale = 1f, snowGrip = 0.26f, baseValue = 22
     )
+    /** Letná športová zmes – na suchu drží, na snehu sa točí ako na ľade. */
     val TIRE_SPORT = ItemDef(
         id = "tire_sport", name = "Tyre (sport)", rarity = ItemRarity.RARE,
         weight = 7f, axleTire = true, reliability = 1.05f, grip = 1.45f,
-        bumpResist = 0.70f, wheelScale = 0.94f, baseValue = 55
+        bumpResist = 0.70f, wheelScale = 0.94f, snowGrip = 0.16f, baseValue = 55
     )
     /**
      * Zimná zmes – na snehu drží, na suchu je o kúsok horšia než letná.
@@ -146,7 +148,7 @@ object ItemCatalog {
     val TIRE_OFFROAD = ItemDef(
         id = "tire_offroad", name = "Tyre (off-road)", rarity = ItemRarity.RARE,
         weight = 10f, axleTire = true, reliability = 1.2f, grip = 1.15f,
-        bumpResist = 1.65f, wheelScale = 1.14f, snowGrip = 0.70f, baseValue = 60
+        bumpResist = 1.65f, wheelScale = 1.14f, snowGrip = 0.40f, baseValue = 60
     )
     val BATTERY = ItemDef(
         id = "battery_std", name = "Battery 45Ah", rarity = ItemRarity.UNCOMMON,
@@ -292,6 +294,18 @@ object ItemCatalog {
         id = "roof_rack_expedition", name = "Expedition kit", weight = 19f, baseValue = 95
     )
 
+    /** Veľký nález z garáže; po pripojení rozšíri kufor, ale zaťaží auto. */
+    val UTILITY_TRAILER = ItemDef(
+        id = "utility_trailer", name = "Utility trailer", rarity = ItemRarity.VERY_RARE,
+        weight = 65f, slots = 3, baseValue = 180
+    )
+
+    /** Kontraktný náklad: fyzicky zaberá miesto, no nedá sa premeniť na šrot. */
+    val MISSION_PACKAGE = ItemDef(
+        id = "mission_package", name = "Mission package", rarity = ItemRarity.RARE,
+        weight = 6f, slots = 1, baseValue = 0
+    )
+
     val DOOR_FRONT = ItemDef(
         id = "door_front", name = "Front door", rarity = ItemRarity.COMMON,
         weight = 12f, mountsTo = ComponentSlot.DOOR_FRONT, reliability = 1f, baseValue = 22
@@ -347,7 +361,7 @@ object ItemCatalog {
     val ALL = listOf(
         FUEL_CAN, DIESEL_CAN, OIL_BOTTLE, PUNCTURE_KIT, RELAY_MODULE, COOLANT_BOTTLE, WATER,
         TIRE_POOR, TIRE, TIRE_SPORT, TIRE_OFFROAD, TIRE_WINTER, SNOW_CHAINS,
-        BACKPACK, BOOT_CRATE, ROOF_RACK, EXPEDITION_RACK,
+        BACKPACK, BOOT_CRATE, ROOF_RACK, EXPEDITION_RACK, UTILITY_TRAILER, MISSION_PACKAGE,
         BATTERY, BATTERY_GOOD,
         ENGINE_A, ENGINE_B, ENGINE_C, ENGINE_D, ENGINE_E,
         RADIATOR, RADIATOR_GOOD, RADIATOR_HD,
@@ -446,7 +460,13 @@ data class ItemStack(
             val recovery = when {
                 def.fluid != null -> 0.06f
                 !def.hasDurability -> 0.20f
-                else -> 0.08f + 0.12f * health.coerceIn(0f, 1f)
+                // Zachovalý diel má použiteľné plechy, meď a mechaniku; z
+                // kritického ostáva prevažne materiál. Kvadratická krivka
+                // robí kvalitu citeľnou aj po celočíselnom zaokrúhlení.
+                else -> {
+                    val quality = health.coerceIn(0f, 1f)
+                    0.04f + 0.36f * quality * quality
+                }
             }
             return kotlin.math.round(def.baseValue * recovery * units)
                 .toInt()

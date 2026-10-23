@@ -16,7 +16,6 @@ import sk.kubis.endlessdrive.domain.model.DebugOptions
 import org.junit.runner.RunWith
 import sk.kubis.endlessdrive.domain.repository.PlayerProfile
 import sk.kubis.endlessdrive.domain.repository.PlayerRepository
-import sk.kubis.endlessdrive.ui.game.GameAssets
 import sk.kubis.endlessdrive.ui.game.GameScreen
 import sk.kubis.endlessdrive.ui.game.GameViewModel
 import sk.kubis.endlessdrive.ui.theme.EndlessDriveTheme
@@ -45,19 +44,25 @@ class GameScreenSmokeTest {
         override val throttleMode: Flow<sk.kubis.endlessdrive.domain.model.ThrottleMode> =
             flowOf(sk.kubis.endlessdrive.domain.model.ThrottleMode.BINARY)
         override suspend fun setThrottleMode(mode: sk.kubis.endlessdrive.domain.model.ThrottleMode) = Unit
+        override val gaugeStyle: Flow<sk.kubis.endlessdrive.domain.model.GaugeStyle> =
+            flowOf(sk.kubis.endlessdrive.domain.model.GaugeStyle.CLASSIC)
+        override suspend fun setGaugeStyle(style: sk.kubis.endlessdrive.domain.model.GaugeStyle) = Unit
+        override val uiScale: Flow<Float> = flowOf(1f)
+        override suspend fun setUiScale(scale: Float) = Unit
+        override val appLanguage: Flow<sk.kubis.endlessdrive.domain.model.AppLanguage> =
+            flowOf(sk.kubis.endlessdrive.domain.model.AppLanguage.ENGLISH)
+        override suspend fun setAppLanguage(language: sk.kubis.endlessdrive.domain.model.AppLanguage) = Unit
     }
 
     @Test
     fun gameScreenRendersAndOpensPanels() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val assets = GameAssets(context)
         val vm = GameViewModel(FakeRepository(), bestDistanceKm = 1.5f)
         // A game has a perpetual frame loop, so it never becomes animation-idle.
         compose.mainClock.autoAdvance = false
 
         compose.setContent {
             EndlessDriveTheme {
-                GameScreen(viewModel = vm, assets = assets, onExitToMenu = {})
             }
         }
 
@@ -77,11 +82,10 @@ class GameScreenSmokeTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val vm = GameViewModel(FakeRepository(), bestDistanceKm = 1.5f)
-        val assets = GameAssets(context)
         compose.mainClock.autoAdvance = false
         compose.setContent {
             EndlessDriveTheme {
-                GameScreen(vm, assets, onExitToMenu = {})
+                GameScreen(vm, onExitToMenu = {})
             }
         }
         compose.runOnUiThread {

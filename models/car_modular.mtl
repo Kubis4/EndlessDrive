@@ -1,0 +1,154 @@
+﻿# EndlessDrive Modular Car Material Library
+# Standard PBR and Phong shading attributes
+
+newmtl Mat_Battery
+Ka 0.2 0.2 0.2
+Kd 0.10 0.10 0.10
+Ks 0.2 0.2 0.2
+Ns 30
+d 1
+illum 2
+
+newmtl Mat_BrakeCaliper
+Ka 0.2 0.2 0.2
+Kd 0.78 0.15 0.15
+Ks 0.5 0.5 0.5
+Ns 60
+d 1
+illum 2
+
+newmtl Mat_BrakeDisc
+Ka 0.2 0.2 0.2
+Kd 0.65 0.66 0.68
+Ks 0.7 0.7 0.7
+Ns 100
+d 1
+illum 2
+
+newmtl Mat_CarPaint
+Ka 0.2 0.2 0.2
+Kd 0.43 0.30 0.54
+Ks 0.5 0.5 0.5
+Ns 90
+d 1
+illum 2
+
+newmtl Mat_CarPaint_Dark
+Ka 0.2 0.2 0.2
+Kd 0.22 0.16 0.28
+Ks 0.3 0.3 0.3
+Ns 50
+d 1
+illum 2
+
+newmtl Mat_Chrome
+Ka 0.2 0.2 0.2
+Kd 0.85 0.86 0.88
+Ks 0.95 0.95 0.95
+Ns 220
+d 1
+illum 2
+
+newmtl Mat_EngineMetal
+Ka 0.2 0.2 0.2
+Kd 0.55 0.56 0.58
+Ks 0.6 0.6 0.6
+Ns 70
+d 1
+illum 2
+
+newmtl Mat_Glass_Tinted
+Ka 0.2 0.2 0.2
+Kd 0.22 0.50 0.85
+Ks 0.9 0.9 0.9
+Ns 150
+d 0.55
+illum 2
+
+newmtl Mat_Gold
+Ka 0.2 0.2 0.2
+Kd 0.85 0.70 0.25
+Ks 0.9 0.8 0.4
+Ns 140
+d 1
+illum 2
+
+newmtl Mat_HeadlightLens
+Ka 0.2 0.2 0.2
+Kd 0.95 0.97 1.00
+Ks 0.9 0.9 0.9
+Ns 180
+d 0.45
+illum 2
+
+newmtl Mat_Interior_Dark
+Ka 0.2 0.2 0.2
+Kd 0.15 0.15 0.17
+Ks 0.1 0.1 0.1
+Ns 25
+d 1
+illum 2
+
+newmtl Mat_Plastic_Black
+Ka 0.2 0.2 0.2
+Kd 0.08 0.08 0.09
+Ks 0.1 0.1 0.1
+Ns 20
+d 1
+illum 2
+
+newmtl Mat_Radiator
+Ka 0.2 0.2 0.2
+Kd 0.35 0.35 0.37
+Ks 0.4 0.4 0.4
+Ns 40
+d 1
+illum 2
+
+newmtl Mat_RoofRack
+Ka 0.2 0.2 0.2
+Kd 0.14 0.14 0.16
+Ks 0.4 0.4 0.4
+Ns 50
+d 1
+illum 2
+
+newmtl Mat_Seat_Fabric
+Ka 0.2 0.2 0.2
+Kd 0.25 0.26 0.28
+Ks 0.08 0.08 0.08
+Ns 15
+d 1
+illum 2
+
+newmtl Mat_TaillightRed
+Ka 0.2 0.2 0.2
+Kd 0.85 0.08 0.08
+Ks 0.8 0.8 0.8
+Ns 120
+d 0.75
+illum 2
+
+newmtl Mat_TaillightWhite
+Ka 0.2 0.2 0.2
+Kd 0.90 0.90 0.92
+Ks 0.8 0.8 0.8
+Ns 120
+d 0.7
+illum 2
+
+newmtl Mat_TireRubber
+Ka 0.2 0.2 0.2
+Kd 0.12 0.12 0.13
+Ks 0.05 0.05 0.05
+Ns 15
+d 1
+illum 2
+
+newmtl Mat_WheelRim
+Ka 0.2 0.2 0.2
+Kd 0.18 0.18 0.20
+Ks 0.6 0.6 0.6
+Ns 80
+d 1
+illum 2

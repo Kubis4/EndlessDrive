@@ -15,8 +15,10 @@ import sk.kubis.endlessdrive.domain.model.SedanSpec
 import sk.kubis.endlessdrive.domain.model.DebugOptions
 import sk.kubis.endlessdrive.game.GameEngine
 import sk.kubis.endlessdrive.game.car.Car
+import kotlin.math.atan
 import kotlin.math.exp
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sin
 
 class FuelAndSuspensionTest {
@@ -133,8 +135,14 @@ class FuelAndSuspensionTest {
         assertFalse(engine.headlightsOn)
         assertFalse(engine.highBeamsOn)
 
-        val lowBeamCar = Car().apply { batteryCharge = 1f }
-        val highBeamCar = Car().apply { batteryCharge = 1f }
+        val lowBeamCar = Car().apply {
+            mount(ComponentSlot.BATTERY, ItemStack(ItemCatalog.BATTERY.id, ComponentCondition.NEW, 1f))
+            batteryCharge = 1f
+        }
+        val highBeamCar = Car().apply {
+            mount(ComponentSlot.BATTERY, ItemStack(ItemCatalog.BATTERY.id, ComponentCondition.NEW, 1f))
+            batteryCharge = 1f
+        }
         repeat(60) {
             lowBeamCar.tickElectrics(1f / 60f, headlightsOn = true)
             highBeamCar.tickElectrics(
@@ -245,22 +253,27 @@ class FuelAndSuspensionTest {
                 engine.advance(1f / 30f)
                 val car = engine.car
                 val wb = SedanSpec.wheelOffsetX
+                val hx = kotlin.math.cos(car.planar.heading)
+                val hz = kotlin.math.sin(car.planar.heading)
+                fun surface(offset: Float): Float = sk.kubis.endlessdrive.game.world.World3D.height(
+                    engine, car.x+offset*hx, car.planar.z+offset*hz
+                )
                 val rearBody = car.y - wb * sin(car.pitch)
                 val frontBody = car.y + wb * sin(car.pitch)
                 val floorOffset = car.rideHeight - car.suspTravel + 0.01f
                 assertTrue(
                     "seed=$seed zadná náprava prenikla pri ${car.speedKmh} km/h",
-                    rearBody >= engine.segment.heightAtWorld(car.x - wb) + floorOffset - 0.002f
+                    rearBody >= surface(-wb) + floorOffset - 0.002f
                 )
                 assertTrue(
                     "seed=$seed predná náprava prenikla pri ${car.speedKmh} km/h",
-                    frontBody >= engine.segment.heightAtWorld(car.x + wb) + floorOffset - 0.002f
+                    frontBody >= surface(wb) + floorOffset - 0.002f
                 )
                 for (offset in floatArrayOf(-wb * 0.5f, 0f, wb * 0.5f)) {
                     val bodyPoint = car.y + offset * sin(car.pitch)
                     assertTrue(
                         "seed=$seed podlaha prenikla do cesty pri ${car.speedKmh} km/h",
-                        bodyPoint >= engine.segment.heightAtWorld(car.x + offset) +
+                        bodyPoint >= surface(offset) +
                             GameConfig.ROAD_CHASSIS_CLEARANCE - 0.003f
                     )
                 }
@@ -282,6 +295,125 @@ class FuelAndSuspensionTest {
     }
 
     @Test
+    fun hardBrakingDoesNotPitchTheNoseTooFar() {
+        val car = completeCar()
+        car.engineRunning = true
+        car.snapToGround(0f)
+        car.speed = 28f
+        var minPitch = 0f
+        repeat(90) {
+            car.applyDrive(1f / 60f, 0f, 1f, 0f, 0f, 0f)
+            minPitch = min(minPitch, car.pitch)
+        }
+        assertTrue(
+            "brzdenie naklonilo auto priveľmi dopredu: $minPitch",
+            minPitch > -GameConfig.BRAKE_DIVE_PITCH_LIMIT - 0.02f
+        )
+        assertTrue(
+            "zadná náprava ostala vo vzduchu pri brzde, compression=${car.rearCompression}",
+            car.rearCompression > 0.03f
+        )
+    }
+
+    @Test
+    fun coastingDownhillFollowsTheRoadPitchWithoutBrake() {
+        val car = completeCar()
+        car.mount(
+            ComponentSlot.SUSPENSION,
+            ItemStack(ItemCatalog.SUSPENSION.id, ComponentCondition.USED, 1f)
+        )
+        car.engineRunning = true
+        val slope = -0.22f
+        val roadPitch = atan(slope)
+        car.speed = 18f
+        car.snapToGround(0f, slope)
+        var worstDive = 0f
+        var minRear = Float.POSITIVE_INFINITY
+        repeat(180) {
+            car.applyDriveSlope(1f / 60f, 0.1f, 0f, 0f, slope, 0f)
+            if (car.grounded) {
+                worstDive = max(worstDive, roadPitch - car.pitch)
+                minRear = min(minRear, car.rearCompression)
+            }
+        }
+        println("DOWNHILL coast dive=$worstDive rear=$minRear pitch=${car.pitch} road=$roadPitch")
+        assertTrue(
+            "z kopca bez brzdy nos klesol o $worstDive rad pod cestu",
+            worstDive < 0.06f + 0.005f
+        )
+        assertTrue(
+            "zadná náprava ostala vo vzduchu z kopca, compression=$minRear",
+            minRear > 0.02f
+        )
+    }
+
+    @Test
+    fun wornSuspensionKeepsBothAxlesPlantedWhenParked() {
+        val car = completeCar()
+        car.mount(
+            ComponentSlot.SUSPENSION,
+            ItemStack(ItemCatalog.SUSPENSION.id, ComponentCondition.CRITICAL, 0.26f)
+        )
+        car.engineRunning = false
+        car.speed = 0f
+        car.snapToGround(0f)
+        assertTrue(
+            "ojazdené pruženie zdvihlo zadok pri snap, compression=${car.rearCompression} pitch=${car.pitch}",
+            car.rearCompression > 0.02f
+        )
+        assertTrue(
+            "parkovisko: nos priveľmi dole pitch=${car.pitch}",
+            car.pitch > -GameConfig.COAST_DIVE_PITCH_LIMIT - 0.01f
+        )
+        repeat(120) { car.applyDrive(1f / 60f, 0f, 0f, 0f, 0f, 0f) }
+        assertTrue("po idle musí držať cesta", car.grounded)
+        assertTrue(
+            "ojazdené pruženie zdvihlo zadok v kľude, compression=${car.rearCompression} pitch=${car.pitch}",
+            car.rearCompression > 0.02f
+        )
+        assertTrue(
+            "v kľude nos priveľmi dole pitch=${car.pitch}",
+            kotlin.math.abs(car.pitch) < 0.08f
+        )
+    }
+
+    @Test
+    fun reversingDoesNotDiveTheNose() {
+        val car = completeCar()
+        car.engineRunning = true
+        car.snapToGround(0f)
+        var minPitch = 1f
+        repeat(180) {
+            car.applyDrive(1f / 60f, 0f, 1f, 0f, 0f, 0f)
+            minPitch = min(minPitch, car.pitch)
+        }
+        println("REVERSE pitch=$minPitch speed=${car.speed * 3.6f} x=${car.x}")
+        assertTrue("cúvanie musí auto posunúť dozadu, x=${car.x}", car.x < -2f)
+        assertTrue(
+            "cúvanie naklonilo nos priveľmi dopredu: $minPitch",
+            minPitch > -GameConfig.REVERSE_PITCH_LIMIT - 0.02f
+        )
+    }
+
+    @Test
+    fun modestSpeedStopsInAShortDistance() {
+        val car = completeCar()
+        car.engineRunning = true
+        car.snapToGround(0f)
+        car.speed = 8f
+        val start = car.x
+        var frames = 0
+        while (car.speed > 0.4f && frames < 240) {
+            car.applyDrive(1f / 60f, 0f, 1f, 0f, 0f, 0f)
+            frames++
+        }
+        val dist = car.x - start
+        println("BRAKE from 29 km/h: ${dist}m in ${frames / 60f}s v=${car.speed}")
+        assertTrue("auto sa musí zastaviť, ostalo ${car.speed}", car.speed <= 0.4f)
+        assertTrue("brzdná dráha z 29 km/h je ${dist} m", dist < 6.5f)
+    }
+
+    @Test
     fun legendaryEngineCanRunWellPastEightyKmh() {
         val car = completeCar()
         car.mount(ComponentSlot.ENGINE, ItemStack(ItemCatalog.ENGINE_C.id, ComponentCondition.NEW, 1f))
@@ -293,5 +425,24 @@ class FuelAndSuspensionTest {
         car.snapToGround(0f)
         repeat(1800) { car.applyDrive(1f / 60f, 1f, 0f, 0f, 0f, 0f) }
         assertTrue("230 hp motor ide iba ${car.speedKmh} km/h", car.speedKmh > 105f)
+    }
+
+    @Test
+    fun missingSuspensionIsWorseThanAWornFittedOne() {
+        val worn = completeCar()
+        worn.mount(
+            ComponentSlot.SUSPENSION,
+            ItemStack(ItemCatalog.SUSPENSION.id, ComponentCondition.CRITICAL, 0.04f)
+        )
+        val missing = completeCar()
+        missing.parts.remove(ComponentSlot.SUSPENSION)
+        assertTrue(
+            "chýbajúce pruženie nesmie byť lepšie ako 4 %",
+            missing.suspensionMul < worn.suspensionMul
+        )
+        assertTrue(missing.suspensionMul <= GameConfig.SUSP_MISSING_MUL)
+        val wornGrip = worn.axleSurfaceMu(ComponentSlot.TIRE_FRONT)
+        val missingGrip = missing.axleSurfaceMu(ComponentSlot.TIRE_FRONT)
+        assertTrue("bez pruženia má auto držať horšie", missingGrip < wornGrip)
     }
 }

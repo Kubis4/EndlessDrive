@@ -29,10 +29,7 @@ object WorldGenerator {
         listOf(
             BranchStyle.SAFE_RURAL,
             BranchStyle.SAFE_RURAL,
-            BranchStyle.INDUSTRIAL,
-            BranchStyle.INDUSTRIAL,
-            BranchStyle.DESERT,
-            BranchStyle.SHORTCUT_RISK,
+            BranchStyle.FOREST_ALIVE,
             BranchStyle.FOREST_ALIVE,
             BranchStyle.FOREST
         )
@@ -100,19 +97,12 @@ object WorldGenerator {
     private fun pickPaving(
         rng: SeededRandom,
         style: BranchStyle,
-        tripDistance: Float
+        @Suppress("UNUSED_PARAMETER") tripDistance: Float
     ): RoadPaving {
-        if (style == BranchStyle.ALPINE) {
+        // Snehová vozovka len tam, kde je aj zimné pozadie (alpínske kopce).
+        // Močiar, jeseň, púšť a vidiek nesmú dostať snehový asfalt.
+        if (style.snowy) {
             return if (rng.chance(0.58f)) RoadPaving.SNOW else RoadPaving.PACKED_SNOW
-        }
-        // Zima je odmena za dlhú jazdu – čím ďalej, tým väčšia šanca na sneh.
-        // Na púšti a v piesočnej búrke nesneží, tam vládne piesok.
-        if (!style.arid && tripDistance >= GameConfig.SNOW_START_M) {
-            val winterChance = (MathX.growth(tripDistance - GameConfig.SNOW_START_M, 30_000f) * 0.55f)
-                .coerceAtMost(0.62f)
-            if (rng.nextFloat() < winterChance) {
-                return if (rng.chance(0.45f)) RoadPaving.PACKED_SNOW else RoadPaving.SNOW
-            }
         }
         val roll = rng.nextFloat()
         return when (style) {
@@ -174,7 +164,8 @@ object WorldGenerator {
     ): RoadSegment {
         val rng = SeededRandom(plan.seed)
         val sections = layoutSections(plan)
-        // Už žiadne rázcestie: región pozná jediné plynulé pokračovanie.
+        // Plány oboch vetiev sú lacné a deterministické. Hotové segmenty sa
+        // pripravia až neskôr po jednom, aby križovatka nespôsobila frame spike.
         val choices = buildContinuation(
             rng, plan.seed, plan.style, tripDistance + plan.length, isTutorial
         )
@@ -227,9 +218,9 @@ object WorldGenerator {
     ): List<RoadFeature> {
         if (isTutorial) return listOf(
             RoadFeature.STRAIGHT,
-            RoadFeature.HILLS,
             RoadFeature.STRAIGHT,
-            RoadFeature.HILLS,
+            RoadFeature.STRAIGHT,
+            RoadFeature.STRAIGHT,
             RoadFeature.STRAIGHT,
             RoadFeature.STRAIGHT
         )
@@ -295,7 +286,8 @@ object WorldGenerator {
                     roll < 0.68f -> if (earlySoft > 0.4f) RoadFeature.SWITCHBACK else RoadFeature.RAVINE
                     roll < 0.82f -> RoadFeature.SWITCHBACK
                     roll < 0.92f -> RoadFeature.HILLS
-                    else -> RoadFeature.BROKEN
+                    roll < 0.96f -> RoadFeature.BROKEN
+                    else -> RoadFeature.BRIDGE
                 }
                 BranchStyle.SHORTCUT_RISK -> when {
                     roll < 0.10f + earlySoft * 0.04f -> RoadFeature.STRAIGHT
@@ -390,7 +382,23 @@ object WorldGenerator {
         val garageX = flattestLocalX(segment, 480f, 620f)
             .takeUnless { it.isNaN() } ?: flattestLocalX(segment, 380f, 780f)
         if (houseX.isNaN() || garageX.isNaN()) return
-        segment.buildings += makeBuilding(rng, BuildingType.HOUSE, houseX, tripDistance, segment.style)
+        val house = makeBuilding(rng, BuildingType.HOUSE, houseX, tripDistance, segment.style)
+        // Predné sedadlo je permanentne vo vraku – v dome hľadáme iné diely.
+        // Prvá jazda nesmie rozhodnúť typom náhodne namontovaného motora.
+        // Jeden čistý kanister z oboch palív zaručí, že hráč pochopí voľbu
+        // správneho paliva a zároveň sa dostane k prvému relé.
+        listOf(ItemCatalog.FUEL_CAN, ItemCatalog.DIESEL_CAN).forEach { fuel ->
+            if (house.loot.none { it.defId == fuel.id }) {
+                house.loot += ItemStack(
+                    defId = fuel.id,
+                    condition = ComponentCondition.NEW,
+                    health = 1f,
+                    count = 1,
+                    purity = 1f
+                )
+            }
+        }
+        segment.buildings += house
         val garage = makeBuilding(rng, BuildingType.GARAGE, garageX, tripDistance, segment.style)
         // Prvá garáž je ochutnávka, nie katalóg. Jeden náhodný pár plechu a
         // jedna užitočná vec stačia; ďalšie diely si hráč hľadá na ceste.
@@ -426,7 +434,10 @@ object WorldGenerator {
 
         // Na začiatku hry sporadicky, neskôr bežná súčasť cesty.
         val density = 0.4f + MathX.growth(tripDistance, 30_000f) * 1.1f
-        val count = (plan.length / 260f * density).toInt().coerceIn(0, 6)
+        // Zimný kraj: ľad a brečka majú pokrývať úseky, nie len občasný flak.
+        val winterBoost = if (plan.paving.winter) 1.55f else 1f
+        val cap = if (plan.paving.winter) 8 else 6
+        val count = (plan.length / 260f * density * winterBoost).toInt().coerceIn(0, cap)
 
         repeat(count) {
             val gap = 70f + rng.nextFloat() * 190f
@@ -457,7 +468,7 @@ object WorldGenerator {
     private fun surfacePatchLength(rng: SeededRandom, surface: RoadSurface): Float = when (surface) {
         RoadSurface.SAND -> rng.nextFloat(36f, 74f)
         RoadSurface.MUD -> rng.nextFloat(32f, 66f)
-        RoadSurface.ICE, RoadSurface.SLUSH -> rng.nextFloat(28f, 58f)
+        RoadSurface.ICE, RoadSurface.SLUSH -> rng.nextFloat(36f, 72f)
         RoadSurface.GRAVEL -> rng.nextFloat(24f, 54f)
         RoadSurface.WATER -> rng.nextFloat(32f, 48f)
         RoadSurface.ASPHALT -> rng.nextFloat(24f, 48f)
@@ -490,17 +501,18 @@ object WorldGenerator {
         // Voda bola zdrojom nečitateľných kolízií a spikeov pri mostoch.
         // Roklina ostáva náročná, ale ako stabilné bahno.
         if (standing && feature == RoadFeature.RAVINE && rng.nextFloat() < 0.75f) {
-            return RoadSurface.MUD
+            return if (rng.chance(0.38f)) RoadSurface.WATER else RoadSurface.MUD
         }
         val roll = rng.nextFloat()
         val picked = when (style) {
             BranchStyle.SAFE_RURAL -> when {
-                roll < 0.42f -> RoadSurface.MUD
+                standing && roll < 0.18f -> RoadSurface.WATER
                 roll < 0.70f -> RoadSurface.MUD
                 else -> RoadSurface.GRAVEL
             }
             // Močiar drží tmavé bahno; štrk je len spevnený krátky úsek.
             BranchStyle.FOREST -> when {
+                standing && roll < 0.20f -> RoadSurface.WATER
                 roll < 0.86f -> RoadSurface.MUD
                 else -> RoadSurface.GRAVEL
             }
@@ -509,6 +521,7 @@ object WorldGenerator {
                 else -> RoadSurface.GRAVEL
             }
             BranchStyle.INDUSTRIAL -> when {
+                standing && roll < 0.16f -> RoadSurface.WATER
                 roll < 0.45f -> RoadSurface.GRAVEL
                 roll < 0.72f -> RoadSurface.MUD
                 else -> RoadSurface.MUD
@@ -544,7 +557,11 @@ object WorldGenerator {
             for (i in 0 until plan.buildingCount) {
                 val latest = usableEnd - (plan.buildingCount - 1 - i) * GameConfig.BUILDING_MIN_SPACING
                 if (cursor >= latest) break
-                val windowEnd = latest.coerceAtLeast(cursor + 1f)
+                val windowEnd = if (tripDistance < Journey.goals.first().distanceKm * 1000f && i == 0) {
+                    minOf(latest, cursor + 650f).coerceAtLeast(cursor + 1f)
+                } else {
+                    latest.coerceAtLeast(cursor + 1f)
+                }
                 val lx = flattestLocalX(segment, cursor, windowEnd)
                 if (lx.isNaN()) {
                     // Celé okno padlo na most – budovu preskočíme a posunieme sa ďalej.
@@ -553,7 +570,11 @@ object WorldGenerator {
                 }
                 segment.buildings += makeBuilding(
                     rng,
-                    weightedBuilding(rng, plan.style),
+                    if (tripDistance < Journey.goals.first().distanceKm * 1000f && i == 0) {
+                        BuildingType.GAS_STATION
+                    } else {
+                        weightedBuilding(rng, plan.style)
+                    },
                     lx,
                     tripDistance,
                     plan.style
@@ -562,6 +583,63 @@ object WorldGenerator {
             }
         }
         placeRelays(rng, plan, segment, tripDistance)
+        placeServiceShops(rng, plan, segment, tripDistance)
+    }
+
+    /**
+     * Dielňa a lakovačka nie sú v rulete budov – stáli by príliš často.
+     * Stoja na míľnikoch: dielňa každých ~20 km od 20. km, lakovačka
+     * rovnakým rytmom od 30. km (posunuté, aby sa nestretli).
+     */
+    private fun placeServiceShops(
+        rng: SeededRandom,
+        plan: SegmentPlan,
+        segment: RoadSegment,
+        tripDistance: Float
+    ) {
+        val from = segment.worldOrigin
+        val to = segment.worldOrigin + plan.length - GameConfig.JUNCTION_ZONE - 40f
+        if (to <= from) return
+
+        fun place(type: BuildingType, first: Float, spacing: Float) {
+            if (spacing <= 1f || first > to) return
+            // Preskoč míľniky pred týmto úsekom, inak by sa dielňa na 40 km
+            // nikdy nepoložila (cyklus by skončil skôr, než by na ňu došiel).
+            var slot = 0
+            if (first < from) {
+                slot = kotlin.math.ceil(((from - first) / spacing).toDouble()).toInt().coerceAtLeast(0)
+            }
+            var at = first + slot * spacing
+            var guard = 0
+            while (at <= to + 0.5f && guard < 64) {
+                guard++
+                if (at >= from - 0.5f) {
+                    val localX = relayLocalX(segment, (at - from).coerceAtLeast(0f), to - from)
+                    if (!localX.isNaN()) {
+                        val blocked = segment.buildings.any {
+                            kotlin.math.abs(it.localX - localX) < GameConfig.BUILDING_MIN_SPACING * 0.55f
+                        }
+                        if (!blocked) {
+                            segment.buildings += makeBuilding(
+                                rng, type, localX, tripDistance, plan.style
+                            )
+                        }
+                    }
+                }
+                at += spacing
+            }
+        }
+
+        place(
+            BuildingType.AUTO_SHOP,
+            GameConfig.AUTO_SHOP_FIRST_M,
+            GameConfig.AUTO_SHOP_SPACING_M
+        )
+        place(
+            BuildingType.PAINT_SHOP,
+            GameConfig.PAINT_SHOP_FIRST_M,
+            GameConfig.PAINT_SHOP_SPACING_M
+        )
     }
 
     /**
@@ -655,12 +733,22 @@ object WorldGenerator {
             depot.pumpFuelL = depotFuel * 0.55f
             depot.pumpDieselL = depotFuel * 0.45f
             depot.pumpPurity = rng.nextFloat(0.88f, 1f)
-            val tier3 = listOf(ItemCatalog.ENGINE_C, ItemCatalog.RADIATOR_HD, ItemCatalog.FUEL_TANK_LONG)
-            val solid = listOf(
-                ItemCatalog.TIRE, ItemCatalog.TIRE_OFFROAD, ItemCatalog.BATTERY_GOOD,
-                ItemCatalog.BRAKES_GOOD, ItemCatalog.RADIATOR_GOOD, ItemCatalog.SUSPENSION_GOOD,
-                ItemCatalog.ENGINE_B, ItemCatalog.FUEL_TANK_BIG, ItemCatalog.DRIVE_AWD
-            )
+            val tier3 = buildList {
+                add(ItemCatalog.RADIATOR_HD)
+                add(ItemCatalog.FUEL_TANK_LONG)
+                // Najvýkonnejší motor patrí až k štvrtému relayu.
+                if (at >= 35_000f) add(ItemCatalog.ENGINE_C)
+            }
+            val solid = buildList {
+                addAll(listOf(
+                    ItemCatalog.TIRE, ItemCatalog.TIRE_OFFROAD, ItemCatalog.BATTERY_GOOD,
+                    ItemCatalog.BRAKES_GOOD, ItemCatalog.RADIATOR_GOOD,
+                    ItemCatalog.SUSPENSION_GOOD, ItemCatalog.FUEL_TANK_BIG
+                ))
+                if (at >= 5_000f) add(ItemCatalog.ENGINE_D)
+                if (at >= 10_000f) add(ItemCatalog.ENGINE_B)
+                if (at >= 12_000f) add(ItemCatalog.DRIVE_AWD)
+            }
             val depotIds = depot.loot.mapTo(HashSet()) { it.defId }
             repeat(2 + rng.nextInt(2)) {
                 val available = solid.filter { it.id !in depotIds }
@@ -805,9 +893,11 @@ object WorldGenerator {
             BranchStyle.ALPINE.unlockDistance,
             GameConfig.SNOW_START_M
         )
-        // Nie je to aktivita ani udalosť na ceste: jediné pokračovanie regiónu
-        // berie suseda zo zmysluplného poolu. Les ide do vidieka / priemyslu /
-        // pustatiny / púšte, nie do druhého variantu lesa.
+        // Po ~20 km bez hôr by sneh mal prísť spoľahlivejšie – inak 40 km
+        // bez reťazí/snehu je bežný výsledok nízkej šance DESERT_DUSK/INDUSTRIAL.
+        val snowStarved = atDistance >= GameConfig.SNOW_START_M + 9_000f
+        // Prvá vetva berie suseda zo zmysluplného poolu. Les ide do vidieka /
+        // priemyslu / pustatiny / púšte, nie do druhého variantu lesa.
         val next = if (tutorial) {
             when (current) {
                 BranchStyle.SAFE_RURAL -> BranchStyle.FOREST
@@ -831,7 +921,9 @@ object WorldGenerator {
                     BranchStyle.SHORTCUT_RISK, BranchStyle.SHORTCUT_RISK,
                     BranchStyle.INDUSTRIAL, BranchStyle.DESERT, BranchStyle.SAFE_RURAL
                 )
-                BranchStyle.SHORTCUT_RISK -> listOf(
+                BranchStyle.SHORTCUT_RISK -> if (alpineReady && rng.chance(if (snowStarved) 0.58f else 0.24f)) {
+                    listOf(BranchStyle.ALPINE)
+                } else listOf(
                     BranchStyle.DESERT_DUSK, BranchStyle.DESERT_DUSK,
                     BranchStyle.INDUSTRIAL, BranchStyle.FOREST_ALIVE, BranchStyle.DUST_STORM
                 )
@@ -842,7 +934,7 @@ object WorldGenerator {
                 BranchStyle.SANDSTORM -> listOf(
                     BranchStyle.DESERT_DUSK, BranchStyle.DESERT_DUSK, BranchStyle.SHORTCUT_RISK
                 )
-                BranchStyle.DESERT_DUSK -> if (alpineReady && rng.chance(0.42f)) {
+                BranchStyle.DESERT_DUSK -> if (alpineReady && rng.chance(if (snowStarved) 0.88f else 0.58f)) {
                     listOf(BranchStyle.ALPINE)
                 } else listOf(
                     BranchStyle.SHORTCUT_RISK, BranchStyle.INDUSTRIAL, BranchStyle.FOREST_ALIVE
@@ -850,21 +942,46 @@ object WorldGenerator {
                 BranchStyle.ALPINE -> listOf(
                     BranchStyle.INDUSTRIAL, BranchStyle.FOREST, BranchStyle.SAFE_RURAL
                 )
-                BranchStyle.INDUSTRIAL -> if (alpineReady && rng.chance(0.18f)) {
+                BranchStyle.INDUSTRIAL -> if (alpineReady && rng.chance(if (snowStarved) 0.72f else 0.36f)) {
                     listOf(BranchStyle.ALPINE)
                 } else listOf(
                     BranchStyle.DUST_STORM, BranchStyle.SHORTCUT_RISK,
                     BranchStyle.FOREST_ALIVE, BranchStyle.DESERT
                 )
-                BranchStyle.DUST_STORM -> listOf(
+                BranchStyle.DUST_STORM -> if (alpineReady && snowStarved && rng.chance(0.40f)) {
+                    listOf(BranchStyle.ALPINE)
+                } else listOf(
                     BranchStyle.INDUSTRIAL, BranchStyle.DESERT_DUSK, BranchStyle.SHORTCUT_RISK
                 )
             }
             val distinct = pool.filter { !it.biome.sharesSceneryWith(current.biome) }
             rng.pick(if (distinct.isEmpty()) pool else distinct)
         }
-        val nextSeed = parentSeed xor (next.ordinal + 1L) * MIX xor atDistance.toRawBits().toLong()
-        return listOf(BranchChoice(id = 0, plan = planSegment(nextSeed, next, atDistance)))
+        val unlockedAlternatives = BranchStyle.entries.filter { candidate ->
+            candidate != next &&
+                atDistance >= candidate.unlockDistance &&
+                !candidate.biome.sharesSceneryWith(current.biome)
+        }
+        val alternativePool = unlockedAlternatives.filter {
+            !it.biome.sharesSceneryWith(next.biome)
+        }.ifEmpty { unlockedAlternatives }
+        val alternative = if (tutorial) {
+            alternativePool.minByOrNull { it.fuelDrainMul + it.bumpiness }
+        } else if (alternativePool.isNotEmpty()) {
+            pickWeighted(rng, alternativePool)
+        } else null
+
+        fun choice(id: Int, style: BranchStyle): BranchChoice {
+            val salt = (id + 1L) * 0x632BE59BD9B4E019L
+            val nextSeed = parentSeed xor (style.ordinal + 1L) * MIX xor
+                atDistance.toRawBits().toLong() xor salt
+            return BranchChoice(id = id, plan = planSegment(nextSeed, style, atDistance))
+        }
+
+        return buildList {
+            add(choice(0, next))
+            alternative?.let { add(choice(1, it)) }
+        }
     }
 
     /** Ruleta podľa [BranchStyle.pickWeight] – bežné cesty padajú častejšie než búrka. */
@@ -882,50 +999,44 @@ object WorldGenerator {
 
     private fun weightedBuilding(rng: SeededRandom, style: BranchStyle): BuildingType {
         val roll = rng.nextFloat()
+        // Servis (dielňa / lakovačka) ide mimo rulety – [placeServiceShops].
         return when (style) {
             BranchStyle.SAFE_RURAL -> when {
-                roll < 0.45f -> BuildingType.HOUSE
-                roll < 0.75f -> BuildingType.GARAGE
-                roll < 0.92f -> BuildingType.GAS_STATION
-                else -> BuildingType.AUTO_SHOP
+                roll < 0.48f -> BuildingType.HOUSE
+                roll < 0.80f -> BuildingType.GARAGE
+                else -> BuildingType.GAS_STATION
             }
             // V lese stoja skôr chaty a kôlne než pumpy.
             BranchStyle.FOREST, BranchStyle.FOREST_ALIVE -> when {
-                roll < 0.52f -> BuildingType.HOUSE
-                roll < 0.82f -> BuildingType.GARAGE
-                roll < 0.94f -> BuildingType.GAS_STATION
-                else -> BuildingType.AUTO_SHOP
+                roll < 0.55f -> BuildingType.HOUSE
+                roll < 0.86f -> BuildingType.GARAGE
+                else -> BuildingType.GAS_STATION
             }
             // Na púšti prežije len to, čo stálo pri ceste – stanica a servis.
             BranchStyle.DESERT, BranchStyle.DESERT_DUSK, BranchStyle.SANDSTORM -> when {
-                roll < 0.18f -> BuildingType.HOUSE
-                roll < 0.42f -> BuildingType.GARAGE
-                roll < 0.76f -> BuildingType.GAS_STATION
-                else -> BuildingType.AUTO_SHOP
+                roll < 0.22f -> BuildingType.HOUSE
+                roll < 0.52f -> BuildingType.GARAGE
+                else -> BuildingType.GAS_STATION
             }
             // Prachová búrka stojí nad mestom – domov je tu najviac zo všetkého.
             BranchStyle.DUST_STORM -> when {
-                roll < 0.46f -> BuildingType.HOUSE
-                roll < 0.68f -> BuildingType.GARAGE
-                roll < 0.88f -> BuildingType.GAS_STATION
-                else -> BuildingType.AUTO_SHOP
+                roll < 0.50f -> BuildingType.HOUSE
+                roll < 0.74f -> BuildingType.GARAGE
+                else -> BuildingType.GAS_STATION
             }
             BranchStyle.INDUSTRIAL -> when {
-                roll < 0.15f -> BuildingType.HOUSE
-                roll < 0.40f -> BuildingType.GARAGE
-                roll < 0.70f -> BuildingType.GAS_STATION
-                else -> BuildingType.AUTO_SHOP
+                roll < 0.22f -> BuildingType.HOUSE
+                roll < 0.52f -> BuildingType.GARAGE
+                else -> BuildingType.GAS_STATION
             }
             BranchStyle.SHORTCUT_RISK -> when {
-                roll < 0.30f -> BuildingType.GARAGE
-                roll < 0.55f -> BuildingType.GAS_STATION
-                else -> BuildingType.AUTO_SHOP
+                roll < 0.42f -> BuildingType.GARAGE
+                else -> BuildingType.GAS_STATION
             }
             BranchStyle.ALPINE -> when {
-                roll < 0.18f -> BuildingType.HOUSE
-                roll < 0.54f -> BuildingType.GARAGE
-                roll < 0.76f -> BuildingType.GAS_STATION
-                else -> BuildingType.AUTO_SHOP
+                roll < 0.24f -> BuildingType.HOUSE
+                roll < 0.62f -> BuildingType.GARAGE
+                else -> BuildingType.GAS_STATION
             }
         }
     }
@@ -956,10 +1067,10 @@ object WorldGenerator {
         // Skutočná poloha budovy posúva rotáciu lootov aj progres rarity;
         // všetky stavby v jednom segmente už nedostanú ten istý „kilometer“.
         val lootDistance = distance + localX
-        val loot = if (type == BuildingType.WRECK) {
-            wreckLoot(rng, guaranteed = wreckLootOverride).toMutableList()
-        } else {
-            LootGenerator.generate(rng, type, lootDistance, style).toMutableList()
+        val loot = when (type) {
+            BuildingType.WRECK -> wreckLoot(rng, guaranteed = wreckLootOverride).toMutableList()
+            BuildingType.AUTO_SHOP, BuildingType.PAINT_SHOP -> mutableListOf()
+            else -> LootGenerator.generate(rng, type, lootDistance, style).toMutableList()
         }
         // Vyschnutý stojan neznamená prázdnu stanicu – v sklade ostal kanister.
         // Zájsť na benzínku a odísť bez paliva je najhorší možný záver zastávky.

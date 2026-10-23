@@ -32,8 +32,28 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.collectAsState
+import kotlinx.coroutines.flow.MutableStateFlow
 import sk.kubis.endlessdrive.domain.repository.PlayerProfile
+import sk.kubis.endlessdrive.playgames.PlayGamesState
 import sk.kubis.endlessdrive.playgames.PlayGamesService
+import sk.kubis.endlessdrive.ui.l10n.LocalCopy
+import sk.kubis.endlessdrive.ui.l10n.countryHint
+import sk.kubis.endlessdrive.ui.l10n.distance
+import sk.kubis.endlessdrive.ui.l10n.driver
+import sk.kubis.endlessdrive.ui.l10n.editProfile
+import sk.kubis.endlessdrive.ui.l10n.friendsHint
+import sk.kubis.endlessdrive.ui.l10n.leaderboardSubtitle
+import sk.kubis.endlessdrive.ui.l10n.personalBest
+import sk.kubis.endlessdrive.ui.l10n.playGamesConnecting
+import sk.kubis.endlessdrive.ui.l10n.playGamesSignIn
+import sk.kubis.endlessdrive.ui.l10n.playGamesSignedIn
+import sk.kubis.endlessdrive.ui.l10n.playGamesSignedInAs
+import sk.kubis.endlessdrive.ui.l10n.playGamesUnavailable
+import sk.kubis.endlessdrive.ui.l10n.player
+import sk.kubis.endlessdrive.ui.l10n.tabLabel
+import sk.kubis.endlessdrive.ui.l10n.time
+import sk.kubis.endlessdrive.ui.l10n.worldHint
 import sk.kubis.endlessdrive.ui.theme.GameColors
 import sk.kubis.endlessdrive.ui.theme.GamePanel
 
@@ -43,13 +63,17 @@ fun LeaderboardScreen(
     playGames: PlayGamesService? = null,
     activity: Activity? = null,
     onEditProfile: () -> Unit,
+    onAchievements: () -> Unit = {},
     onBack: () -> Unit
 ) {
+    val copy = LocalCopy.current
     var selectedTab by remember { mutableStateOf(LeaderboardTab.WORLD) }
-    val localEntry = remember(profile) {
+    val idlePlayGamesState = remember { MutableStateFlow(PlayGamesState()) }
+    val playGamesState by (playGames?.state ?: idlePlayGamesState).collectAsState()
+    val localEntry = remember(profile, copy.language) {
         LeaderboardEntry(
             rank = 1,
-            nickname = profile.nickname.ifBlank { "DRIVER" },
+            nickname = profile.nickname.ifBlank { copy.driver },
             countryCode = profile.countryCode,
             distanceKm = profile.bestDistanceKm,
             timeSeconds = profile.bestTimeSeconds,
@@ -59,27 +83,67 @@ fun LeaderboardScreen(
     var onlineEntries by remember { mutableStateOf<List<LeaderboardEntry>?>(null) }
     var onlineError by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(selectedTab, playGames, activity, profile.bestDistanceKm) {
+    LaunchedEffect(selectedTab, playGames, activity, playGamesState.signedIn) {
         onlineEntries = null
         onlineError = null
-        if (playGames != null && activity != null) {
-            playGames.loadScores(activity, selectedTab) { entries, error ->
-                onlineEntries = entries
-                onlineError = error
-            }
+        if (playGames == null || activity == null) return@LaunchedEffect
+        if (!playGamesState.signedIn) {
+            playGames.refreshAuth(activity)
+            return@LaunchedEffect
+        }
+        playGames.loadScores(activity, selectedTab) { entries, error ->
+            onlineEntries = entries
+            onlineError = error
         }
     }
     val displayEntries = onlineEntries?.takeIf { it.isNotEmpty() } ?: listOf(localEntry)
 
     Box(Modifier.fillMaxSize().background(GameColors.panelSoft), contentAlignment = Alignment.Center) {
         GamePanel(
-            title = "LEADERBOARD",
-            subtitle = "Distance first · time shown for every run",
+            title = copy.leaderboard,
+            subtitle = copy.leaderboardSubtitle,
             modifier = Modifier.widthIn(max = 760.dp).padding(20.dp),
             onClose = onBack
         ) {
+            Row(
+                Modifier.fillMaxWidth().background(Color(0x6610181D), RoundedCornerShape(8.dp)).padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val statusText = when {
+                    playGamesState.connecting -> copy.playGamesConnecting
+                    playGamesState.signedIn ->
+                        playGamesState.playerName?.takeIf { it.isNotBlank() }
+                            ?.let { copy.playGamesSignedInAs(it) }
+                            ?: copy.playGamesSignedIn
+                    else -> playGamesState.error ?: copy.playGamesUnavailable
+                }
+                Text(
+                    statusText,
+                    color = if (playGamesState.signedIn) GameColors.accent else GameColors.textDim,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                if (!playGamesState.signedIn && !playGamesState.connecting && activity != null && playGames != null) {
+                    Text(
+                        copy.playGamesSignIn,
+                        color = GameColors.accent,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clickable {
+                                playGames.signIn(activity) { ok ->
+                                    if (!ok) onlineError = playGames.state.value.error
+                                        ?: copy.playGamesUnavailable
+                                }
+                            }
+                            .padding(8.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.height(14.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                LeaderboardTab.entries.forEach { tab ->
+                listOf(LeaderboardTab.FRIENDS, LeaderboardTab.WORLD).forEach { tab ->
                     TabButton(tab, selectedTab == tab) { selectedTab = tab }
                 }
             }
@@ -88,9 +152,9 @@ fun LeaderboardScreen(
                 Modifier.fillMaxWidth().background(Color(0x6610181D), RoundedCornerShape(8.dp)).padding(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("${countryFlag(profile.countryCode)}  ${profile.nickname.ifBlank { "DRIVER" }}", color = GameColors.text, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Text("${countryFlag(profile.countryCode)}  ${profile.nickname.ifBlank { copy.driver }}", color = GameColors.text, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 Spacer(Modifier.weight(1f))
-                Text("PERSONAL BEST", color = GameColors.textDim, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text(copy.personalBest, color = GameColors.textDim, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(14.dp))
             LeaderboardHeader()
@@ -99,9 +163,9 @@ fun LeaderboardScreen(
                 Spacer(Modifier.height(10.dp))
                 Text(
                     onlineError ?: when (selectedTab) {
-                        LeaderboardTab.FRIENDS -> "Friends scores are loaded from Play Games when the service is connected."
-                        LeaderboardTab.COUNTRY -> "Country rankings need a country-aware backend; Play Games offers Friends and Public collections."
-                        LeaderboardTab.WORLD -> "World scores are loaded from the public Play Games leaderboard when configured."
+                        LeaderboardTab.FRIENDS -> copy.friendsHint
+                        LeaderboardTab.COUNTRY -> copy.countryHint
+                        LeaderboardTab.WORLD -> copy.worldHint
                     },
                     color = GameColors.textDim,
                     fontSize = 12.sp,
@@ -109,9 +173,20 @@ fun LeaderboardScreen(
                 )
             }
             Spacer(Modifier.height(12.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
-                    "EDIT PROFILE",
+                    copy.achievements,
+                    color = GameColors.accent,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable(onClick = onAchievements).padding(8.dp)
+                )
+                Text(
+                    copy.editProfile,
                     color = GameColors.accent,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
@@ -124,6 +199,7 @@ fun LeaderboardScreen(
 
 @Composable
 private fun RowScope.TabButton(tab: LeaderboardTab, selected: Boolean, onClick: () -> Unit) {
+    val copy = LocalCopy.current
     Box(
         Modifier.weight(1f)
             .background(if (selected) GameColors.accent else GameColors.panelHigh, RoundedCornerShape(8.dp))
@@ -133,7 +209,7 @@ private fun RowScope.TabButton(tab: LeaderboardTab, selected: Boolean, onClick: 
         contentAlignment = Alignment.Center
     ) {
         Text(
-            tab.label,
+            copy.tabLabel(tab),
             color = if (selected) Color(0xFF211B13) else GameColors.text,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
@@ -144,11 +220,12 @@ private fun RowScope.TabButton(tab: LeaderboardTab, selected: Boolean, onClick: 
 
 @Composable
 private fun LeaderboardHeader() {
+    val copy = LocalCopy.current
     Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("#", color = GameColors.textDim, fontSize = 10.sp, modifier = Modifier.width(28.dp))
-        Text("PLAYER", color = GameColors.textDim, fontSize = 10.sp, modifier = Modifier.weight(1f))
-        Text("DISTANCE", color = GameColors.textDim, fontSize = 10.sp, modifier = Modifier.width(82.dp))
-        Text("TIME", color = GameColors.textDim, fontSize = 10.sp, modifier = Modifier.width(72.dp))
+        Text(copy.player, color = GameColors.textDim, fontSize = 10.sp, modifier = Modifier.weight(1f))
+        Text(copy.distance, color = GameColors.textDim, fontSize = 10.sp, modifier = Modifier.width(82.dp))
+        Text(copy.time, color = GameColors.textDim, fontSize = 10.sp, modifier = Modifier.width(72.dp))
     }
 }
 
