@@ -54,6 +54,7 @@ static func piece(parent: Node3D, label: String, mesh: Mesh, pos: Vector3, mater
 	node.material_override = material
 	node.position = pos
 	parent.add_child(node, true)
+	preload("res://scripts/world_materials.gd").decorate(node)
 	return node
 
 

@@ -7,7 +7,8 @@ uniform float metalness = 0.15;
 void fragment() {
 	vec2 uv = fract(UV) * 0.49 + tile * 0.5 + vec2(0.005);
 	vec3 sample_color = texture(atlas, uv).rgb;
-	ALBEDO = mix(vec3(0.86), sample_color, 0.48) * tint.rgb;
+	vec3 color = mix(vec3(0.86), sample_color, 0.48) * tint.rgb;
+	ALBEDO = mix(vec3(dot(color, vec3(0.2126, 0.7152, 0.0722))), color, 0.72);
 	ROUGHNESS = 0.78;
 	METALLIC = metalness;
 }

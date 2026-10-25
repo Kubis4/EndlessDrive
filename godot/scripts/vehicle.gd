@@ -16,7 +16,9 @@ var heading := 0.0
 var wheel_angle := 0.0
 var throttle_input := 0.0
 var brake_input := 0.0
+var handbrake_input := 0.0
 var steering_input := 0.0
+var winch_pull_velocity := Vector3.ZERO
 var controls_enabled := true
 var boundary_recovery_enabled := true # Tests disable this to prove real collision, not clamping.
 var surface_info: Dictionary = {}
@@ -41,12 +43,18 @@ var _lateral_speed := 0.0
 var _reverse_time := 0.0
 var _reverse_engaged := false
 var _spin := 0.0
+var _road_spin := 0.0
 var _visual: Node3D
 var _wheels: Array[Dictionary] = []
 var _lights: Array[SpotLight3D] = []
 var _audio: AudioStreamPlayer3D
 var _touches: Dictionary = {}
 var _brake_materials: Array[StandardMaterial3D] = []
+var _reverse_materials: Array[StandardMaterial3D] = []
+var _reverse_lights: Array[SpotLight3D] = []
+var _last_light_mode := -1
+var _last_rear_mode := -1
+var _snorkel: Node3D
 var _visual_rest_position := Vector3.ZERO
 var _visual_rest_rotation := Vector3.ZERO
 var _last_compaction := Vector3.INF
@@ -58,7 +66,12 @@ var wheel_speed := 0.0
 var belly_contact := false
 var soil_resistance := 0.0
 var wheel_support := 1.0
+var rear_wheel_support := 1.0
 var _soil_timer := 0.0
+var body_pitch := 0.0
+var body_roll := 0.0
+var _physics_age := 0.0
+var _debris_contacts: Dictionary = {}
 
 
 func _ready() -> void:
@@ -66,6 +79,12 @@ func _ready() -> void:
 	floor_snap_length = 0.8
 	floor_max_angle = deg_to_rad(48)
 	floor_constant_speed = true
+	collision_mask |= 2
+	# A vehicle must never inherit the tangential/exit velocity of a rotating
+	# crate under a tyre. Floor collision and floor snapping remain active.
+	platform_floor_layers = 0
+	platform_wall_layers = 0
+	platform_on_leave = CharacterBody3D.PLATFORM_ON_LEAVE_DO_NOTHING
 	var collision := get_node_or_null("ChassisCollision") as CollisionShape3D
 	# Separate load-bearing wheels and rounded belly: the wheels can descend
 	# into soft soil until the physical chassis catches on the remaining ground.
@@ -93,6 +112,8 @@ func _ready() -> void:
 		_visual.name = "Visual"
 		add_child(_visual)
 	_prepare_model(_visual)
+	if not has_node("VisibilityOutline"):
+		add_child(preload("res://scenes/vehicle_visibility.tscn").instantiate())
 	_visual_rest_position = _visual.position
 	_visual_rest_rotation = _visual.rotation
 	for side: float in [-0.63, 0.63]:
@@ -110,6 +131,18 @@ func _ready() -> void:
 		if marker != null: marker.add_child(light)
 		else: add_child(light)
 		_lights.append(light)
+	var equipment := _visual.get_node_or_null("ExpeditionEquipment") as Node3D
+	if equipment == null:
+		equipment = load("res://scenes/vehicle_equipment.tscn").instantiate() as Node3D
+		_visual.add_child(equipment)
+	for label: String in ["ReverseLampL", "ReverseLampR"]:
+		var lamp := equipment.get_node(label) as MeshInstance3D
+		var lens := lamp.material_override.duplicate() as StandardMaterial3D
+		lamp.material_override = lens
+		_reverse_materials.append(lens)
+		_reverse_lights.append(lamp.get_node("GroundLight") as SpotLight3D)
+	_snorkel = equipment.get_node("Snorkel") as Node3D
+	_snorkel.visible = run != null and run.snorkel_installed
 	_audio = AudioStreamPlayer3D.new()
 	_audio.stream = DesertAudio.engine_loop()
 	_audio.max_distance = 35.0
@@ -124,19 +157,22 @@ func _ready() -> void:
 func _physics_process(dt: float) -> void:
 	if run == null or world == null:
 		return
+	_physics_age += dt
 	_ensure_safe_position()
 	var manual_throttle := _strength("throttle") if controls_enabled else 0.0
 	brake_input = _strength("brake") if controls_enabled else 0.0
+	handbrake_input = _strength("handbrake") if controls_enabled else 0.0
 	steering_input = (_strength("right") - _strength("left")) if controls_enabled else 0.0
 	_manual_age += dt
 	if manual_throttle > 0.02:
 		_last_manual_throttle = manual_throttle
 		_manual_age = 0.0
-	if brake_input > 0.0 or not run.engine_running or not controls_enabled or speed < -0.1:
+	if brake_input > 0.0 or handbrake_input > 0.0 or not run.engine_running or not controls_enabled or speed < -0.1:
 		cancel_cruise()
 	throttle_input = manual_throttle if manual_throttle > 0.02 else (cruise_amount if cruise_enabled else 0.0)
 	# The brake has priority even while W/touch throttle remains held.
 	throttle_input *= 1.0 - brake_input
+	throttle_input *= 1.0 - handbrake_input * 0.95
 	surface_info = world.terrain.sample(position.x, position.z)
 	var offroad := float(surface_info.road) < 0.5
 	var grip := run.tyre_grip(surface_info) * world.weather_grip
@@ -144,7 +180,7 @@ func _physics_process(dt: float) -> void:
 	var ahead := position + direction * (WHEELBASE * 0.5)
 	var behind := position - direction * (WHEELBASE * 0.5)
 	var slope := (world.height_at(ahead.x, ahead.z) - world.height_at(behind.x, behind.z)) / WHEELBASE
-	if throttle_input > 0.0 or brake_input == 0.0:
+	if throttle_input > 0.0 or brake_input == 0.0 or handbrake_input > 0.0:
 		_reverse_time = 0.0
 		_reverse_engaged = false
 	elif absf(speed) < 0.08:
@@ -155,18 +191,24 @@ func _physics_process(dt: float) -> void:
 		_reverse_time = 0.0
 	var acceleration := -GRAVITY * slope / (1.0 + slope * slope) if is_on_floor() else 0.0
 	var load_factor := 1.0 + run.cargo_weight() / 1000.0
-	var engine_force := 14.0 * run.power_factor() / load_factor
+	var engine_force := (9.0 if run.differential_locked else 8.0) * run.power_factor() / load_factor
+	var speed_limit := run.drive_speed_limit()
+	# Progressively reduce drive near the selected range limit. Braking and
+	# downhill gravity remain physical, without an instantaneous speed change.
+	var governor := 1.0 - smoothstep(speed_limit * 0.82, speed_limit, maxf(speed, 0.0))
 	var effort := brake_input if _reverse_engaged else throttle_input
 	var traction := _soil_traction(dt, grip, engine_force, effort if run.engine_running else 0.0)
-	if run.engine_running:
-		acceleration += minf(throttle_input * engine_force, traction) if float(surface_info.get("soil_softness", 0.0)) > 0.01 else throttle_input * minf(engine_force, traction)
+	if run.engine_running and is_on_floor():
+		acceleration += governor * (minf(throttle_input * engine_force, traction) if float(surface_info.get("soil_softness", 0.0)) > 0.01 else throttle_input * minf(engine_force, traction))
 		if _reverse_engaged and throttle_input == 0.0:
-			acceleration -= minf(brake_input * engine_force * (13.2 / 14.0), traction) if float(surface_info.get("soil_softness", 0.0)) > 0.01 else brake_input * minf(13.2 * run.power_factor() / load_factor, traction)
+			acceleration -= minf(brake_input * engine_force * 0.85, traction) if float(surface_info.get("soil_softness", 0.0)) > 0.01 else brake_input * minf(engine_force * 0.85, traction)
 	speed += acceleration * dt
 	# Fluid resistance grows with movement; it must not behave like a parking
 	# brake at zero speed. Weak vehicles can crawl out of a shallow ford.
-	var standing_drag := lerpf(0.6, 0.12, smoothstep(0.03, 0.3, float(surface_info.get("water", 0.0))))
-	speed = move_toward(speed, 0.0, dt * (0.82 + speed * speed * 0.011 + float(surface_info.drag) * (standing_drag + absf(speed) * 0.09) + soil_resistance))
+	speed = move_toward(speed, 0.0, dt * (preload("res://scripts/surface_resistance.gd").deceleration(surface_info, speed) + soil_resistance))
+	var water_depth := maxf(0.0, float(surface_info.get("water", 0.0)))
+	# Hydrodynamic drag grows with depth and speed, while remaining zero at
+	# rest so a serviceable 4x4 can crawl out under its own power.
 	# Hydraulic/pedal take-up is progressive. DriveRun owns type, condition,
 	# cargo and traction limits; pressure is applied once, after driving forces.
 	_brake_pressure = move_toward(_brake_pressure, brake_input, dt * (4.0 if brake_input > _brake_pressure else 8.0))
@@ -174,25 +216,37 @@ func _physics_process(dt: float) -> void:
 		speed = move_toward(speed, 0.0, dt * _brake_pressure * run.brake_deceleration(grip, absf(speed)))
 		if absf(speed) < 0.08:
 			stop_reason = "brake"
-	speed = clampf(speed, -22.0, 42.0)
-	var steering_limit := 0.55 / (1.0 + absf(speed) * 0.035)
-	wheel_angle = lerpf(wheel_angle, steering_input * steering_limit, 1.0 - exp(-12.0 * dt))
-	var yaw_limit := minf(grip * 8.5 / maxf(absf(speed), 2.0), 1.45)
+	if handbrake_input > 0.0 and is_on_floor():
+		speed = move_toward(speed, 0.0, dt * handbrake_input * (4.5 + grip * 4.5))
+		if absf(speed) < 0.08: stop_reason = "handbrake"
+	if brake_input < 0.02 and speed > speed_limit:
+		speed = move_toward(speed, speed_limit, dt * 3.5)
+	speed = clampf(speed, -5.0, 34.0)
+	var steering_limit := lerpf(0.56, 0.18, smoothstep(3, 23, absf(speed))) * (0.82 if run.differential_locked else 1.0)
+	var steering_rate := 2.8 if absf(steering_input) < 0.02 else 1.9
+	wheel_angle = move_toward(wheel_angle, steering_input * steering_limit, steering_rate * dt)
+	var yaw_limit := minf(grip * 6.5 / maxf(absf(speed), 2.0), 1.15)
 	var requested := clampf(speed / WHEELBASE * tan(wheel_angle), -yaw_limit, yaw_limit)
-	_yaw_rate = lerpf(_yaw_rate, requested if is_on_floor() else 0.0, 1.0 - exp(-7.0 * dt))
+	_yaw_rate = lerpf(_yaw_rate, requested if is_on_floor() else 0.0, 1.0 - exp(-(18.0 if absf(steering_input) < 0.02 else 9.0) * dt))
 	if absf(speed) < 0.08:
 		_yaw_rate = 0.0
 	heading = wrapf(heading + _yaw_rate * dt, -PI, PI)
-	_lateral_speed = (_lateral_speed - speed * _yaw_rate * dt) * exp(-(5.0 + grip * 13.0) * dt)
+	var lateral_damping := 7.0 + grip * 16.0 if is_on_floor() else 0.4
+	if handbrake_input > 0.0 and absf(speed) > 2.5 and is_on_floor(): lateral_damping *= 0.25
+	_lateral_speed = (_lateral_speed - speed * _yaw_rate * dt) * exp(-lateral_damping * dt)
 	_lateral_speed += world.wind_force * dt
 	direction = Vector3(cos(heading), 0, sin(heading))
 	var right := Vector3(-sin(heading), 0, cos(heading))
 	velocity.x = direction.x * speed + right.x * _lateral_speed
 	velocity.z = direction.z * speed + right.z * _lateral_speed
+	if controls_enabled and winch_pull_velocity.is_finite():
+		var pull := winch_pull_velocity.limit_length(2.4)
+		velocity.x += pull.x
+		velocity.z += pull.z
 	var falling_speed := velocity.y
 	var was_grounded := is_on_floor()
 	velocity.y -= GRAVITY * dt
-	rotation.y = -heading
+	rotation = Vector3(body_roll, -heading, body_pitch)
 	var previous_speed := absf(speed)
 	var before_move := position
 	var intended_motion := Vector3(velocity.x, 0.0, velocity.z) * dt
@@ -212,11 +266,7 @@ func _physics_process(dt: float) -> void:
 		last_collision_normal = normal
 		var hit_body := hit.get_collider()
 		if hit_body is RigidBody3D and hit_body.mass < 100.0 and normal.y < floor_cos:
-			hit_body.apply_central_impulse(direction * absf(speed) * hit_body.mass * 0.5)
-			run.impact(3.0 + absf(speed) * 0.12)
-			speed *= 0.86
-			obstacle_impacts += 1
-			cancel_cruise()
+			_push_debris(hit_body, normal)
 		elif _is_terrain(hit_body):
 			terrain_contacts += 1
 			if normal.y < floor_cos:
@@ -272,7 +322,9 @@ func _physics_process(dt: float) -> void:
 	elif absf(speed) > 0.5 and not has_obstacle:
 		stop_reason = ""
 	elif absf(speed) < 0.08 and not has_obstacle and stop_reason not in ["obstacle", "unexplained", "fallen_recovery"]:
-		if brake_input > 0.0:
+		if handbrake_input > 0.0:
+			stop_reason = "handbrake"
+		elif brake_input > 0.0:
 			stop_reason = "brake"
 		elif not run.engine_running:
 			stop_reason = "engine_off"
@@ -284,9 +336,31 @@ func _physics_process(dt: float) -> void:
 		stop_reason = "high_centered" if belly_contact or wheel_support < 0.3 else "bogged"
 	_ensure_safe_position()
 	run.distance = maxf(run.distance, position.x)
-	run.advance(dt, speed, throttle_input, offroad, cruise_enabled and manual_throttle < 0.02)
+	run.advance(dt, speed, throttle_input, offroad, cruise_enabled and manual_throttle < 0.02, maxf(_brake_pressure, handbrake_input * 0.6), water_depth)
 	_update_visual(dt, slope)
 	wheel_speed = speed + (-1.0 if _reverse_engaged else 1.0) * soil_slip * (effort if run.engine_running else 0.0) * 9.0
+
+
+func _push_debris(body: RigidBody3D, normal: Vector3) -> void:
+	var id := body.get_instance_id()
+	if _physics_age - float(_debris_contacts.get(id, -10.0)) < 0.20: return
+	var push := -Vector3(normal.x, 0, normal.z).normalized()
+	if push.length_squared() < 0.5: return
+	var car_motion := Vector3(cos(heading) * speed - sin(heading) * _lateral_speed, 0, sin(heading) * speed + cos(heading) * _lateral_speed)
+	var relative := car_motion - Vector3(body.linear_velocity.x, 0, body.linear_velocity.z)
+	var closing := maxf(0, relative.dot(push))
+	if closing < 0.25: return
+	_debris_contacts[id] = _physics_age
+	if _debris_contacts.size() > 64:
+		for key: int in _debris_contacts.keys():
+			if _physics_age - float(_debris_contacts[key]) > 2.0: _debris_contacts.erase(key)
+	var delta_speed := minf(closing * 0.65, maxf(0, 12.0 - body.linear_velocity.dot(push)))
+	body.apply_central_impulse(push * body.mass * delta_speed)
+	if closing > 1.5:
+		run.impact(1.0 + closing * 0.10)
+		speed *= 0.94
+		obstacle_impacts += 1
+		cancel_cruise()
 
 
 func _soil_traction(dt: float, grip: float, engine_force: float, effort: float) -> float:
@@ -294,17 +368,22 @@ func _soil_traction(dt: float, grip: float, engine_force: float, effort: float) 
 	if soft <= 0.01:
 		soil_slip = move_toward(soil_slip, 0.0, dt * 5.0)
 		soil_resistance = 0.0
-		return grip * GRAVITY
+		return grip * GRAVITY * (1.0 if run.four_wheel_drive else 0.67)
 	var tyre_type: String = run.variants.get("tires", "road")
 	var suitable := 1.35 if tyre_type == "allterrain" else (1.30 if tyre_type == "winter" and float(surface_info.get("snow", 0)) > 0.4 else 1.0)
-	var condition := lerpf(0.65, 1.0, float(run.parts.tires))
+	# DriveRun.tyre_grip already applies tyre wear; do not penalize it twice.
 	var burial := clampf(sink_depth / WHEEL_RADIUS, 0.0, 1.5)
-	var support := maxf(0.025, wheel_support * (0.12 if belly_contact else 1.0))
-	var available := grip * GRAVITY * suitable * condition * support / (1.0 + burial * soft * 1.5)
+	# Four driven wheels retain useful contact on a bank or in a shallow rut.
+	# A genuinely grounded belly in deep peat can still unload all four tyres.
+	var shallow := 1.0 - smoothstep(0.18, 0.42, sink_depth)
+	var driven_support := wheel_support if run.four_wheel_drive else rear_wheel_support
+	var support := maxf(lerpf(0.025, 0.82 if run.four_wheel_drive else 0.52, shallow), driven_support * (0.12 if belly_contact else 1.0))
+	var available := grip * GRAVITY * 1.28 * suitable * support / (1.0 + burial * soft * 1.1)
+	available *= 1.40 if run.differential_locked else (1.0 if run.four_wheel_drive else 0.62)
 	var demand := engine_force * effort
 	var slip := clampf((demand - available) / maxf(demand, 0.01), 0.0, 1.0)
 	soil_slip = lerpf(soil_slip, slip, 1.0 - exp(-8.0 * dt))
-	soil_resistance = soft * (sink_depth * 4.0 + burial * burial * 1.2) / suitable
+	soil_resistance = soft * (sink_depth * 2.6 + burial * burial * 0.8) / suitable
 	if belly_contact: soil_resistance += soft * 2.0
 	# Spinning tread shears the supporting soil; a gentle pedal retains more grip.
 	return available * (1.0 - soil_slip * soft * 0.45)
@@ -319,39 +398,52 @@ func _update_visual(dt: float, slope: float) -> void:
 	var grounded := 0
 	var total_sink := 0.0
 	var support := 0.0
+	var rear_support := 0.0
 	var loaded_contacts: Array[Vector3] = []
 	for wheel: Dictionary in _wheels:
 		var pivot: Node3D = wheel.pivot
-		var p := global_transform * Vector3(pivot.position.x + _visual_rest_position.x, 0, pivot.position.z + _visual_rest_position.z)
-		var query := PhysicsRayQueryParameters3D.create(p + Vector3.UP * 1.0, p - Vector3.UP * 3.0)
+		var probe := global_transform * Vector3(pivot.position.x + _visual_rest_position.x, 0, pivot.position.z + _visual_rest_position.z)
+		var p := world.to_local(probe)
+		var query := PhysicsRayQueryParameters3D.create(probe + Vector3.UP * 1.0, probe - Vector3.UP * 3.0)
 		query.exclude = [get_rid()]
 		var hit := get_world_3d().direct_space_state.intersect_ray(query)
 		if not hit.is_empty() and _is_terrain(hit.collider):
-			p.y = hit.position.y
+			p = world.to_local(hit.position)
 			grounded += 1
-			if global_position.y - WHEEL_RADIUS - p.y < 0.30:
+			if probe.y - WHEEL_RADIUS - world.to_global(p).y < 0.30:
 				loaded_contacts.append(p)
 		else: p.y = world.height_at(p.x, p.z)
 		wheel_contacts.append(p)
 		total_sink += maxf(0.0, world.height_at(p.x, p.z) + world.terrain.deformation.depth_at(p.x, p.z) - p.y)
-		support += clampf(1.0 - maxf(0.0, global_position.y - WHEEL_RADIUS - p.y - 0.05) / 0.25, 0.0, 1.0)
+		var contact_support := clampf(1.0 - maxf(0.0, probe.y - WHEEL_RADIUS - world.to_global(p).y - 0.05) / 0.25, 0.0, 1.0)
+		support += contact_support
+		if not wheel.front: rear_support += contact_support
 		if wheel.front: front += p.y
 		else: rear += p.y
 		if pivot.position.z > 0: left += p.y
 		else: right += p.y
 	sink_depth = total_sink / maxf(1.0, wheel_contacts.size())
 	wheel_support = support / maxf(1.0, wheel_contacts.size())
+	rear_wheel_support = rear_support / 2.0
 	var pitch := atan((front - rear) / (2.0 * WHEELBASE)) if wheel_contacts.size() == 4 else atan(slope)
-	var roll := atan((left - right) / (2.0 * WHEEL_TRACK)) if wheel_contacts.size() == 4 else 0.0
-	_visual.rotation.z = lerp_angle(_visual.rotation.z, _visual_rest_rotation.z + pitch, 1.0 - exp(-14.0 * dt))
-	_visual.rotation.x = lerpf(_visual.rotation.x, _visual_rest_rotation.x + roll + clampf(-speed * _yaw_rate * 0.006, -0.06, 0.06), 1.0 - exp(-12.0 * dt))
+	# Positive local Z is the left tyre row. Positive X rotation lowers that
+	# row, so cross-slope must have the opposite sign. The old sign leaned the
+	# physical contact rig away from the bank and lifted an entire side.
+	var roll := -atan((left - right) / (2.0 * WHEEL_TRACK)) if wheel_contacts.size() == 4 else 0.0
+	var has_support := grounded >= 2 and is_on_floor()
+	body_pitch = lerp_angle(body_pitch, clampf(pitch, -0.55, 0.55) if has_support else 0.0, 1.0 - exp(-18.0 * dt))
+	body_roll = lerp_angle(body_roll, clampf(roll, -0.48, 0.48) if has_support else 0.0, 1.0 - exp(-20.0 * dt))
+	# The actual collision rig follows the supporting plane. Only the small
+	# suspension residual/body lean belongs to the visual mesh.
+	_visual.rotation.z = _visual_rest_rotation.z + (clampf(pitch - body_pitch, -0.10, 0.10) if has_support else 0.0)
+	_visual.rotation.x = _visual_rest_rotation.x + (clampf(roll - body_roll, -0.08, 0.08) if has_support else 0.0) + clampf(-speed * _yaw_rate * 0.002, -0.025, 0.025)
 	if grounded >= 3 and is_on_floor():
 		var target_y := (front + rear) * 0.25 + WHEEL_RADIUS - global_position.y + _visual_rest_position.y
 		# Do not visually bury the body through its physical supporting belly.
 		_visual.position.y = lerpf(_visual.position.y, clampf(target_y, _visual_rest_position.y - (0.04 if sink_depth > 0.12 else 0.5), _visual_rest_position.y + 0.5), 1.0 - exp(-18.0 * dt))
 	else: _visual.position.y = lerpf(_visual.position.y, _visual_rest_position.y, 1.0 - exp(-6.0 * dt))
 	if grounded >= 3 and is_on_floor() and absf(speed) > 0.6 and _last_compaction.distance_to(position) > 0.65:
-		world.compact_tyres(wheel_contacts, surface_info, 1.0 + run.cargo_weight() / 1000.0)
+		world.compact_tyres(loaded_contacts, surface_info, 1.0 + run.cargo_weight() / 1000.0, Vector2(cos(heading), sin(heading)), clampf(soil_slip + absf(_lateral_speed) * 0.2, 0.0, 1.0))
 		_last_compaction = position
 	_soil_timer += dt
 	if _soil_timer >= 0.10:
@@ -364,25 +456,41 @@ func _update_visual(dt: float, slope: float) -> void:
 			world.load_tyres(loaded_contacts, pressure * maxf(wheel_support, 0.12), soil_slip, effort, _soil_timer)
 		_soil_timer = 0.0
 	_spin -= wheel_speed * dt / WHEEL_RADIUS
+	_road_spin -= speed * dt / WHEEL_RADIUS
 	max_wheel_contact_error = 0.0
 	for index in _wheels.size():
 		var wheel: Dictionary = _wheels[index]
 		var pivot: Node3D = wheel.pivot
 		if grounded >= 3 and is_on_floor():
-			var local_contact := _visual.global_transform.affine_inverse() * (wheel_contacts[index] + Vector3.UP * WHEEL_RADIUS)
+			var local_contact := _visual.global_transform.affine_inverse() * world.to_global(wheel_contacts[index] + Vector3.UP * WHEEL_RADIUS)
 			pivot.position.y = move_toward(pivot.position.y, clampf(local_contact.y, float(wheel.rest_y) - 0.25, float(wheel.rest_y) + 0.25), dt * 2.0)
 			max_wheel_contact_error = maxf(max_wheel_contact_error, absf(pivot.global_position.y - WHEEL_RADIUS - wheel_contacts[index].y))
 		pivot.rotation.y = -wheel_angle if wheel.front else 0.0
 		var contact := wheel.get("contact") as CollisionShape3D
 		if contact != null: contact.rotation.y = pivot.rotation.y
 		var spin_node: Node3D = wheel.spin
-		spin_node.rotation.z = _spin
-	for light: SpotLight3D in _lights:
-		light.visible = run.headlights and run.battery > 0.01
-	for mat: StandardMaterial3D in _brake_materials:
-		mat.emission_enabled = true
-		mat.emission = Color(0.8, 0.025, 0.008)
-		mat.emission_energy_multiplier = 2.5 if brake_input > 0.0 else (0.5 if run.headlights else 0.0)
+		spin_node.rotation.z = _spin if run.four_wheel_drive or not wheel.front else _road_spin
+	var light_mode := (2 if run.high_beams else 1) if run.headlights and run.battery > 0.01 else 0
+	if light_mode != _last_light_mode:
+		_last_light_mode = light_mode
+		for light: SpotLight3D in _lights:
+			light.visible = light_mode > 0
+			light.spot_range = 88.0 if light_mode == 2 else 55.0
+			light.spot_angle = 28.0 if light_mode == 2 else 40.0
+			light.light_energy = 7.0 if light_mode == 2 else 5.0
+	var reversing := (speed < -0.1 or _reverse_engaged) and run.battery > 0.01
+	var rear_mode := int(reversing) + 2 * int(brake_input > 0.0 and not _reverse_engaged) + 4 * int(run.headlights)
+	# Material setters upload state to the renderer. Lamps change on transitions,
+	# rather than invalidating every lens material on every physics tick.
+	if rear_mode != _last_rear_mode:
+		_last_rear_mode = rear_mode
+		for material: StandardMaterial3D in _reverse_materials: material.emission_energy_multiplier = 3.0 if reversing else 0.0
+		for light: SpotLight3D in _reverse_lights: light.visible = reversing
+		for mat: StandardMaterial3D in _brake_materials:
+			mat.emission_enabled = true
+			mat.emission = Color(0.8, 0.025, 0.008)
+			mat.emission_energy_multiplier = 2.5 if rear_mode & 2 else (0.5 if run.headlights else 0.0)
+	if _snorkel.visible != run.snorkel_installed: _snorkel.visible = run.snorkel_installed
 	# Headless verification has no listener/audio clock to drain playback on exit.
 	if DisplayServer.get_name() == "headless": return
 	if run.engine_running and not _audio.playing:
@@ -428,6 +536,7 @@ func clear_inputs() -> void:
 	_touches.clear()
 	throttle_input = 0.0
 	brake_input = 0.0
+	handbrake_input = 0.0
 	steering_input = 0.0
 	_brake_pressure = 0.0
 	cancel_cruise()
@@ -448,7 +557,23 @@ func toggle_cruise() -> String:
 		return "Podrž plyn a zapni tempomat."
 	cruise_amount = capture
 	cruise_enabled = true
-	return "Tempomat drží plyn na %d %%. Brzda ho vypne." % roundi(capture * 100.0)
+	return "Tempomat zapnutý."
+
+
+func toggle_drive_mode() -> String:
+	if absf(speed) > 4.0: return "Pred zmenou pohonu spomaľ pod 15 km/h."
+	run.four_wheel_drive = not run.four_wheel_drive
+	if not run.four_wheel_drive: run.differential_locked = false
+	cancel_cruise()
+	return "4×4" if run.four_wheel_drive else "4×2 · zadný náhon"
+
+
+func toggle_differential() -> String:
+	if absf(speed) > 2.5: return "Pred zmenou uzávierky spomaľ pod 9 km/h."
+	run.differential_locked = not run.differential_locked
+	if run.differential_locked: run.four_wheel_drive = true
+	cancel_cruise()
+	return "Uzávierka zapnutá" if run.differential_locked else "Uzávierka vypnutá"
 
 
 func cancel_cruise() -> void:
@@ -460,7 +585,16 @@ func _ensure_safe_position() -> void:
 	if not boundary_recovery_enabled:
 		return
 	var ground := world.height_at(position.x, position.z)
+	# A route worker may have a newer numeric profile while an older, real
+	# collision floor still supports us. That is not a physical fall.
 	var fallen := position.y < ground - 3.0
+	if fallen:
+		# Verify current collision, since is_on_floor() can still describe the
+		# previous tick after a teleport or a streamed floor replacement.
+		var query := PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * 0.1, global_position - Vector3.UP * (WHEEL_RADIUS + 0.45))
+		query.exclude = [get_rid()]
+		var support := get_world_3d().direct_space_state.intersect_ray(query)
+		if not support.is_empty() and support.normal.y > cos(floor_max_angle): fallen = false
 	var escaped := absf(position.z - world.terrain.corridor_center(position.x)) > world.terrain.boundary_width(position.x) + 6.0
 	# The physical wall handles ordinary shoulder contacts. The recovery path
 	# is reserved for an invalid/outside spawn or a genuinely fallen vehicle.
@@ -489,7 +623,15 @@ func _try_terrain_step(motion: Vector3) -> bool:
 	raised.origin += motion
 	var landing := KinematicCollision3D.new()
 	if not test_move(raised, Vector3.DOWN * (TERRAIN_STEP + 0.08), landing): return false
-	if not _is_terrain(landing.get_collider()) or landing.get_normal().y < cos(floor_max_angle): return false
+	if not _is_terrain(landing.get_collider()): return false
+	if landing.get_normal().y < cos(floor_max_angle):
+		# A tyre can touch the rounded lip before its tread reaches the flat
+		# top. Verify the real supporting face beneath the chassis instead of
+		# mistaking that cylinder/edge contact normal for the road's slope.
+		var query := PhysicsRayQueryParameters3D.create(raised.origin, raised.origin - Vector3.UP * (TERRAIN_STEP + WHEEL_RADIUS + 0.4))
+		query.exclude = [get_rid()]
+		var support := get_world_3d().direct_space_state.intersect_ray(query)
+		if support.is_empty() or not _is_terrain(support.collider) or support.normal.y < cos(floor_max_angle): return false
 	# All three sweeps succeeded; perform exactly the motions that were tested.
 	move_and_collide(Vector3.UP * TERRAIN_STEP)
 	move_and_collide(motion)
@@ -504,6 +646,7 @@ func _strength(action: String) -> float:
 
 func park() -> void:
 	speed = 0.0
+	winch_pull_velocity = Vector3.ZERO
 	velocity = Vector3.ZERO
 	_yaw_rate = 0.0
 	_lateral_speed = 0.0
@@ -514,7 +657,11 @@ func park() -> void:
 	soil_slip = 0.0
 	sink_depth = 0.0
 	wheel_support = 1.0
+	rear_wheel_support = 1.0
 	belly_contact = false
 	_soil_timer = 0.0
+	body_pitch = 0.0
+	body_roll = 0.0
+	rotation = Vector3(0, -heading, 0)
 	stop_reason = "park"
 	clear_inputs()

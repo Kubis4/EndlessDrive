@@ -1,11 +1,11 @@
 class_name DriveStops
 extends RefCounted
 ## Pure, random-access stop metadata; IDs remain the owning terrain chunk index.
-## One stop per 960 m region, jittered within 28..100 m: gaps are 888..1032 m.
+## One stop per 1.92 km district, jittered within 28..100 m.
 ## No streaming, scene tree, global RNG or previous-stop traversal is required.
 
 const CHUNK_LENGTH := 96.0
-const REGION_LENGTH := 960.0
+const REGION_LENGTH := 1920.0
 const KINDS := ["workshop", "home", "gas", "repair", "paint"]
 const TITLES := {
 	"workshop": "Cestná dielňa", "home": "Dom pri ceste",
@@ -14,9 +14,9 @@ const TITLES := {
 
 
 static func for_chunk(index: int, seed: int) -> Dictionary:
-	if index < 0 or index % 10 > 1:
+	if index < 0 or index % 20 > 1:
 		return {}
-	var stop := _in_region(int(index / 10), seed)
+	var stop := _in_region(int(index / 20), seed)
 	return stop if int(stop.id) == index else {}
 
 

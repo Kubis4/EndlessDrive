@@ -1,0 +1,5 @@
+User-agent: Google-adstxt
+Allow: /app-ads.txt
+
+User-agent: *
+Allow: /

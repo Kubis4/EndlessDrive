@@ -3,7 +3,7 @@ extends SceneTree
 ## Follows the upper road, stops at all buildings, collects only useful stock, repairs,
 ## and uses full cruise consumption. All runs are in memory; no player's save is touched.
 
-const HORIZON := 100000.0
+const HORIZON := 120000.0
 var failures := 0
 var minimum_fuel := INF
 var minimum_health := INF
@@ -20,7 +20,7 @@ func _run() -> void:
 	var distances: Array[float] = []
 	for seed_index in 64:
 		var state := DriveRun.new()
-		state.world_seed = 1009 + seed_index * 7919
+		state.world_seed = DriveTerrain.VARIED_SEED_MIN + seed_index * 7919
 		DriveProfile.new().prepare_run(state)
 		var profile := DriveTerrain.new()
 		profile.seed_value = state.world_seed

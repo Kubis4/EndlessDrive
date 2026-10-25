@@ -1,0 +1,12 @@
+{
+  "assets": [
+    "bg_forest_far.png",
+    "bg_forest_alive_far.png"
+  ],
+  "size": [
+    2048,
+    512
+  ],
+  "backups": "C:\\Users\\Kubis\\StudioProjects\\EndlessDrive\\art\\backgrounds\\upgrade-2026-09-06\\originals",
+  "source": "imagegen style transfer; crop and edge blend"
+}

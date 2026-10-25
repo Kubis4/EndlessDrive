@@ -1,0 +1,51 @@
+[gd_scene format=3 uid="uid://bfg34pugxv46k"]
+
+[sub_resource type="StandardMaterial3D" id="Steel"]
+albedo_color = Color(0.17, 0.2, 0.22, 1)
+metallic = 0.75
+roughness = 0.44
+
+[sub_resource type="BoxMesh" id="Base"]
+material = SubResource("Steel")
+size = Vector3(0.24, 0.15, 0.78)
+
+[sub_resource type="StandardMaterial3D" id="Cable"]
+albedo_color = Color(0.57, 0.63, 0.66, 1)
+metallic = 0.8
+roughness = 0.5
+
+[sub_resource type="CylinderMesh" id="Drum"]
+material = SubResource("Cable")
+top_radius = 0.105
+bottom_radius = 0.105
+height = 0.48
+radial_segments = 16
+
+[sub_resource type="StandardMaterial3D" id="Hook"]
+albedo_color = Color(0.89, 0.24, 0.08, 1)
+metallic = 0.5
+
+[sub_resource type="TorusMesh" id="HookMesh"]
+material = SubResource("Hook")
+inner_radius = 0.04
+outer_radius = 0.075
+rings = 12
+ring_segments = 8
+
+[node name="WinchMount" type="Node3D" unique_id=1811206390]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.27, 0.55, 0)
+
+[node name="Frame" type="MeshInstance3D" parent="." unique_id=1200945161]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.25089502, 0)
+mesh = SubResource("Base")
+
+[node name="Drum" type="MeshInstance3D" parent="." unique_id=1771784886]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0.043308973, -0.15353286, 0)
+mesh = SubResource("Drum")
+
+[node name="Hook" type="MeshInstance3D" parent="." unique_id=936243784]
+transform = Transform3D(-4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0, 1, 0.17000008, -0.1939013, 0)
+mesh = SubResource("HookMesh")
+
+[node name="CableOutlet" type="Marker3D" parent="." unique_id=1089184394]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.16000009, -0.29892087, 0)

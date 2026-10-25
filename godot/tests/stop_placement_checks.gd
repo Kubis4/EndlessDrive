@@ -25,13 +25,13 @@ func _run() -> void:
 	world.update_stream(0)
 	await physics_frame
 	await physics_frame
-	check(world._models.size() == 7, "Seven original scene cache entries stay compatible")
+	check(world._models.size() == 8 and world._models.has("road_delineator"), "Environment cache includes the original props and road delineator")
 	check(world.chunks.size() == 7, "Streaming count remains seven")
 	var tutorial: Dictionary = world.buildings[0]
 	check(tutorial.kind == "workshop" and tutorial.position == world._roadside_point(42, -18), "Exact tutorial workshop position")
 	var seen: Dictionary = {}
 	for region in range(0, 11):
-		var stop := DriveStops.next_stop(region * 960.0, world.world_seed)
+		var stop := DriveStops.next_stop(region * DriveStops.REGION_LENGTH, world.world_seed)
 		world.update_stream(float(stop.x))
 		await physics_frame
 		await physics_frame
@@ -65,18 +65,18 @@ func _test_catalog() -> void:
 		var gas_region := 0
 		var cycle: Dictionary = {}
 		for region in range(0, 106):
-			var stop := DriveStops.next_stop(region * 960.0, seed_value)
+			var stop := DriveStops.next_stop(region * DriveStops.REGION_LENGTH, seed_value)
 			var x := float(stop.x)
 			var id := int(stop.id)
 			check(stop.has_all(["kind", "title", "local_x", "offset", "x", "id"]), "Catalog schema")
 			check(id == int(floor(x / 96.0)) and is_equal_approx(float(stop.local_x), x - id * 96.0), "ID is owning chunk")
 			check(DriveStops.for_chunk(id, seed_value) == DriveStops.by_id(id, seed_value), "Direct ID/chunk lookup agrees")
-			var repeated := DriveStops.next_stop(region * 960.0, seed_value)
+			var repeated := DriveStops.next_stop(region * DriveStops.REGION_LENGTH, seed_value)
 			check(repeated == stop, "Repeated lookups are deterministic")
 			check(DriveStops.next_stop(x, seed_value).id == id, "Next stop includes current coordinate")
 			check(DriveStops.next_stop(x + 0.1, seed_value).id > id, "Next stop advances after passing coordinate")
 			if previous >= 0.0:
-				check(x - previous >= 650.0 and x - previous <= 1050.0, "Sparse stop spacing stays within target")
+				check(x - previous >= 1800.0 and x - previous <= 2050.0, "Sparse stop spacing stays within target")
 			previous = x
 			check(absf(float(stop.offset)) >= 18.0 and absf(float(stop.offset)) <= 26.0, "Roadside offset range")
 			check(DriveStops._clear_footprint(profile, x, float(stop.offset)), "Footprint clears roads and rock limits")

@@ -1,0 +1,104 @@
+{
+  "targetSize": [
+    2048,
+    512
+  ],
+  "assets": {
+    "bg_desert_far.png": {
+      "sourceSize": [
+        2172,
+        724
+      ],
+      "outputSize": [
+        2048,
+        512
+      ],
+      "alphaPreserved": true,
+      "visibleRows": [
+        0,
+        511
+      ],
+      "maximumEdgeChannelDifference": 0
+    },
+    "bg_desert_mid.png": {
+      "sourceSize": [
+        2172,
+        724
+      ],
+      "outputSize": [
+        2048,
+        512
+      ],
+      "alphaPreserved": true,
+      "visibleRows": [
+        279,
+        511
+      ],
+      "maximumEdgeChannelDifference": 0
+    },
+    "bg_desert_near.png": {
+      "sourceSize": [
+        2172,
+        724
+      ],
+      "outputSize": [
+        2048,
+        512
+      ],
+      "alphaPreserved": true,
+      "visibleRows": [
+        279,
+        511
+      ],
+      "maximumEdgeChannelDifference": 0
+    },
+    "bg_desert_dusk_far.png": {
+      "sourceSize": [
+        2172,
+        724
+      ],
+      "outputSize": [
+        2048,
+        512
+      ],
+      "alphaPreserved": true,
+      "visibleRows": [
+        102,
+        509
+      ],
+      "maximumEdgeChannelDifference": 0
+    },
+    "bg_desert_dusk_mid.png": {
+      "sourceSize": [
+        2172,
+        724
+      ],
+      "outputSize": [
+        2048,
+        512
+      ],
+      "alphaPreserved": true,
+      "visibleRows": [
+        248,
+        511
+      ],
+      "maximumEdgeChannelDifference": 0
+    },
+    "bg_desert_dusk_near.png": {
+      "sourceSize": [
+        2172,
+        724
+      ],
+      "outputSize": [
+        2048,
+        512
+      ],
+      "alphaPreserved": true,
+      "visibleRows": [
+        358,
+        511
+      ],
+      "maximumEdgeChannelDifference": 0
+    }
+  }
+}

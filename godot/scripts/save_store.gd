@@ -5,9 +5,19 @@ const PATH := "user://journey-v1.json"
 
 
 static func store(run: DriveRun, pose: Vector3, heading: float, path: String = PATH) -> Error:
+	return store_data(run.to_data(), pose, heading, path)
+
+
+static func store_soil_snapshot(data: Dictionary, field: DriveDeformation, pose: Vector3, heading: float, path: String = PATH) -> Error:
+	# Only private numeric snapshots reach this worker; serialization, JSON and
+	# atomic file rotation must not occupy the rendering/physics thread.
+	data["terrain_deformation"] = field.to_data()
+	return store_data(data, pose, heading, path)
+
+
+static func store_data(data: Dictionary, pose: Vector3, heading: float, path: String = PATH) -> Error:
 	if not pose.is_finite() or not is_finite(heading):
 		return ERR_INVALID_DATA
-	var data := run.to_data()
 	data["vehicle"] = {"x": pose.x, "y": pose.y, "z": pose.z, "heading": heading}
 	var file := FileAccess.open(path + ".tmp", FileAccess.WRITE)
 	if file == null:

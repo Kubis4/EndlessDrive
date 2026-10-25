@@ -1,0 +1,110 @@
+[
+  {
+    "file": "bg_forest_far.png",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_error": 0,
+    "sha256": "7ab6d4573eb040f6d9f4f0a2c2d28abb4ee04324d17f9503f0a5960752eee72c"
+  },
+  {
+    "file": "bg_forest_mid.png",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_error": 0,
+    "sha256": "9e05ac259cfee0f0eb2e372961e7eba943536601bce8e60e7e75d4212ef367e7"
+  },
+  {
+    "file": "bg_forest_near.png",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_error": 0,
+    "sha256": "a4cda108c1e4bf2b741e9c3e84626108e258bdd5a8d35d291e1303e909f29014"
+  },
+  {
+    "file": "bg_forest_alive_far.png",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_error": 0,
+    "sha256": "3339bf9bc5d59e2c38608439e78fc4a377c20ad94283cd1503f4f570f07cdf44"
+  },
+  {
+    "file": "bg_forest_alive_mid.png",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_error": 0,
+    "sha256": "29b4b5a093357fc952ffdfa5d1dab1ed8ae688cbca2a3c0f8751d24aaea92205"
+  },
+  {
+    "file": "bg_forest_alive_near.png",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_error": 0,
+    "sha256": "c20dc42aa0cc954524e4fab98bf2e9b03b9f8815f08094edaf822bb4de75a59b"
+  },
+  {
+    "file": "bg_industry_far.png",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_error": 0,
+    "sha256": "dc5947d65b6a0956239a63f6534a0c61e26e5a30ef56b21ce8433d0660840133"
+  },
+  {
+    "file": "bg_industry_mid.png",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_error": 0,
+    "sha256": "f5b5138d7a48915f274f137aeb1fa8190482d2200e5ec9d878d3312e38f78868"
+  },
+  {
+    "file": "bg_industry_near.png",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_error": 0,
+    "sha256": "7b92ba248196f23039ab7934b3aef1b6ad9b919ddba6f69c9f1d8515fa4bb2fe"
+  },
+  {
+    "file": "bg_sandstorm_far.png",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_error": 0,
+    "sha256": "7c1d4947b79ba05426b3a592f82ec1767b5d71f06ad208c55d9db9dbcad8ffbb"
+  },
+  {
+    "file": "bg_sandstorm_mid.png",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_error": 0,
+    "sha256": "c4fc3e3f329d0439d65c6c92603e401b82f26352e83d144acbfd81300d9b6288"
+  },
+  {
+    "file": "bg_sandstorm_near.png",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_error": 0,
+    "sha256": "66486729026180195b76f6972042028811343d3ee13101a8c0418df31fc1beb0"
+  }
+]

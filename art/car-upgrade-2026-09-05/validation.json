@@ -1,0 +1,206 @@
+[
+  {
+    "file": "car_base_body.png",
+    "size": [
+      1472,
+      459
+    ],
+    "original_sha256": "380e94c26f0779c57777d1840caecd1fb7aa28e470dea47127078f526bf2fb69",
+    "alpha_sha256": "97e1d1c65f5d4a508c64d2e6f99cc5c1127a2244918e661d00e0a24834d66014",
+    "alpha_changed_pixels": 0,
+    "paint_class_changed_pixels": 0,
+    "visible_rgb_changed_pixels": 299590
+  },
+  {
+    "file": "car_bumper_front_fog.png",
+    "size": [
+      184,
+      151
+    ],
+    "original_sha256": "b4bdfa9cb3bd595fd1b41e86c715dce0570a8dd590a0c163e6cbe3b53e0f90e1",
+    "alpha_sha256": "af65e80dc9f8effbfe83ffc57f35a4ebed3c58f12a77bf63b504bdccb39c2fb9",
+    "alpha_changed_pixels": 0,
+    "paint_class_changed_pixels": 0,
+    "visible_rgb_changed_pixels": 12316
+  },
+  {
+    "file": "car_bumper_rear_std.png",
+    "size": [
+      211,
+      150
+    ],
+    "original_sha256": "5bbf79a793c78779f1929c6ad641861814f30ffbad183d274f52f943043835a1",
+    "alpha_sha256": "34bba69ce6fa37feba2f156d55039412dafd53fada62d0345270bef0ace0df73",
+    "alpha_changed_pixels": 0,
+    "paint_class_changed_pixels": 0,
+    "visible_rgb_changed_pixels": 17614
+  },
+  {
+    "file": "car_door_front.png",
+    "size": [
+      381,
+      393
+    ],
+    "original_sha256": "fc8084274c2a063f47831b9cc990bb83944a404d689177a6c05b81ff3f1cd17f",
+    "alpha_sha256": "8e48160511542884a5eb1f232fa24cbd01f6eb34bf7d93f3f8a762d2af33efda",
+    "alpha_changed_pixels": 0,
+    "paint_class_changed_pixels": 0,
+    "visible_rgb_changed_pixels": 117771
+  },
+  {
+    "file": "car_door_rear.png",
+    "size": [
+      387,
+      391
+    ],
+    "original_sha256": "2319a13d10765754b338c100081e8f6d32ddd62233d513a8e3b0a72115236372",
+    "alpha_sha256": "faa07cca84b61cb652a8868df62a9923884c33c64b9acb4726d189270cf3310a",
+    "alpha_changed_pixels": 0,
+    "paint_class_changed_pixels": 0,
+    "visible_rgb_changed_pixels": 118603
+  },
+  {
+    "file": "car_headlight_std.png",
+    "size": [
+      173,
+      125
+    ],
+    "original_sha256": "0eb2fefc2194cb525ead1e8ef956bfea7a4d626ad233e80700e06fcaa2b0e5b3",
+    "alpha_sha256": "31368b8368f05fc4cf884b1b14191136b17539dba6e1d2c91277ac3b564aea02",
+    "alpha_changed_pixels": 0,
+    "paint_class_changed_pixels": 0,
+    "visible_rgb_changed_pixels": 4911
+  },
+  {
+    "file": "car_hood.png",
+    "size": [
+      330,
+      108
+    ],
+    "original_sha256": "c3277c01a12ec63ceb3e643abb63dab151b50358f72987bf658037816fe5d060",
+    "alpha_sha256": "e8448cbb2a3ccacbadf841c9ffb67bb4e1bc936caeb648ed907447fe995a1884",
+    "alpha_changed_pixels": 0,
+    "paint_class_changed_pixels": 0,
+    "visible_rgb_changed_pixels": 14451
+  },
+  {
+    "file": "car_roof_rack.png",
+    "size": [
+      479,
+      48
+    ],
+    "original_sha256": "0b24d47dcedb7c7cf633d4b88f57df99340f4c101d9f08cb29a2a5f5fdd73386",
+    "alpha_sha256": "b6cc4a8f0da69c4a65a48b2c0d39310460d295e08b085db5351a4572ba062a3e",
+    "alpha_changed_pixels": 0,
+    "paint_class_changed_pixels": 0,
+    "visible_rgb_changed_pixels": 4470
+  },
+  {
+    "file": "car_seat_front.png",
+    "size": [
+      234,
+      299
+    ],
+    "original_sha256": "0ece0bd66e57eb5957db3e45416b890492c7d9c34d2ba9e8a052c579f39f6ecf",
+    "alpha_sha256": "a747eb9da4801edcad8790a61525e6ad738134acbcd5f3640eb40f9cb1c39d7e",
+    "alpha_changed_pixels": 0,
+    "paint_class_changed_pixels": 0,
+    "visible_rgb_changed_pixels": 13765
+  },
+  {
+    "file": "car_seat_rear.png",
+    "size": [
+      254,
+      215
+    ],
+    "original_sha256": "05dca8a187a005daaf1a882add9442d1264224fad88ab005d607d9f75c2ca255",
+    "alpha_sha256": "287544c3fb101479df7714298587f439e2fda27d16ad2c2e668d168190799237",
+    "alpha_changed_pixels": 0,
+    "paint_class_changed_pixels": 0,
+    "visible_rgb_changed_pixels": 12488
+  },
+  {
+    "file": "car_taillight_std.png",
+    "size": [
+      96,
+      92
+    ],
+    "original_sha256": "b8494b846229231f47c07966e58dcd668b1b54b3abd5c1cb78cee5bd2422983d",
+    "alpha_sha256": "7fbf67c8ebf6ae958e48660496ca584dd2af5a54eb21f64170e8a920f909f350",
+    "alpha_changed_pixels": 0,
+    "paint_class_changed_pixels": 0,
+    "visible_rgb_changed_pixels": 4976
+  },
+  {
+    "file": "car_trunk.png",
+    "size": [
+      273,
+      107
+    ],
+    "original_sha256": "418b21f39a17e1ac4b2ed9cd21656579a2ffed6feba9685b2e8ee05280d99b11",
+    "alpha_sha256": "11efc9fe5eefe843c665fa3124de62e6a128576f62a13033348fe7f5d3c548e8",
+    "alpha_changed_pixels": 0,
+    "paint_class_changed_pixels": 0,
+    "visible_rgb_changed_pixels": 5669
+  },
+  {
+    "file": "wheel_chains_overlay.png",
+    "size": [
+      256,
+      256
+    ],
+    "original_sha256": "7bc9942f6deb481d2ed099e4953c409e89b3a692a381aab183a4587e4f4fa321",
+    "alpha_sha256": "49a428aac42f79a0f52fca17253df2f1facbbfd91f9b90b57a09180d5c697ea0",
+    "alpha_changed_pixels": 0,
+    "paint_class_changed_pixels": 0,
+    "visible_rgb_changed_pixels": 4385
+  },
+  {
+    "file": "wheel_offroad.png",
+    "size": [
+      256,
+      256
+    ],
+    "original_sha256": "d05feb64064392c533b569a068a44256ae11187e7d63923bd1f8877c87a70015",
+    "alpha_sha256": "ffb9a150b13b1474c61747779cf70c115b39de3bbba859801ab29b6557c9e5d2",
+    "alpha_changed_pixels": 0,
+    "paint_class_changed_pixels": 0,
+    "visible_rgb_changed_pixels": 39442
+  },
+  {
+    "file": "wheel_poor.png",
+    "size": [
+      256,
+      256
+    ],
+    "original_sha256": "dafe40ebb3e3d6e65a5e404aed4d3b1a7c5ab98ff50f5aaf00300d955ba0b901",
+    "alpha_sha256": "86bc0f1a6b1653a5988cf6310bc716f88af0d90d856a14bb36494f31af5dd8f8",
+    "alpha_changed_pixels": 0,
+    "paint_class_changed_pixels": 0,
+    "visible_rgb_changed_pixels": 37172
+  },
+  {
+    "file": "wheel_sport.png",
+    "size": [
+      256,
+      256
+    ],
+    "original_sha256": "e08896c54c0e2380d698719f7c3141ba4121c068f88e7321d5eed27c0b6034a3",
+    "alpha_sha256": "12cdfc6fd35f14c9e9c04301689327a7aa73a981940063a9000718df334a3280",
+    "alpha_changed_pixels": 0,
+    "paint_class_changed_pixels": 0,
+    "visible_rgb_changed_pixels": 33442
+  },
+  {
+    "file": "wheel_std.png",
+    "size": [
+      256,
+      256
+    ],
+    "original_sha256": "cf2ca397fbd35d25f099fcad0a1a67308379258d1577480f6118669acce1ae3f",
+    "alpha_sha256": "3d8be8dfefacf002ec7c9c718c21620340f9cc56206f06dbab16ed52b0d9ed53",
+    "alpha_changed_pixels": 0,
+    "paint_class_changed_pixels": 0,
+    "visible_rgb_changed_pixels": 34988
+  }
+]

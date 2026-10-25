@@ -23,6 +23,19 @@ func _run() -> void:
 	game._ephemeral = true
 	root.add_child(game)
 	await frames(4)
+	var hud: DriveHUD = game.hud
+	check(hud._drive_state != null and hud._road_assist != null and hud._lights_button != null, "Saved editable HUD binds the new gear, road assist and light controls")
+	game._action("lights")
+	await frames(2)
+	check(hud._lights_button.button_pressed == game.run.headlights, "Keyboard light toggle updates the visible dashboard control")
+	game._action("lights")
+	var original_pose: Vector3 = game.vehicle.position
+	game.vehicle.position = Vector3(280, game.world.height_at(280, game.world.center_at(280) + 22) + 0.6, game.world.center_at(280) + 22)
+	game.vehicle.heading = 0
+	hud._update_road_assist()
+	check(not hud._assist_panel.visible and hud._road_assist.text.is_empty(), "Off-road driving keeps direction helper labels hidden")
+	game.vehicle.position = original_pose
+	check(not hud._road_info.get_parent().get_global_rect().intersects(hud._stats.fuel.value.get_parent().get_parent().get_parent().get_parent().get_global_rect()), "Compact driving status and road panels do not overlap")
 	game._session_started = false
 	game._had_save = false
 	game._open_menu(false)
@@ -34,9 +47,13 @@ func _run() -> void:
 	game._settings_changed("volume", 0.25)
 	game._settings_changed("camera", 1.15)
 	check(is_equal_approx(game._volume_preference, 0.25) and is_equal_approx(game._camera_preference, 1.15), "Settings apply without writing a player's preferences during tests")
+	var previous_biome := DriveTerrain.starting_biome(game.run.world_seed)
+	game.effects._count = 12
 	game._menu_action("new")
 	await frames(4)
 	check(not paused and not game.menu.menu_open and game.hud.visible and game._session_started, "New ride enters the game and enables controls")
+	check(game.run.world_seed >= DriveTerrain.VARIED_SEED_MIN and game.world.biome_at(0) != previous_biome, "New ride actually installs a different starting environment")
+	check(game.effects._count == 0 and game.effects._tracks.multimesh.visible_instance_count == 0, "New journey clears the preceding world's visual tracks")
 	game._open_menu()
 	check(not game.menu._continue_button.disabled, "Current ride enables Continue without requiring a fake disk save")
 	game._menu_action("garage")

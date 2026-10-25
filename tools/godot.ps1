@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Play', 'Editor', 'Import', 'Test', 'Balance', 'Capture', 'Android', 'BuildArt')]
+    [ValidateSet('Play', 'SandLab', 'SandBench', 'Editor', 'Import', 'Test', 'Balance', 'Capture', 'Android', 'BuildArt', 'RefreshPreview')]
     [string]$Action = 'Play',
     [string]$GodotPath = '',
     [switch]$Night,
@@ -44,16 +44,29 @@ function Invoke-GodotChecked {
 Invoke-GodotChecked -Arguments @('--headless', '--editor', '--import') -LogName 'godot-import.log'
 
 switch ($Action) {
+    'RefreshPreview' {
+        Invoke-GodotChecked -Arguments @('--headless', '--script', 'res://tests/refresh_editor_preview.gd', '--', '--showcases') -LogName 'godot-refresh-preview.log'
+    }
     'BuildArt' {
         Invoke-GodotChecked -Arguments @('--headless', '--script', 'res://tests/build_art.gd') -LogName 'godot-build-art.log'
     }
     'Import' { Write-Host 'Godot project imported.' }
     'Play' { Invoke-GodotChecked -Arguments @() -LogName 'godot-play.log' }
+    'SandLab' { Invoke-GodotChecked -Arguments @('res://scenes/sand_lab.tscn') -LogName 'godot-sand-lab.log' }
+    'SandBench' { Invoke-GodotChecked -Arguments @('--audio-driver', 'Dummy', '--fixed-fps', '60', '--script', 'res://tests/sand_lab_benchmark.gd', '--', '--test-session') -LogName 'godot-sand-benchmark.log' }
     'Editor' { Invoke-GodotChecked -Arguments @('--editor') -LogName 'godot-editor.log' }
     'Test' {
+        Invoke-GodotChecked -Arguments @('--headless', '--fixed-fps', '60', '--script', 'res://tests/sand_lab_checks.gd', '--', '--test-session') -LogName 'godot-sand-lab-checks.log'
         Invoke-GodotChecked -Arguments @('--headless', '--fixed-fps', '60', '--script', 'res://tests/test_runner.gd', '--', '--test-session') -LogName 'godot-tests.log'
-        foreach ($suite in @('equipment_checks', 'menu_ui_checks', 'editor_scene_checks', 'jeep_rig_checks', 'terrain_rework_checks', 'soft_soil_checks', 'soft_soil_field_checks', 'stop_placement_checks', 'driving_regression', 'journey_balance', 'expedition_checks')) {
+        foreach ($suite in @('equipment_checks', 'menu_ui_checks', 'hud_c_checks', 'ui_localization_checks', 'editor_scene_checks', 'streaming_visual_checks', 'visual_polish_checks', 'route_commit_checks', 'jeep_rig_checks', 'terrain_rework_checks', 'terrain_reference_checks', 'displaced_soil_checks', 'surface_balance_checks', 'vehicle_stability_checks', 'drivetrain_checks', 'recovery_system_checks', 'winch_anchor_checks', 'expedition_world_checks', 'road_handling_checks', 'route_structure_checks', 'long_expedition_checks', 'soft_soil_checks', 'soft_soil_field_checks', 'stop_placement_checks', 'driving_regression', 'journey_balance', 'expedition_checks')) {
             Invoke-GodotChecked -Arguments @('--headless', '--fixed-fps', '60', '--script', "res://tests/$suite.gd", '--', '--test-session') -LogName "godot-$suite.log"
+        }
+        $saveProbeAppData = $env:APPDATA
+        try {
+            $env:APPDATA = Join-Path $buildPath 'menu-flow-user'
+            Invoke-GodotChecked -Arguments @('--headless', '--fixed-fps', '60', '--script', 'res://tests/menu_save_exit_checks.gd', '--', '--test-session') -LogName 'godot-menu-save-exit.log'
+        } finally {
+            $env:APPDATA = $saveProbeAppData
         }
     }
     'Balance' {

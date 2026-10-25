@@ -40,19 +40,34 @@ static func run(game, suite) -> void:
 		minimum = minf(minimum, profile.base_height(i))
 	for i in range(240, 480, 4):
 		turns = maxf(turns, absf(profile.center_at(i + 1) - profile.center_at(i - 1)) * 0.5)
-	suite.check(maximum - minimum > 9.0 and turns > 0.3, "Generated hills and switchbacks materially change road geometry")
-	var hx := 150.0
-	var hz := profile.road_centers(hx)[0] - 1.5
-	suite.check(profile.base_height(hx) - profile.height_at(hx, hz) > 0.20, "Potholes physically depress the road surface")
+	# Graded benches retain elevation changes without forcing a steep saddle.
+	var max_grade := 0.0
+	for i in range(480, 720): max_grade = maxf(max_grade, absf(profile.base_height(i + 0.5) - profile.base_height(i - 0.5)))
+	suite.check(maximum - minimum > 3.0 and max_grade < 0.25 and turns > 0.3, "Generated hills and bends change road geometry while retaining a driveable grade")
+	var hole_depth := 0.0
+	for section in 200:
+		var event := profile.road_event(section)
+		if event.is_empty() or event.kind != "potholes": continue
+		# Three staggered holes: the middle hole (i=1) is one metre to +Z.
+		var actual := profile.height_at(float(event.x), float(event.z) + 1.0)
+		profile._events[section] = {}
+		hole_depth = profile.height_at(float(event.x), float(event.z) + 1.0) - actual
+		profile._events[section] = event
+		break
+	suite.check(hole_depth > 0.20, "Seeded potholes physically depress the road surface")
 	var wz := profile.center_at(207) + 1.0
 	var wet := profile.sample(207, wz)
 	var dry := profile.sample(207, wz - 6.0)
 	suite.check(float(wet.water) > 0.4 and float(wet.drag) > float(dry.drag) + 1.0 and float(wet.grip) < float(dry.grip), "Wading water has real depth, lower traction and greater rolling resistance")
-	var lanes := profile.road_centers(480)
+	var fork_profile := DriveTerrain.new()
+	fork_profile.seed_value = 24600 # The Y layout owns the optional ford.
+	var lanes := fork_profile.road_centers(480)
+	var style := fork_profile.junction_style(0)
+	var ford_branch := 0 if int(style.ford_side) < 0 else 1
 	suite.check(lanes.size() == 2 and lanes[1] - lanes[0] > 40.0, "Junction creates two distinct physical road branches")
-	suite.check(profile.sample(480, lanes[0]).paved > 0.9 and profile.sample(480, lanes[1]).paved < 0.1, "Each junction branch has its advertised road material")
-	suite.check(float(profile.sample(480, lanes[1]).water) > 0.4 and float(profile.sample(480, lanes[0]).water) == 0.0, "Only the lower junction branch crosses the ford")
-	suite.check(profile.road_centers(360)[0] == profile.road_centers(360)[1] and profile.road_centers(599)[1] - profile.road_centers(599)[0] > 80.0, "Junction arms diverge instead of rejoining the same road")
+	suite.check(int(fork_profile.sample(480, lanes[0]).material) == int(style.upper_material) and int(fork_profile.sample(480, lanes[1]).material) == int(style.lower_material), "Each seeded junction branch has its advertised road material")
+	suite.check(float(fork_profile.sample(480, lanes[ford_branch]).water) > 0.4 and float(fork_profile.sample(480, lanes[1 - ford_branch]).water) == 0.0, "Only the seeded ford branch crosses deep water")
+	suite.check(fork_profile.road_centers(360)[0] == fork_profile.road_centers(360)[1] and fork_profile.road_centers(599)[1] - fork_profile.road_centers(599)[0] > 80.0, "Junction arms diverge instead of rejoining the same road")
 	# A genuine physics proof: explicitly disable all out-of-map clamping/recovery.
 	vehicle.park()
 	vehicle.boundary_recovery_enabled = false
@@ -73,6 +88,9 @@ static func run(game, suite) -> void:
 			suite.check(offset < profile.boundary_width(vehicle.position.x) - 3.0 and vehicle.position.y > profile.height_at(vehicle.position.x, vehicle.position.z) - 1.0,
 				"Real rock collision stops %s travel at x=%.0f without fallback" % ["upper" if side < 0 else "lower", x])
 	suite.check(vehicle.boundary_recoveries == recoveries, "Boundary collision tests did not use a single rescue teleport")
+	# This fixture specifically exercises the optional Y-layout ford.
+	world.configure(24600)
+	game.route_decisions_enabled = false
 	# Drive all the way through each fork with a small test-only steering controller.
 	# The real throttle/steering inputs, engine, terrain collision and water drag stay active.
 	for branch in 2:
@@ -106,9 +124,9 @@ static func run(game, suite) -> void:
 		Input.action_release("left")
 		Input.action_release("throttle")
 		suite.check(vehicle.position.x >= 545.0 and stayed_safe and vehicle.boundary_recoveries == recoveries,
-			"Starter vehicle physically traverses the %s fork without rescue" % ("upper hilly" if branch == 0 else "lower flooded"))
-		if branch == 1:
-			suite.check(max_water > 0.35, "Lower fork drive really passes through deep water instead of bypassing it")
+			"Starter vehicle physically traverses fork %d without rescue" % branch)
+		if branch == ford_branch:
+			suite.check(max_water > 0.35, "Seeded ford drive really passes through deep water instead of bypassing it")
 	game.run.engine_running = false
 	# Raycast the actual collision mesh, including both branches, a pothole and water bed.
 	for x: float in [150.0, 207.0, 480.0, 960.0, 3840.0]:
@@ -127,10 +145,10 @@ static func run(game, suite) -> void:
 	world.update_stream(480)
 	vehicle.park()
 	game.run.distance = 480
-	vehicle.position = Vector3(480, profile.height_at(480, lanes[1]) + 0.6, lanes[1])
+	vehicle.position = Vector3(480, profile.height_at(480, lanes[ford_branch]) + 0.6, lanes[ford_branch])
 	await suite.frames(5)
 	suite.check(not game.hud._junction_panel.visible and not game.hud._next_stop.visible, "Exploration HUD hides route and upcoming-building predictions")
-	suite.check(game.hud._road_info.text.contains("VODA"), "Driving HUD reports the water under the tyres")
+	suite.check(float(profile.sample(vehicle.position.x, vehicle.position.z).water) > 0.0 and not game.hud._road_info.get_parent().visible, "Water remains physically active while verbose surface descriptions stay hidden")
 	game.hud.toast("Kontrola bezpečnej cesty.")
 	await suite.frames(2)
 	suite.check(not game.hud._toast_panel.get_global_rect().intersects(game.hud._junction_panel.get_global_rect()), "Driving messages never obscure junction choices")

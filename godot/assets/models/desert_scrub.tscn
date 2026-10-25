@@ -1,9 +1,19 @@
 [gd_scene format=3]
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_qc8to"]
-resource_name = "Desert_dry"
-albedo_color = Color(0.44313726, 0.3882353, 0.2627451, 1)
-roughness = 0.9
+[ext_resource type="Shader" path="res://shaders/prop_surface.gdshader" id="1_qxkhq"]
+[ext_resource type="CompressedTexture2DArray" path="res://assets/textures/surface-albedo-atlas.png" id="2_kilce"]
+[ext_resource type="CompressedTexture2DArray" path="res://assets/textures/world-materials-atlas.png" id="3_34igb"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_6naqg"]
+resource_name = "Detailed_3"
+render_priority = 0
+shader = ExtResource("1_qxkhq")
+shader_parameter/world_atlas = ExtResource("3_34igb")
+shader_parameter/terrain_atlas = ExtResource("2_kilce")
+shader_parameter/tint = Color(0.44313726, 0.3882353, 0.2627451, 1)
+shader_parameter/surface_kind = 3
+shader_parameter/roughness_value = 0.9
+shader_parameter/metallic_value = 0.0
 
 [sub_resource type="CylinderMesh" id="CylinderMesh_gws70"]
 top_radius = 0.035
@@ -93,70 +103,70 @@ radial_segments = 5
 
 [node name="DryLeaf" type="MeshInstance3D" parent="." unique_id=1988911110]
 transform = Transform3D(0.6055218, 0.79582876, 0, -0.79582876, 0.6055218, 0, 0, 0, 1, 0.23, 0.175, 0)
-material_override = SubResource("StandardMaterial3D_qc8to")
+material_override = SubResource("ShaderMaterial_6naqg")
 mesh = SubResource("CylinderMesh_gws70")
 
 [node name="LeafTip" type="MeshInstance3D" parent="." unique_id=1585053498]
 transform = Transform3D(0.95937943, 0.28211883, 0, -0.28211883, 0.95937943, 0, 0, 0, 1, 0.49220002, 0.4595, 0)
-material_override = SubResource("StandardMaterial3D_qc8to")
+material_override = SubResource("ShaderMaterial_6naqg")
 mesh = SubResource("CylinderMesh_vewry")
 
 [node name="DryLeaf2" type="MeshInstance3D" parent="." unique_id=1061364938]
 transform = Transform3D(0.89467996, 0.42673883, -0.13206714, -0.42673883, 0.729073, -0.5351136, -0.13206714, 0.5351136, 0.834393, 0.14340265, 0.245, 0.17982124)
-material_override = SubResource("StandardMaterial3D_qc8to")
+material_override = SubResource("ShaderMaterial_6naqg")
 mesh = SubResource("CylinderMesh_qxkhq")
 
 [node name="LeafTip2" type="MeshInstance3D" parent="." unique_id=1980066408]
 transform = Transform3D(0.98656964, 0.16247071, -0.01684115, -0.16247071, 0.9654515, -0.2037319, -0.01684115, 0.2037319, 0.97888184, 0.30688167, 0.6093, 0.38481745)
-material_override = SubResource("StandardMaterial3D_qc8to")
+material_override = SubResource("ShaderMaterial_6naqg")
 mesh = SubResource("CylinderMesh_kilce")
 
 [node name="DryLeaf3" type="MeshInstance3D" parent="." unique_id=1976175936]
 transform = Transform3D(0.99047446, -0.1312195, 0.041733988, 0.1312195, 0.80762595, -0.5749102, 0.041733988, 0.5749102, 0.8171514, -0.051179815, 0.315, 0.22423342)
-material_override = SubResource("StandardMaterial3D_qc8to")
+material_override = SubResource("ShaderMaterial_6naqg")
 mesh = SubResource("CylinderMesh_34igb")
 
 [node name="LeafTip3" type="MeshInstance3D" parent="." unique_id=1927128860]
 transform = Transform3D(0.9985281, -0.053851206, 0.0064485986, 0.053851206, 0.970275, -0.2359374, 0.0064485986, 0.2359374, 0.97174686, -0.1095248, 0.75909996, 0.4798595)
-material_override = SubResource("StandardMaterial3D_qc8to")
+material_override = SubResource("ShaderMaterial_6naqg")
 mesh = SubResource("CylinderMesh_6naqg")
 
 [node name="DryLeaf4" type="MeshInstance3D" parent="." unique_id=1894073244]
 transform = Transform3D(0.6797843, -0.7170169, 0.15420774, 0.7170169, 0.6055218, -0.3452971, 0.15420774, 0.3452971, 0.9257375, -0.20722283, 0.175, 0.09979326)
-material_override = SubResource("StandardMaterial3D_qc8to")
+material_override = SubResource("ShaderMaterial_6naqg")
 mesh = SubResource("CylinderMesh_q3xyx")
 
 [node name="LeafTip4" type="MeshInstance3D" parent="." unique_id=536724573]
 transform = Transform3D(0.9670265, -0.2541803, 0.015879208, 0.2541803, 0.95937943, -0.12240677, 0.015879208, 0.12240677, 0.99235296, -0.44345686, 0.4595, 0.21355757)
-material_override = SubResource("StandardMaterial3D_qc8to")
+material_override = SubResource("ShaderMaterial_6naqg")
 mesh = SubResource("CylinderMesh_wg6ac")
 
 [node name="DryLeaf5" type="MeshInstance3D" parent="." unique_id=1291880780]
 transform = Transform3D(0.7800764, -0.61665547, -0.105909646, 0.61665547, 0.729073, 0.2969657, -0.105909646, -0.2969657, 0.9489966, -0.20722283, 0.245, -0.09979326)
-material_override = SubResource("StandardMaterial3D_qc8to")
+material_override = SubResource("ShaderMaterial_6naqg")
 mesh = SubResource("CylinderMesh_5wrdo")
 
 [node name="LeafTip5" type="MeshInstance3D" parent="." unique_id=1628710691]
 transform = Transform3D(0.9719554, -0.234777, -0.013505554, 0.234777, 0.9654515, 0.11306266, -0.013505554, -0.11306266, 0.99349606, -0.44345686, 0.6093, -0.21355757)
-material_override = SubResource("StandardMaterial3D_qc8to")
+material_override = SubResource("ShaderMaterial_6naqg")
 mesh = SubResource("CylinderMesh_y3knn")
 
 [node name="DryLeaf6" type="MeshInstance3D" parent="." unique_id=1436017122]
 transform = Transform3D(0.99047446, -0.1312195, -0.041733988, 0.1312195, 0.80762595, 0.5749102, -0.041733988, -0.5749102, 0.8171514, -0.051179815, 0.315, -0.22423342)
-material_override = SubResource("StandardMaterial3D_qc8to")
+material_override = SubResource("ShaderMaterial_6naqg")
 mesh = SubResource("CylinderMesh_6pn1c")
 
 [node name="LeafTip6" type="MeshInstance3D" parent="." unique_id=2144004626]
 transform = Transform3D(0.9985281, -0.053851206, -0.0064485986, 0.053851206, 0.970275, 0.2359374, -0.0064485986, -0.2359374, 0.97174686, -0.1095248, 0.75909996, -0.4798595)
-material_override = SubResource("StandardMaterial3D_qc8to")
+material_override = SubResource("ShaderMaterial_6naqg")
 mesh = SubResource("CylinderMesh_xs4fi")
 
 [node name="DryLeaf7" type="MeshInstance3D" parent="." unique_id=1201784075]
 transform = Transform3D(0.8466507, 0.49619108, 0.1922939, -0.49619108, 0.6055218, 0.62220395, 0.1922939, -0.62220395, 0.7588711, 0.14340265, 0.175, -0.17982124)
-material_override = SubResource("StandardMaterial3D_qc8to")
+material_override = SubResource("ShaderMaterial_6naqg")
 mesh = SubResource("CylinderMesh_luxf7")
 
 [node name="LeafTip7" type="MeshInstance3D" parent="." unique_id=2044486134]
 transform = Transform3D(0.9842092, 0.1758982, 0.019801049, -0.1758982, 0.95937943, 0.22056946, 0.019801049, -0.22056946, 0.97517025, 0.30688167, 0.4595, -0.38481745)
-material_override = SubResource("StandardMaterial3D_qc8to")
+material_override = SubResource("ShaderMaterial_6naqg")
 mesh = SubResource("CylinderMesh_he2n1")

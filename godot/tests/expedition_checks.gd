@@ -59,8 +59,8 @@ func _run() -> void:
 	await frames(5)
 	check(not game.hud._junction_panel.visible and not game.hud._next_stop.visible, "Exploration no longer reveals upcoming route contents or building distances")
 	var world: DriveWorld = game.world
-	var lanes := world.terrain.road_centers(480)
-	var choice := world.choose_route(Vector3(480, 0, lanes[0]))
+	var lanes := world.terrain.road_centers(550)
+	var choice := world.choose_route(Vector3(550, 0, lanes[0]))
 	check(not choice.is_empty() and world.terrain.route_choices["0"] == -1, "Driving into an arm commits the physical route rather than a menu selection")
 	world.update_stream(480)
 	for side: int in [-1, 1]:
@@ -70,10 +70,10 @@ func _run() -> void:
 		world.terrain.clear_caches()
 		world.update_stream(480)
 		var lane_index := 0 if side < 0 else 1
-		var z := world.terrain.road_centers(480)[lane_index]
+		var z := world.terrain.road_centers(500)[lane_index]
 		game.vehicle.park()
-		game.vehicle.position = Vector3(480, world.height_at(480, z) + 0.6, z)
-		game.vehicle.heading = atan((world.terrain.road_centers(481)[lane_index] - world.terrain.road_centers(479)[lane_index]) * 0.5)
+		game.vehicle.position = Vector3(500, world.height_at(500, z) + 0.6, z)
+		game.vehicle.heading = atan((world.terrain.road_centers(501)[lane_index] - world.terrain.road_centers(499)[lane_index]) * 0.5)
 		game.run.engine_running = true
 		game.run.parts.engine = 0.9
 		game.run.parts.tires = 0.9
@@ -95,10 +95,19 @@ func _run() -> void:
 		for action: String in ["right", "left", "throttle"]: Input.action_release(action)
 		check(game.vehicle.position.x >= 850 and game.vehicle.boundary_recoveries == rescues, "Actual vehicle continues beyond the old merge onto permanent route %d with threaded streaming" % side)
 		if side < 0:
-			var deck_z := world.center_at(744)
-			var deck_height := world.height_at(744, deck_z)
-			check(deck_height - world.terrain.ground_height_at(744, deck_z) > 5.8 and not world.find_children("BridgeDeck", "MeshInstance3D", true, false).is_empty(), "River flows under a separate physical bridge deck, not a solid terrain causeway")
-			var query := PhysicsRayQueryParameters3D.create(Vector3(744, deck_height + 5, deck_z), Vector3(744, deck_height - 8, deck_z))
+			var bridge_x := 744.0
+			for region in 12:
+				bridge_x = 744.0 + region * DriveTerrain.REGION
+				if world.terrain.feature_at(bridge_x).kind == "bridge": break
+			world.async_streaming = false
+			world.update_stream(bridge_x)
+			game.vehicle.park()
+			game.vehicle.position = Vector3(bridge_x - 30, world.height_at(bridge_x - 30, world.center_at(bridge_x - 30)) + 0.6, world.center_at(bridge_x - 30))
+			await frames(2)
+			var deck_z := world.center_at(bridge_x)
+			var deck_height := world.height_at(bridge_x, deck_z)
+			check(deck_height - world.terrain.ground_height_at(bridge_x, deck_z) > 5.8 and not world.find_children("BridgeDeck", "MeshInstance3D", true, false).is_empty(), "River flows under a separate physical bridge deck, not a solid terrain causeway")
+			var query := PhysicsRayQueryParameters3D.create(Vector3(bridge_x, deck_height + 5, deck_z), Vector3(bridge_x, deck_height - 8, deck_z))
 			query.exclude = [game.vehicle.get_rid()]
 			var hit := world.get_world_3d().direct_space_state.intersect_ray(query)
 			check(not hit.is_empty() and absf(float(hit.position.y) - deck_height) < 0.08, "Actual bridge collision matches the drivable surface above the river")
@@ -146,7 +155,7 @@ func _run() -> void:
 	world.clock = 25
 	crossing._physics_process(0.01)
 	check(crossing._train.collision_layer == 0 and absf(crossing._gates[0].rotation.x) > 1.0, "The crossing opens after the train has passed")
-	check(game.effects._tracks.multimesh.instance_count == 640 and game.effects._emitters.size() == 2, "Tyre imprints and surface sprites use bounded buffers instead of accumulating nodes")
+	check(game.effects._tracks.multimesh.instance_count == 0 and game.effects._emitters.size() == 4 and game.effects._grit.size() == 4, "Physical soil replaces decorative imprints and surface particles use bounded buffers")
 	game.queue_free()
 	await frames(2)
 	print("EXPEDITION: %d checks; %d failures" % [checks, failures])

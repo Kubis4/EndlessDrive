@@ -1,0 +1,23 @@
+[gd_scene format=3]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_mo6ey"]
+vertex_color_use_as_albedo = true
+vertex_color_is_srgb = true
+
+[sub_resource type="SphereMesh" id="SphereMesh_swr4i"]
+material = SubResource("StandardMaterial3D_mo6ey")
+radius = 0.045
+height = 0.09
+radial_segments = 4
+rings = 2
+
+[node name="WheelGrit" type="CPUParticles3D" unique_id=1263129316]
+cast_shadow = 0
+emitting = false
+amount = 24
+lifetime = 0.65
+mesh = SubResource("SphereMesh_swr4i")
+spread = 32.0
+gravity = Vector3(0, -9.81, 0)
+scale_amount_min = 0.5
+scale_amount_max = 1.5

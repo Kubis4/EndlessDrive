@@ -1,0 +1,12 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/editor_preview.gd" id="1_h0igq"]
+[ext_resource type="PackedScene" path="res://scenes/world/generated/rail.scn" id="2_3m5kk"]
+
+[node name="RailPreview" type="Node3D" unique_id=281631129]
+script = ExtResource("1_h0igq")
+preview_seed = 24601
+preview_distance = 744.0
+geometry_path = "res://scenes/world/generated/rail.scn"
+
+[node name="GeneratedTerrain" type="Node3D" parent="." unique_id=1647645646 instance=ExtResource("2_3m5kk")]

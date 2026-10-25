@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KubisDev — Endless Drive</title>
+  <meta name="description" content="Endless Drive is a 2.5D survival driving game about keeping a battered car alive on a road that never ends.">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #12110f;
+      --panel: #1c1a17;
+      --text: #efe7d8;
+      --muted: #b7ad9c;
+      --accent: #d08a3a;
+      --line: #3a342c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Segoe UI, system-ui, sans-serif;
+      background: radial-gradient(1200px 500px at 10% -10%, #2a2218 0%, var(--bg) 55%);
+      color: var(--text);
+      line-height: 1.55;
+    }
+    main {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 48px 20px 72px;
+    }
+    h1 { font-size: 2rem; margin: 0 0 8px; }
+    h2 { font-size: 1.15rem; margin: 0 0 10px; color: var(--text); }
+    p, li { color: var(--muted); }
+    a { color: var(--accent); }
+    .lede { font-size: 1.08rem; max-width: 42em; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 22px;
+      margin-top: 20px;
+    }
+    ul { margin: 8px 0 0; padding-left: 1.15em; }
+    li { margin: 0.28em 0; }
+    .links { display: flex; flex-wrap: wrap; gap: 12px 18px; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <main>
+    <p>KubisDev</p>
+    <h1>Endless Drive</h1>
+    <p class="lede">A 2.5D survival driving game about keeping one battered car alive on a road that never ends. You start beside a wreck, search for missing parts, get the engine running and try to travel farther than before.</p>
+
+    <section class="card">
+      <h2>The journey</h2>
+      <p>There is no mission marker telling you exactly what to do. The road is procedurally generated, the next building is never guaranteed to be useful, and every kilometre puts more wear on the car. A weak alternator, a punctured tyre, bad fuel or an empty tank can turn a normal stop into a serious problem.</p>
+      <p>You follow one continuous road through forests, deserts, stormy regions and snow-covered mountains. Hills, bridges, broken pavement and changing surfaces keep the drive unpredictable. The goal is simple: prepare, drive, explore, repair and make it farther than last time.</p>
+    </section>
+
+    <section class="card">
+      <h2>Keep the wreck alive</h2>
+      <p>The car is the centre of the whole game. It is assembled from individual parts rather than one health bar. Engine, battery, alternator, starter, radiator, suspension, drivetrain, brakes, tyres, fuel tank, body panels, lights and cargo equipment can all matter during a run.</p>
+      <p>Parts can be missing, worn, damaged or replaced with something better. Fuel, oil and coolant also have quality. Contaminated fluids may still keep the car moving, but they reduce performance, increase consumption or make the engine run dangerously hot.</p>
+      <ul>
+        <li>Inspect, repair, replace and rearrange individual components</li>
+        <li>Manage fuel, oil, coolant, battery charge and engine temperature</li>
+        <li>Fit a roof rack or extra storage if you need more loot, at the cost of weight and drag</li>
+        <li>Decide when to save a good part, install a temporary replacement, or leave something behind</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Search, loot and improvise</h2>
+      <p>Explore sheds, homes, garages, petrol stations and workshops. Find engines, tyres, batteries, fluids, body panels and useful upgrades. Loot quality changes with the world, so a seemingly empty building can still hide the part that saves the run.</p>
+      <p>Depots give you a reliable chance to refuel, find stronger parts and prepare for the next stretch. Relay stations are longer-term objectives: discover them, recover their equipment, repair them and keep them as a mark of that journey.</p>
+    </section>
+
+    <section class="card">
+      <h2>Weather, terrain and time</h2>
+      <p>Day and night change the sky, lighting and visibility. Rain, snow, fog and storms affect both atmosphere and handling. Headwind slightly slows the car and uses more fuel. Tailwind gives a small push when the tank is nearly empty or the road climbs for a long time.</p>
+      <p>Winter arrives later in the journey. Snow tyres and chains become valuable, while water in the cooling system can freeze and damage the engine. Chains help on snow, but they reduce speed and grip on dry roads, so preparation matters as much as raw power.</p>
+    </section>
+
+    <section class="card">
+      <h2>How far can you go?</h2>
+      <p>Endless Drive is built for journeys well beyond the first kilometres. Terrain gets harder, useful loot becomes less predictable, parts wear down, and fuel and repair decisions matter more. Sign in with Google Play Games to submit your best distance and time, unlock achievements and keep a record of exceptional runs.</p>
+      <div class="links">
+        <a href="https://play.google.com/store/apps/details?id=sk.kubis.endlessdrive">Google Play</a>
+        <a href="privacy.html">Privacy Policy</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Developer</h2>
+      <p>Developed by KubisDev<br><a href="mailto:kubisdev1@gmail.com">kubisdev1@gmail.com</a></p>
+    </section>
+  </main>
+</body>
+</html>

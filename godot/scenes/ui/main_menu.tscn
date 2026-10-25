@@ -970,6 +970,26 @@ theme_override_font_sizes/font_size = 18
 text = "Nalaď si cestu podľa seba. Zmeny sa prejavia počas jazdy."
 autowrap_mode = 3
 
+[node name="LanguageRow" type="HBoxContainer" parent="Root/Stage/Modal/PanelContainer/VBoxContainer/ModalBody/PanelsSettings"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="LanguageLabel" type="Label" parent="Root/Stage/Modal/PanelContainer/VBoxContainer/ModalBody/PanelsSettings/LanguageRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 16
+text = "JAZYK / LANGUAGE"
+
+[node name="Language" type="OptionButton" parent="Root/Stage/Modal/PanelContainer/VBoxContainer/ModalBody/PanelsSettings/LanguageRow"]
+custom_minimum_size = Vector2(240, 42)
+layout_mode = 2
+item_count = 2
+selected = 0
+popup/item_0/text = "Slovenčina"
+popup/item_0/id = 0
+popup/item_1/text = "English"
+popup/item_1/id = 1
+
 [node name="VBoxContainer" type="VBoxContainer" parent="Root/Stage/Modal/PanelContainer/VBoxContainer/ModalBody/PanelsSettings" unique_id=231789923]
 layout_mode = 2
 theme_override_constants/separation = 6
@@ -1198,8 +1218,10 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.7058824, 0.72156864, 0.6745098, 1)
 theme_override_font_sizes/font_size = 16
-text = "L  svetlá    ·    C  kamera    ·    R  tempomat    ·    Esc  pauza
-Tempomat drží plyn; brzda ho zruší. So svetlami sleduj batériu."
+text = "POHON A NAVIJAK
+V: 4×2 / 4×4   ·   B: uzávierka   ·   G: pripojiť lano   ·   H: navíjať
+L: vypnuté / stretávacie / diaľkové   ·   K: diaľkové
+Medzerník: ručná brzda   ·   C: kamera   ·   R: tempomat"
 autowrap_mode = 3
 
 [node name="PanelsGarage" type="VBoxContainer" parent="Root/Stage/Modal/PanelContainer/VBoxContainer/ModalBody" unique_id=1628321237]

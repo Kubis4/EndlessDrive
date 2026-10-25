@@ -1,8 +1,19 @@
 [gd_scene format=3]
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pjkqf"]
-albedo_color = Color(0.8862745, 0.8392157, 0.70980394, 1)
-roughness = 0.87
+[ext_resource type="Shader" path="res://shaders/prop_surface.gdshader" id="1_hxb4o"]
+[ext_resource type="CompressedTexture2DArray" path="res://assets/textures/surface-albedo-atlas.png" id="2_eyob3"]
+[ext_resource type="CompressedTexture2DArray" path="res://assets/textures/world-materials-atlas.png" id="3_y38eg"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_5732b"]
+resource_name = "Detailed_1"
+render_priority = 0
+shader = ExtResource("1_hxb4o")
+shader_parameter/world_atlas = ExtResource("3_y38eg")
+shader_parameter/terrain_atlas = ExtResource("2_eyob3")
+shader_parameter/tint = Color(0.8862745, 0.8392157, 0.70980394, 1)
+shader_parameter/surface_kind = 1
+shader_parameter/roughness_value = 0.9
+shader_parameter/metallic_value = 0.0
 
 [sub_resource type="BoxMesh" id="BoxMesh_v7eup"]
 size = Vector3(10, 2.9, 4.2)
@@ -17,16 +28,30 @@ roughness = 0.87
 [sub_resource type="BoxMesh" id="BoxMesh_eyob3"]
 size = Vector3(3.5, 1.35, 0.08)
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_y38eg"]
-albedo_color = Color(0.29411766, 0.46666667, 0.48235294, 1)
-roughness = 0.87
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_hc0ot"]
+resource_name = "Detailed_0"
+render_priority = 0
+shader = ExtResource("1_hxb4o")
+shader_parameter/world_atlas = ExtResource("3_y38eg")
+shader_parameter/terrain_atlas = ExtResource("2_eyob3")
+shader_parameter/tint = Color(0.29411766, 0.46666667, 0.48235294, 1)
+shader_parameter/surface_kind = 0
+shader_parameter/roughness_value = 0.9
+shader_parameter/metallic_value = 0.0
 
 [sub_resource type="BoxMesh" id="BoxMesh_5732b"]
 size = Vector3(1.35, 2.2, 0.1)
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hc0ot"]
-albedo_color = Color(0.7764706, 0.45882353, 0.27450982, 1)
-roughness = 0.87
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_oph67"]
+resource_name = "Detailed_2"
+render_priority = 0
+shader = ExtResource("1_hxb4o")
+shader_parameter/world_atlas = ExtResource("3_y38eg")
+shader_parameter/terrain_atlas = ExtResource("2_eyob3")
+shader_parameter/tint = Color(0.7764706, 0.45882353, 0.27450982, 1)
+shader_parameter/surface_kind = 2
+shader_parameter/roughness_value = 0.68
+shader_parameter/metallic_value = 0.25
 
 [sub_resource type="BoxMesh" id="BoxMesh_oph67"]
 size = Vector3(11.3, 0.3, 7.2)
@@ -34,12 +59,30 @@ size = Vector3(11.3, 0.3, 7.2)
 [sub_resource type="BoxShape3D" id="BoxShape3D_0ysna"]
 size = Vector3(11.3, 0.3, 7.2)
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_aa1wg"]
-albedo_color = Color(0.9411765, 0.87058824, 0.6862745, 1)
-roughness = 0.87
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_0ysna"]
+resource_name = "Detailed_2"
+render_priority = 0
+shader = ExtResource("1_hxb4o")
+shader_parameter/world_atlas = ExtResource("3_y38eg")
+shader_parameter/terrain_atlas = ExtResource("2_eyob3")
+shader_parameter/tint = Color(0.9411765, 0.87058824, 0.6862745, 1)
+shader_parameter/surface_kind = 2
+shader_parameter/roughness_value = 0.68
+shader_parameter/metallic_value = 0.25
 
 [sub_resource type="BoxMesh" id="BoxMesh_latff"]
 size = Vector3(11.35, 0.2, 0.06)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_aa1wg"]
+resource_name = "Detailed_2"
+render_priority = 0
+shader = ExtResource("1_hxb4o")
+shader_parameter/world_atlas = ExtResource("3_y38eg")
+shader_parameter/terrain_atlas = ExtResource("2_eyob3")
+shader_parameter/tint = Color(0.8862745, 0.8392157, 0.70980394, 1)
+shader_parameter/surface_kind = 2
+shader_parameter/roughness_value = 0.68
+shader_parameter/metallic_value = 0.25
 
 [sub_resource type="BoxMesh" id="BoxMesh_0b6tb"]
 size = Vector3(0.22, 3.6, 0.22)
@@ -47,9 +90,16 @@ size = Vector3(0.22, 3.6, 0.22)
 [sub_resource type="BoxShape3D" id="BoxShape3D_uvti1"]
 size = Vector3(0.22, 3.6, 0.22)
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_x3k0r"]
-albedo_color = Color(0.70980394, 0.3372549, 0.24705882, 1)
-roughness = 0.87
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_latff"]
+resource_name = "Detailed_2"
+render_priority = 0
+shader = ExtResource("1_hxb4o")
+shader_parameter/world_atlas = ExtResource("3_y38eg")
+shader_parameter/terrain_atlas = ExtResource("2_eyob3")
+shader_parameter/tint = Color(0.70980394, 0.3372549, 0.24705882, 1)
+shader_parameter/surface_kind = 2
+shader_parameter/roughness_value = 0.68
+shader_parameter/metallic_value = 0.25
 
 [sub_resource type="BoxMesh" id="BoxMesh_rw275"]
 size = Vector3(0.9, 1.9, 0.85)
@@ -99,7 +149,7 @@ radial_segments = 5
 
 [node name="StationKiosk" type="MeshInstance3D" parent="." unique_id=1150680269]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.45, -1.4)
-material_override = SubResource("StandardMaterial3D_pjkqf")
+material_override = SubResource("ShaderMaterial_5732b")
 mesh = SubResource("BoxMesh_v7eup")
 
 [node name="Collision" type="StaticBody3D" parent="." unique_id=849319377]
@@ -115,12 +165,12 @@ mesh = SubResource("BoxMesh_eyob3")
 
 [node name="KioskDoor" type="MeshInstance3D" parent="." unique_id=673925050]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.8, 1.1, 0.76)
-material_override = SubResource("StandardMaterial3D_y38eg")
+material_override = SubResource("ShaderMaterial_hc0ot")
 mesh = SubResource("BoxMesh_5732b")
 
 [node name="PumpCanopy" type="MeshInstance3D" parent="." unique_id=243046163]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.8, 2.8)
-material_override = SubResource("StandardMaterial3D_hc0ot")
+material_override = SubResource("ShaderMaterial_oph67")
 mesh = SubResource("BoxMesh_oph67")
 
 [node name="StaticBody3D" type="StaticBody3D" parent="." unique_id=1744060215]
@@ -131,12 +181,12 @@ shape = SubResource("BoxShape3D_0ysna")
 
 [node name="CanopyStripe" type="MeshInstance3D" parent="." unique_id=2015444878]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.78, 6.43)
-material_override = SubResource("StandardMaterial3D_aa1wg")
+material_override = SubResource("ShaderMaterial_0ysna")
 mesh = SubResource("BoxMesh_latff")
 
 [node name="CanopyColumn" type="MeshInstance3D" parent="." unique_id=290833328]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 1.8, 5.5)
-material_override = SubResource("StandardMaterial3D_pjkqf")
+material_override = SubResource("ShaderMaterial_aa1wg")
 mesh = SubResource("BoxMesh_0b6tb")
 
 [node name="StaticBody3D2" type="StaticBody3D" parent="." unique_id=1831436166]
@@ -147,7 +197,7 @@ shape = SubResource("BoxShape3D_uvti1")
 
 [node name="FuelPump" type="MeshInstance3D" parent="." unique_id=1762618361]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.3, 0.95, 3.4)
-material_override = SubResource("StandardMaterial3D_x3k0r")
+material_override = SubResource("ShaderMaterial_latff")
 mesh = SubResource("BoxMesh_rw275")
 
 [node name="StaticBody3D3" type="StaticBody3D" parent="." unique_id=1627415917]
@@ -168,7 +218,7 @@ mesh = SubResource("CylinderMesh_6tgqi")
 
 [node name="CanopyColumn2" type="MeshInstance3D" parent="." unique_id=1891017399]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 1.8, 5.5)
-material_override = SubResource("StandardMaterial3D_pjkqf")
+material_override = SubResource("ShaderMaterial_aa1wg")
 mesh = SubResource("BoxMesh_l6k1h")
 
 [node name="StaticBody3D4" type="StaticBody3D" parent="." unique_id=1667371201]
@@ -179,7 +229,7 @@ shape = SubResource("BoxShape3D_jlwob")
 
 [node name="FuelPump2" type="MeshInstance3D" parent="." unique_id=1368681653]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.3, 0.95, 3.4)
-material_override = SubResource("StandardMaterial3D_x3k0r")
+material_override = SubResource("ShaderMaterial_latff")
 mesh = SubResource("BoxMesh_r7y47")
 
 [node name="StaticBody3D5" type="StaticBody3D" parent="." unique_id=1051742045]

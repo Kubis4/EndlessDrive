@@ -31,6 +31,12 @@ var battery := 0.82
 var temperature := 24.0
 var engine_running := false
 var headlights := false
+var high_beams := false
+var snorkel_installed := false
+var water_ingress := 0.0
+var current_water_depth := 0.0
+var four_wheel_drive := true
+var differential_locked := false
 var elapsed := 0.0
 var day_time := 0.31
 var parts: Dictionary = {
@@ -55,12 +61,17 @@ var deposited_scrap := 0
 var searched: Dictionary = {}
 var loot_piles: Dictionary = {}
 var cargo_parts: Array[Dictionary] = []
+var wear_distance := 0.0
+var mechanical_events := 0
+var last_mechanical_event := ""
 
 
 func toggle_engine() -> String:
 	if engine_running:
 		engine_running = false
 		return "Motor vypnutý."
+	if water_ingress >= 1.0:
+		return "Nasávanie je zatopené. Vytiahni auto z vody a vysuš ho v servise."
 	if fuel <= 0.0:
 		return "V nádrži nie je palivo."
 	if battery < 0.08:
@@ -72,33 +83,88 @@ func toggle_engine() -> String:
 	return "Motor beží. Šťastnú cestu."
 
 
-func advance(dt: float, speed: float, throttle: float, offroad: bool, cruise_driving: bool = false) -> void:
+func advance(dt: float, speed: float, throttle: float, offroad: bool, cruise_driving: bool = false, brake_load: float = 0.0, water_depth: float = 0.0) -> void:
 	if dt <= 0.0 or not is_finite(dt):
 		return
 	elapsed += dt
 	day_time = fposmod(day_time + dt / 1200.0, 1.0)
 	var metres := absf(speed) * dt
 	var wear := metres / 150000.0
+	var old_fault := floori(wear_distance / 8000.0)
+	wear_distance += metres
+	for fault in range(old_fault + 1, floori(wear_distance / 8000.0) + 1):
+		var rng := RandomNumberGenerator.new()
+		rng.seed = world_seed + fault * 104729
+		var slot: String = PART_NAMES.keys()[rng.randi_range(0, PART_NAMES.size() - 1)]
+		parts[slot] = maxf(0, float(parts[slot]) - rng.randf_range(0.025, 0.060) * (1.2 if offroad else 1.0))
+		mechanical_events += 1
+		last_mechanical_event = "Opotrebovanie: %s. Skontroluj auto pri najbližšej zastávke." % PART_NAMES[slot]
+	parts.brakes = maxf(0, float(parts.brakes) - wear * (0.12 + clampf(brake_load, 0, 1) * 1.8))
+	parts.alternator = maxf(0, float(parts.alternator) - wear * 0.14)
+	parts.radiator = maxf(0, float(parts.radiator) - wear * 0.12)
 	parts.tires = maxf(0.0, float(parts.tires) - wear * (3.0 if offroad else 1.0))
 	parts.suspension = maxf(0.0, float(parts.suspension) - wear * (2.5 if offroad else 0.7) * (0.72 if variants.suspension == "reinforced" else 1.0))
+	# Driven components consume service life; a locked axle also scrubs tyres
+	# on firm ground. Low range is useful in mud, expensive on asphalt.
+	var driveline_load := (0.12 if four_wheel_drive else 0.0) + (0.35 if differential_locked else 0.0)
+	parts.tires = maxf(0.0, float(parts.tires) - wear * (driveline_load + (1.7 if differential_locked and not offroad else 0.0)))
+	parts.suspension = maxf(0.0, float(parts.suspension) - wear * driveline_load * 0.55)
 	if headlights:
-		battery = maxf(0.0, battery - dt * 0.00018)
+		battery = maxf(0.0, battery - dt * (0.00030 if high_beams else 0.00018))
 	if engine_running:
 		var cruise_cost := 1.5 if cruise_driving else 1.0
 		var engine_efficiency := 0.82 if variants.engine == "efficient" else (1.12 if variants.engine == "torque" else 1.0)
-		fuel = maxf(0.0, fuel - dt * (0.0004 + absf(speed) * 0.00011 * (1.0 + throttle * 0.6)) * cruise_cost * engine_efficiency / maxf(0.5, float(fluid_quality.fuel)))
+		fuel = maxf(0.0, fuel - dt * (0.0004 + absf(speed) * 0.00011 * (1.0 + throttle * 0.6)) * cruise_cost * engine_efficiency * (1.08 if four_wheel_drive else 1.0) * (1.10 if differential_locked else 1.0) / maxf(0.5, float(fluid_quality.fuel)))
 		oil = maxf(0.0, oil - dt * 0.000025 * (2.0 - float(parts.engine)))
 		coolant = maxf(0.0, coolant - dt * 0.00004 * (2.0 - float(parts.radiator)))
 		battery = minf(1.0, battery + dt * 0.0015 * float(parts.alternator) * (1.45 if variants.alternator == "highoutput" else 1.0))
-		var cooling := coolant / COOLANT_CAPACITY * float(fluid_quality.coolant)
+		var cooling := coolant / COOLANT_CAPACITY * float(fluid_quality.coolant) * lerpf(0.35, 1.0, float(parts.radiator))
 		var target := 78.0 + throttle * 20.0 + (1.0 - cooling) * 25.0 - (8.0 if variants.radiator == "large" else 0.0)
 		temperature = move_toward(temperature, target, dt * 0.7)
 		var damage := dt * (maxf(temperature - 110.0, 0.0) * 0.00015 + (0.0005 if oil < 0.4 else 0.0) + (1.0 - float(fluid_quality.oil)) * 0.000025)
-		parts.engine = maxf(0.0, float(parts.engine) - wear * 0.6 - damage)
+		parts.engine = maxf(0.0, float(parts.engine) - wear * (0.6 + driveline_load * 0.35) - damage)
 		if fuel <= 0.0 or float(parts.engine) <= 0.02:
 			engine_running = false
 	else:
 		temperature = move_toward(temperature, 22.0, dt * 0.25)
+	# Actual ford water cools a hot radiator gradually, without replenishing
+	# coolant or refrigerating a cold engine.
+	if is_finite(water_depth) and water_depth > 0.03 and temperature > 32.0:
+		var immersion := smoothstep(0.03, 0.50, water_depth)
+		temperature = move_toward(temperature, 32.0, dt * immersion * (0.55 + minf(absf(speed), 10.0) * 0.10))
+	current_water_depth = maxf(water_depth, 0.0) if is_finite(water_depth) else 0.0
+	var intake_height := 1.85 if snorkel_installed else 0.80
+	if current_water_depth > intake_height:
+		water_ingress = minf(1.5, water_ingress + dt * (current_water_depth - intake_height) * (1.8 if engine_running else 0.25))
+		if water_ingress >= 1.0 and engine_running:
+			engine_running = false
+			parts.engine = maxf(0, float(parts.engine) - 0.12)
+			last_mechanical_event = "Motor nasal vodu. Použi navijak a vysuš nasávanie."
+			mechanical_events += 1
+	elif water_ingress < 1.0:
+		water_ingress = move_toward(water_ingress, 0.0, dt * 0.12)
+
+
+func drain_intake() -> String:
+	if current_water_depth > 0.20: return "Najprv vytiahni auto z vody."
+	if water_ingress <= 0.01: return "Nasávanie je suché."
+	if float(inventory.scrap) < 2: return "Na vysušenie potrebuješ 2 kusy šrotu."
+	inventory.scrap = float(inventory.scrap) - 2
+	water_ingress = 0.0
+	return "Nasávanie vysušené. Skontroluj stav motora."
+
+
+func install_snorkel(building_id: int) -> String:
+	if snorkel_installed: return "Šnorchel je už namontovaný."
+	if _stop_kind(building_id) not in ["repair", "workshop"]: return "Šnorchel namontujú v dielni alebo autoservise."
+	if float(inventory.scrap) < 14: return "Na šnorchel potrebuješ 14 kusov šrotu."
+	inventory.scrap = float(inventory.scrap) - 14
+	snorkel_installed = true
+	return "Šnorchel namontovaný. Nasávanie je chránené do hĺbky 1,85 m."
+
+
+func drive_speed_limit() -> float:
+	return 7.0 if differential_locked else (16.0 if four_wheel_drive else 22.0)
 
 
 func power_factor() -> float:
@@ -177,7 +243,15 @@ func open_loot(building_id: int) -> Array:
 	var supplies: Array = ["fuel", "oil", "coolant", "scrap"]
 	var part_pool: Array = PART_NAMES.keys()
 	var part_count := 2
-	if building_id <= -1000000:
+	if building_id <= -3000000:
+		stop_kind = "wreck"
+		supplies = ["fuel", "oil", "coolant", "scrap"]
+		part_count = 1
+	elif building_id <= -2000000:
+		stop_kind = "cache"
+		supplies = ["fuel", "coolant", "scrap", "repairkit"]
+		part_count = 0
+	elif building_id <= -1000000:
 		stop_kind = "debris"
 		supplies = ["scrap"]
 		part_count = 0
@@ -206,6 +280,8 @@ func open_loot(building_id: int) -> Array:
 			"coolant": amount = rng.randf_range(1.0, 4.0)
 			"scrap": amount = rng.randi_range(4, 9) if stop_kind == "repair" else rng.randi_range(2, 6)
 			_: amount = rng.randi_range(1, 2)
+		if stop_kind in ["wreck", "cache"] and kind in FLUIDS: amount *= 0.45
+		if stop_kind == "cache" and kind == "repairkit": amount = 1
 		var quality := 1.0
 		if kind in FLUIDS:
 			quality = snappedf(rng.randf_range(0.52, 1.0), 0.01)
@@ -393,22 +469,25 @@ func paint_vehicle(color: String, building_id: int = -1) -> String:
 
 
 func _stop_kind(building_id: int) -> String:
+	if building_id < 0: return "debris"
 	return str(DriveStops.by_id(building_id, DriveTerrain.route_seed(world_seed, route_choices, building_id * 96.0)).get("kind", ""))
 
 
-func to_data() -> Dictionary:
+func to_data(include_terrain: bool = true) -> Dictionary:
 	return {
 		"version": SAVE_VERSION, "seed": world_seed, "distance": distance,
 		"fuel": fuel, "oil": oil, "coolant": coolant, "battery": battery,
 		"temperature": temperature, "elapsed": elapsed, "day_time": day_time,
-		"headlights": headlights, "parts": parts.duplicate(),
+		"headlights": headlights, "four_wheel_drive": four_wheel_drive, "differential_locked": differential_locked, "parts": parts.duplicate(),
+		"high_beams": high_beams, "snorkel_installed": snorkel_installed, "water_ingress": water_ingress,
 		"inventory": inventory.duplicate(), "searched": searched.duplicate(),
 		"loot_piles": loot_piles.duplicate(true), "cargo_parts": cargo_parts.duplicate(true),
 		"variants": variants.duplicate(), "fluid_quality": fluid_quality.duplicate(),
 		"inventory_quality": inventory_quality.duplicate(), "station_stock": station_stock.duplicate(), "paint_color": paint_color,
 		"route_choices": route_choices.duplicate(), "weather_state": weather_state.duplicate(),
-		"terrain_deformation": terrain_deformation.duplicate(true),
+		"terrain_deformation": terrain_deformation.duplicate(true) if include_terrain else [],
 		"run_id": run_id, "found_scrap": found_scrap, "deposited_scrap": deposited_scrap,
+		"wear_distance": wear_distance, "mechanical_events": mechanical_events,
 	}
 
 
@@ -431,12 +510,14 @@ static func from_data(data: Dictionary) -> DriveRun:
 		"oil": [0.0, OIL_CAPACITY], "coolant": [0.0, COOLANT_CAPACITY],
 		"battery": [0.0, 1.0], "temperature": [-40.0, 180.0],
 		"elapsed": [0.0, 100000000.0], "day_time": [0.0, 1.0],
+		"wear_distance": [0.0, 100000000.0], "mechanical_events": [0.0, 1000000.0],
 	}
 	for key: String in limits:
 		var number: Variant = data.get(key, result.get(key))
 		if not (number is float or number is int) or not is_finite(float(number)):
 			return null
 		result.set(key, clampf(float(number), limits[key][0], limits[key][1]))
+	if not data.has("wear_distance"): result.wear_distance = result.distance
 	for group: String in ["parts", "inventory"]:
 		var source: Variant = data.get(group, {})
 		if not source is Dictionary:
@@ -454,6 +535,17 @@ static func from_data(data: Dictionary) -> DriveRun:
 		if str(key).is_valid_int() and visited[key] == true:
 			result.searched[str(key)] = true
 	result.headlights = data.get("headlights", false) == true
+	for key: String in ["high_beams", "snorkel_installed"]:
+		if not data.get(key, false) is bool: return null
+		result.set(key, data.get(key, false))
+	var ingress: Variant = data.get("water_ingress", 0.0)
+	if not (ingress is float or ingress is int) or not is_finite(float(ingress)) or float(ingress) < 0 or float(ingress) > 1.5: return null
+	result.water_ingress = float(ingress)
+	for key: String in ["four_wheel_drive", "differential_locked"]:
+		var mode: Variant = data.get(key, result.get(key))
+		if not mode is bool: return null
+		result.set(key, mode)
+	if result.differential_locked and not result.four_wheel_drive: return null
 	var choices: Variant = data.get("route_choices", {})
 	if not choices is Dictionary: return null
 	for key: Variant in choices:
@@ -462,7 +554,7 @@ static func from_data(data: Dictionary) -> DriveRun:
 		result.route_choices[str(key)] = int(choices[key])
 	var weather: Variant = data.get("weather_state", {})
 	if not weather is Dictionary: return null
-	for key: String in ["next", "edge", "left"]:
+	for key: String in ["next", "edge", "left", "front_until", "front_serial", "front_index", "front_strength", "front_biome", "wetness", "intensity", "rain_mix", "snow_mix", "wind_mix", "warning", "shelter_x", "shelter_y", "shelter_z", "has_shelter", "storm_serial", "storm_variant", "storm_x", "storm_z", "storm_vx", "storm_vz", "storm_duration", "storm_visibility"]:
 		var value: Variant = weather.get(key, 0.0)
 		if not (value is float or value is int) or not is_finite(float(value)) or absf(float(value)) > 100000000: return null
 		if weather.has(key): result.weather_state[key] = float(value)

@@ -40,7 +40,7 @@ func _run() -> void:
 	check(vehicle._brake_materials.size() == 2, "Both new brake lamps have independently controlled materials")
 	check(vehicle._audio.stream is AudioStreamWAV and vehicle._audio.stream.data.size() > 0, "Engine audio is synthesized from the new source")
 	check(not FileAccess.file_exists("res://assets/models/car_modular.glb") and not FileAccess.file_exists("res://assets/textures/materials-v1.png") and not FileAccess.file_exists("res://assets/audio/engine_idle.ogg"), "Legacy Android art and audio are absent from the Godot project")
-	check(world._models.size() == 7, "All seven new environment model scenes load")
+	check(world._models.size() == 8 and world._models.has("road_delineator"), "All eight environment model scenes load, including the road delineator")
 	check(game.camera.projection == Camera3D.PROJECTION_ORTHOGONAL and game.camera.size > 35.0 and game.camera.size < 65.0, "Default camera uses the reference-style wide orthographic view")
 	var offset: Vector3 = game.camera.position - game._camera_focus
 	check(offset.normalized().y > 0.6 and offset.normalized().y < 0.85, "Camera looks down at the world from a high oblique angle")
@@ -86,7 +86,8 @@ func _run() -> void:
 	var initial_pose: Vector3 = vehicle.position
 	game.run.toggle_engine()
 	vehicle.set_touch("throttle", true, 0)
-	await frames(100)
+	# The expedition drivetrain accelerates gently; measure a 2.5-second launch.
+	await frames(150)
 	check(vehicle.position.x > initial_pose.x + 8.0, "Throttle drives the vehicle forward using Godot physics")
 	check(game.run.fuel < 7.0, "Driving consumes fuel")
 	game._action("cruise")

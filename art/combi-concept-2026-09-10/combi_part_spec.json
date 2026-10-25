@@ -1,0 +1,88 @@
+{
+  "carModel": "COMBI_MODULAR_CONCEPT",
+  "basedOn": "SEDAN_MODULAR_MVP (car_base_body.png, BodyPartCatalog.kt, SedanLayers)",
+  "status": "concept / proposal - nothing here is loaded by the game yet",
+  "frame": {
+    "widthPx": 1472,
+    "heightPx": 459,
+    "worldWidthM": 5.6,
+    "pxPerM": 262.857,
+    "note": "Identical to the sedan frame. All anchors below are top-left pixel positions in this frame, exactly like BodyPartCatalog.at(res, dx, dy). The shell PNG must stay opaque out to x=1..1471 and y=1..458 because SedanLayers.cropToOpaque() defines the frame from the shell's opaque bounds."
+  },
+  "wheels": {
+    "rearFx": 0.191,
+    "frontFx": 0.828,
+    "centerFy": 0.913,
+    "radiusFx": 0.083,
+    "rearCenterPx": [281, 419],
+    "frontCenterPx": [1219, 419],
+    "visualRadiusPx": 122,
+    "archCenterPx": { "rear": [283, 419], "front": [1219, 419] },
+    "archRadiusPx": 127,
+    "physics": { "wheelRadiusM": 0.48, "wheelOffsetXM": 1.764, "bodyVisualLiftM": 0.24 },
+    "note": "Unchanged from the sedan so GameConfig, SedanLayers and CarArtist need no retuning."
+  },
+  "referenceDimensions": {
+    "totalLengthM": 5.6,
+    "bodyHeightM": 1.746,
+    "wheelbaseM": 3.528,
+    "rearOverhangM": 1.069,
+    "frontOverhangM": 0.962,
+    "roofHeightRearM": 1.69,
+    "tailgateRakeDeg": 24,
+    "beltLinePx": 196,
+    "roofRailPx": [16, 58]
+  },
+  "drawOrder": [
+    "CARGO (optional, behind shell)",
+    "REAR_SEAT", "FRONT_SEAT", "driver", "SHELL",
+    "TAILGATE (TRUNK_LID slot)", "HOOD", "TAILLIGHT", "HEADLIGHT",
+    "BUMPER_REAR", "BUMPER_FRONT", "DOOR_REAR", "DOOR_FRONT", "ROOF_RACK", "wheels"
+  ],
+  "parts": [
+    {
+      "bodyPart": "SHELL", "slot": "CHASSIS", "drawable": "car_base_body_combi",
+      "anchorPx": [0, 0], "sizePx": [1472, 459], "status": "new",
+      "paintable": true, "behindBody": false,
+      "notes": "Front half (x >= 440: roof peak, windscreen, A-pillar, fender line, nose, both arches, sill, door openings, B-pillar) traced 1:1 from car_base_body.png. New: flat roof back to x=172, D-pillar, rear quarter glass 118..336 x 56..198 (fixed glass, part of the shell), tailgate aperture edge (172,16)-(72,235)-(60,300)."
+    },
+    {
+      "bodyPart": "TAILGATE", "slot": "TRUNK_LID", "drawable": "car_tailgate_combi",
+      "anchorPx": [8, 14], "sizePx": [168, 290], "anchorFx": [0.0054, 0.0305], "status": "new",
+      "paintable": true, "behindBody": false,
+      "replaces": "car_trunk (-15,120) 273x107",
+      "notes": "Hinged at the roof edge (172,16), raked 24 deg to (14,235), lower panel down to the bumper top (y 300). Contains the rear window 38..142 x 64..196, wiper and handle. Same ComponentSlot as the sedan trunk lid, so ItemCatalog / save data stay valid."
+    },
+    {
+      "bodyPart": "DOOR_REAR", "slot": "DOOR_REAR", "drawable": "car_door_rear_combi",
+      "anchorPx": [340, 45], "sizePx": [387, 391], "anchorFx": [0.2310, 0.0980], "status": "variant",
+      "paintable": true, "behindBody": false,
+      "fallback": "car_door_rear (sedan) fits the same frame; the sloped upper-rear corner just leaves a wedge of the flat roof visible",
+      "notes": "Same bbox and arch cut-out (r135 around 283,419) as the sedan door; only the window frame is squared off to follow the flat combi roof. Glass 372..712 x 62..196."
+    },
+    {
+      "bodyPart": "TAILLIGHT", "slot": "TAILLIGHT", "drawable": "car_taillight_combi",
+      "anchorPx": [92, 200], "sizePx": [96, 92], "anchorFx": [0.0625, 0.4357], "status": "new anchor",
+      "paintable": false, "behindBody": false,
+      "sedanAnchorPx": [5, 201],
+      "notes": "Same sprite size as car_taillight_std. Moved onto the rear quarter panel next to the tailgate so the lamp stays on the shell when the tailgate is missing. SedanLayers derives taillightFx/Fy from anchor + sprite size, so the brake-light glow follows automatically."
+    },
+    {
+      "bodyPart": "CARGO", "slot": "(new, optional)", "drawable": "car_cargo_boxes",
+      "anchorPx": [100, 110], "sizePx": [240, 90], "status": "optional",
+      "paintable": false, "behindBody": true,
+      "notes": "Luggage visible through the quarter glass / tailgate window. Needs a new ComponentSlot or can be tied to an existing item (e.g. expedition kit). Not required for the combi to work."
+    },
+    { "bodyPart": "DOOR_FRONT", "slot": "DOOR_FRONT", "drawable": "car_door_front", "anchorPx": [715, 45], "sizePx": [381, 393], "anchorFx": [0.4857, 0.0980], "status": "reuse", "paintable": true, "behindBody": false },
+    { "bodyPart": "HOOD", "slot": "HOOD", "drawable": "car_hood", "anchorPx": [1120, 153], "sizePx": [330, 108], "anchorFx": [0.7609, 0.3333], "status": "reuse", "paintable": true, "behindBody": false },
+    { "bodyPart": "HEADLIGHT", "slot": "HEADLIGHT", "drawable": "car_headlight_std", "anchorPx": [1295, 258], "sizePx": [173, 125], "anchorFx": [0.8797, 0.5621], "status": "reuse", "paintable": false, "behindBody": false },
+    { "bodyPart": "BUMPER_FRONT", "slot": "FRONT_BUMPER", "drawable": "car_bumper_front_fog", "anchorPx": [1290, 315], "sizePx": [184, 151], "anchorFx": [0.8764, 0.6863], "status": "reuse", "paintable": true, "behindBody": false },
+    { "bodyPart": "BUMPER_REAR", "slot": "REAR_BUMPER", "drawable": "car_bumper_rear_std", "anchorPx": [-10, 300], "sizePx": [211, 150], "anchorFx": [-0.0068, 0.6536], "status": "reuse", "paintable": true, "behindBody": false },
+    { "bodyPart": "REAR_SEAT", "slot": "SEAT_REAR", "drawable": "car_seat_rear", "anchorPx": [430, 120], "sizePx": [254, 215], "anchorFx": [0.2921, 0.2614], "status": "reuse", "paintable": false, "behindBody": true },
+    { "bodyPart": "FRONT_SEAT", "slot": "SEAT_FRONT", "drawable": "car_seat_front", "anchorPx": [750, 85], "sizePx": [234, 299], "anchorFx": [0.5095, 0.1852], "status": "reuse", "paintable": false, "behindBody": true },
+    { "bodyPart": "ROOF_RACK", "slot": "ROOF_RACK", "drawable": "car_roof_rack", "anchorPx": [442, -15], "sizePx": [479, 48], "anchorFx": [0.3003, -0.0327], "status": "reuse", "paintable": false, "behindBody": false,
+      "optionalVariant": { "drawable": "car_roof_rack_combi_long", "anchorPx": [190, -15], "sizePx": [730, 48], "note": "long rack using the flat roof; same slot" } },
+    { "bodyPart": "WHEELS", "slot": "TIRE_REAR / TIRE_FRONT", "drawable": "wheel_std | wheel_poor | wheel_sport | wheel_offroad", "status": "reuse", "notes": "Positioned by CarArtist from SedanLayers fx values, not by anchor." }
+  ],
+  "newSpriteCount": { "required": 3, "list": ["car_base_body_combi", "car_tailgate_combi", "car_taillight_combi"], "recommended": ["car_door_rear_combi"], "optional": ["car_cargo_boxes", "car_roof_rack_combi_long"] }
+}

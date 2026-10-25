@@ -32,3 +32,11 @@ local.properties
 # Godot import cache and local export output.
 /godot/.godot/
 /godot/export/
+
+# Local build caches and intermediate asset-processing output.
+/.gradle-home/
+/.gradle-user/
+/_tmp_bg/
+*.class
+__pycache__/
+*.pyc

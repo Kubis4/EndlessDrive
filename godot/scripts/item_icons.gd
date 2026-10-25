@@ -29,6 +29,11 @@ const SHAPES := {
 
 static func texture(key: String) -> Texture2D:
 	var canonical := key.to_lower()
+	# Dashboard and service screens share the same authored vehicle symbols.
+	var asset := "res://assets/ui/%s.svg" % canonical
+	if ResourceLoader.exists(asset):
+		if not _cache.has(canonical): _cache[canonical] = load(asset)
+		return _cache[canonical]
 	if not SHAPES.has(canonical):
 		canonical = "unknown"
 	if _cache.has(canonical):

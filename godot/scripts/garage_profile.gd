@@ -2,6 +2,7 @@ class_name DriveProfile
 extends RefCounted
 const PATH := "user://garage-profile.json"
 var bank := 0
+var best_distance := 0.0
 var upgrades: Dictionary = {"engine": 0, "tires": 0, "brakes": 0, "suspension": 0, "radiator": 0, "alternator": 0}
 var receipts: Dictionary = {}
 
@@ -47,7 +48,7 @@ func deposit(run: DriveRun) -> int:
 func store(path: String = PATH) -> Error:
 	var file := FileAccess.open(path + ".tmp", FileAccess.WRITE)
 	if file == null: return FileAccess.get_open_error()
-	file.store_string(JSON.stringify({"bank": bank, "upgrades": upgrades, "receipts": receipts}))
+	file.store_string(JSON.stringify({"bank": bank, "best_distance": best_distance, "upgrades": upgrades, "receipts": receipts}))
 	file.flush()
 	var error := file.get_error()
 	file.close()
@@ -64,6 +65,8 @@ static func restore(path: String = PATH) -> DriveProfile:
 		var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(candidate))
 		if not data is Dictionary or not data.get("upgrades") is Dictionary or not data.get("receipts", {}) is Dictionary: continue
 		var money: Variant = data.get("bank", 0)
+		var record: Variant = data.get("best_distance", 0.0)
+		if not (record is int or record is float) or not is_finite(float(record)) or float(record) < 0 or float(record) > 100000000: continue
 		if not (money is int or money is float) or not is_finite(float(money)) or float(money) < 0 or float(money) > 10000000: continue
 		var profile := DriveProfile.new()
 		var valid := true
@@ -81,5 +84,6 @@ static func restore(path: String = PATH) -> DriveProfile:
 			profile.receipts[str(key)] = int(value)
 		if valid:
 			profile.bank = int(money)
+			profile.best_distance = float(record)
 			return profile
 	return DriveProfile.new()

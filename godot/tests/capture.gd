@@ -12,6 +12,19 @@ func _capture() -> void:
 	root.add_child(game)
 	var output := "res://../build/godot-preview.png"
 	for argument: String in OS.get_cmdline_user_args():
+		if argument == "--touch-ui":
+			game.hud.expedition_ui.touch_mode = 1
+			game.hud.expedition_ui._layout()
+		if argument == "--equipment-ui": game.hud.expedition_ui.set_equipment_open(true)
+		if argument == "--english": game._settings_changed("language", 1.0)
+		if argument == "--winch": game.winch.toggle_attachment()
+		if argument.begins_with("--seed="):
+			game.run.world_seed = argument.trim_prefix("--seed=").to_int()
+			game.world.configure(game.run.world_seed)
+			game.world.update_stream(0)
+			game.vehicle.park()
+			game.vehicle.position = Vector3(0, game.world.height_at(0, game.world.center_at(0)) + 0.6, game.world.center_at(0))
+			game._update_camera(1, true)
 		if argument == "--car-close":
 			game.overview_size = 15
 			game.overview_offset = Vector3(12, 10, 12)
@@ -22,6 +35,14 @@ func _capture() -> void:
 			game._update_camera(1, true)
 		if argument == "--brake-lights":
 			game.vehicle.set_touch("brake", true, 9876)
+		if argument == "--warning-ui":
+			game.run.temperature = 112
+			game.run.fuel = 1.7
+			game.run.distance = 8430
+		if argument == "--high-beams":
+			game.run.headlights = true
+			game.run.high_beams = true
+		if argument == "--snorkel": game.run.snorkel_installed = true
 		if argument == "--no-shadows": game.sun.shadow_enabled = false
 		if argument.begins_with("--clock="):
 			game.world.clock = argument.trim_prefix("--clock=").to_float()
@@ -31,13 +52,15 @@ func _capture() -> void:
 			game.world.terrain.route_choices = {"0": int(argument.trim_prefix("--route="))}
 			game.world.terrain.clear_caches()
 		if argument == "--storm":
-			game.weather.storm_active = true
-			game.weather._storm_left = 60
-			game.weather.storm_edge = game.vehicle.position.x + 10
-			game.weather.intensity = 1
+			game.weather.start_sandstorm(0)
+			game.weather.storm_center = Vector2(game.vehicle.position.x, game.vehicle.position.z)
+			game.weather.storm_warning = 0
+			game.weather._storm_left = 50
+			game.weather.storm_visibility = 1
 		if argument.begins_with("--weather="):
 			game.weather.forced_mode = argument.trim_prefix("--weather=")
 		if argument == "--fx":
+			game.run.engine_running = true
 			game.vehicle.speed = 12
 		if argument == "--upgrades":
 			game._open_menu(false)

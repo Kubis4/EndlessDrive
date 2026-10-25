@@ -1,0 +1,212 @@
+[
+  {
+    "name": "industry_mid",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_rgba_max_error": 0,
+    "top_alpha_max": 0,
+    "bytes": 397148
+  },
+  {
+    "name": "industry_far",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_rgba_max_error": 0,
+    "top_alpha_max": 255,
+    "bytes": 899322
+  },
+  {
+    "name": "industry_near",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_rgba_max_error": 0,
+    "top_alpha_max": 0,
+    "bytes": 404454
+  },
+  {
+    "name": "desert_far",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_rgba_max_error": 0,
+    "top_alpha_max": 255,
+    "bytes": 936869
+  },
+  {
+    "name": "desert_mid",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_rgba_max_error": 0,
+    "top_alpha_max": 0,
+    "bytes": 469275
+  },
+  {
+    "name": "desert_near",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_rgba_max_error": 0,
+    "top_alpha_max": 0,
+    "bytes": 269548
+  },
+  {
+    "name": "desert_dusk_far",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_rgba_max_error": 0,
+    "top_alpha_max": 255,
+    "bytes": 815223
+  },
+  {
+    "name": "desert_dusk_mid",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_rgba_max_error": 0,
+    "top_alpha_max": 0,
+    "bytes": 456886
+  },
+  {
+    "name": "desert_dusk_near",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_rgba_max_error": 0,
+    "top_alpha_max": 0,
+    "bytes": 338062
+  },
+  {
+    "name": "sandstorm_far",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_rgba_max_error": 0,
+    "top_alpha_max": 255,
+    "bytes": 1006480
+  },
+  {
+    "name": "sandstorm_mid",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_rgba_max_error": 0,
+    "top_alpha_max": 0,
+    "bytes": 708492
+  },
+  {
+    "name": "sandstorm_near",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_rgba_max_error": 0,
+    "top_alpha_max": 0,
+    "bytes": 303643
+  },
+  {
+    "name": "duststorm_far",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_rgba_max_error": 0,
+    "top_alpha_max": 255,
+    "bytes": 910713
+  },
+  {
+    "name": "duststorm_mid",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_rgba_max_error": 0,
+    "top_alpha_max": 0,
+    "bytes": 672392
+  },
+  {
+    "name": "duststorm_near",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_rgba_max_error": 0,
+    "top_alpha_max": 0,
+    "bytes": 401801
+  },
+  {
+    "name": "forest_far",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_rgba_max_error": 0,
+    "top_alpha_max": 255,
+    "bytes": 911051
+  },
+  {
+    "name": "forest_mid",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_rgba_max_error": 0,
+    "top_alpha_max": 0,
+    "bytes": 497569
+  },
+  {
+    "name": "forest_near",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_rgba_max_error": 0,
+    "top_alpha_max": 0,
+    "bytes": 572639
+  },
+  {
+    "name": "forest_alive_far",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_rgba_max_error": 0,
+    "top_alpha_max": 255,
+    "bytes": 1034662
+  },
+  {
+    "name": "forest_alive_mid",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_rgba_max_error": 0,
+    "top_alpha_max": 0,
+    "bytes": 696874
+  },
+  {
+    "name": "forest_alive_near",
+    "size": [
+      2048,
+      512
+    ],
+    "edge_rgba_max_error": 0,
+    "top_alpha_max": 0,
+    "bytes": 916169
+  }
+]

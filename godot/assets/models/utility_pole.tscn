@@ -1,9 +1,19 @@
 [gd_scene format=3]
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ki176"]
-resource_name = "Desert_wood"
-albedo_color = Color(0.4117647, 0.3254902, 0.22745098, 1)
-roughness = 0.9
+[ext_resource type="Shader" path="res://shaders/prop_surface.gdshader" id="1_1myll"]
+[ext_resource type="CompressedTexture2DArray" path="res://assets/textures/surface-albedo-atlas.png" id="2_kyuxv"]
+[ext_resource type="CompressedTexture2DArray" path="res://assets/textures/world-materials-atlas.png" id="3_1aqf0"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_7l2fa"]
+resource_name = "Detailed_0"
+render_priority = 0
+shader = ExtResource("1_1myll")
+shader_parameter/world_atlas = ExtResource("3_1aqf0")
+shader_parameter/terrain_atlas = ExtResource("2_kyuxv")
+shader_parameter/tint = Color(0.4117647, 0.3254902, 0.22745098, 1)
+shader_parameter/surface_kind = 0
+shader_parameter/roughness_value = 0.9
+shader_parameter/metallic_value = 0.0
 
 [sub_resource type="CylinderMesh" id="CylinderMesh_emqu0"]
 top_radius = 0.1
@@ -44,12 +54,12 @@ size = Vector3(0.32, 9, 0.32)
 
 [node name="TimberPole" type="MeshInstance3D" parent="." unique_id=471130722]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.8, 0)
-material_override = SubResource("StandardMaterial3D_ki176")
+material_override = SubResource("ShaderMaterial_7l2fa")
 mesh = SubResource("CylinderMesh_emqu0")
 
 [node name="CrossArm" type="MeshInstance3D" parent="." unique_id=1313741205]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8.85, 0)
-material_override = SubResource("StandardMaterial3D_ki176")
+material_override = SubResource("ShaderMaterial_7l2fa")
 mesh = SubResource("BoxMesh_0i8pu")
 
 [node name="Insulator" type="MeshInstance3D" parent="." unique_id=1705186614]

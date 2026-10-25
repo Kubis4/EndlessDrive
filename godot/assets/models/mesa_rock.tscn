@@ -1,9 +1,19 @@
 [gd_scene format=4]
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pc31v"]
-resource_name = "Desert_rock"
-albedo_color = Color(0.60784316, 0.52156866, 0.40392157, 1)
-roughness = 0.9
+[ext_resource type="Shader" path="res://shaders/prop_surface.gdshader" id="1_k6is4"]
+[ext_resource type="CompressedTexture2DArray" path="res://assets/textures/surface-albedo-atlas.png" id="2_0c237"]
+[ext_resource type="CompressedTexture2DArray" path="res://assets/textures/world-materials-atlas.png" id="3_3s0y8"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_mbduk"]
+resource_name = "Detailed_4"
+render_priority = 0
+shader = ExtResource("1_k6is4")
+shader_parameter/world_atlas = ExtResource("3_3s0y8")
+shader_parameter/terrain_atlas = ExtResource("2_0c237")
+shader_parameter/tint = Color(0.60784316, 0.52156866, 0.40392157, 1)
+shader_parameter/surface_kind = 4
+shader_parameter/roughness_value = 0.9
+shader_parameter/metallic_value = 0.0
 
 [sub_resource type="ArrayMesh" id="ArrayMesh_pn65b"]
 _surfaces = [{
@@ -22,7 +32,7 @@ size = Vector3(1.5, 1.1, 1.5)
 [node name="WeatheredMesaRock" type="Node3D" unique_id=1343828357]
 
 [node name="FacetedSandstone" type="MeshInstance3D" parent="." unique_id=1585342742]
-material_override = SubResource("StandardMaterial3D_pc31v")
+material_override = SubResource("ShaderMaterial_mbduk")
 mesh = SubResource("ArrayMesh_pn65b")
 
 [node name="Collision" type="StaticBody3D" parent="." unique_id=924076446]

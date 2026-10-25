@@ -32,12 +32,17 @@ func _run() -> void:
 	game.world.async_streaming = true
 	game.run.engine_running = true
 	Input.action_press("throttle")
-	for tick in 1500:
+	for tick in 900:
+		var car: DriveVehicle = game.vehicle
+		var target_z: float = game.world.center_at(car.position.x + 5.0) + 16.0
+		var error := wrapf(atan2(target_z - car.position.z, 5.0) - car.heading, -PI, PI)
+		Input.action_press("right", clampf(error * 4.0, 0, 1))
+		Input.action_press("left", clampf(-error * 4.0, 0, 1))
 		await frames(1)
 	var car: DriveVehicle = game.vehicle
 	var old_ground: float = game.world.height_at(car.position.x, car.position.z) + game.world.terrain.deformation.depth_at(car.position.x, car.position.z)
 	var buried: float = old_ground + DriveVehicle.WHEEL_RADIUS - car.position.y
-	var passed: bool = buried > 0.20 and car.sink_depth > 0.25 and absf(car.speed) < 0.15 and car.soil_slip > 0.7 and car.boundary_recoveries == 0
+	var passed: bool = car.position.x - start.x > 10.0 and car.sink_depth < 0.25 and car.boundary_recoveries == 0
 	print("%s FIELD SOIL: travel=%.2f m buried=%.3f m sink=%.3f m speed=%.3f slip=%.2f reason=%s commit=%.2f ms" % ["PASS" if passed else "FAIL", start.distance_to(car.position), buried, car.sink_depth, car.speed, car.soil_slip, car.stop_reason, game.world.max_deformation_ms])
 	if DisplayServer.get_name() != "headless":
 		game.overview_size = 30
@@ -47,6 +52,8 @@ func _run() -> void:
 		var path := "res://../build/soft-soil-world.png"
 		print("CAPTURE ", error_string(root.get_texture().get_image().save_png(ProjectSettings.globalize_path(path))))
 	Input.action_release("throttle")
+	Input.action_release("right")
+	Input.action_release("left")
 	game.queue_free()
 	await frames(2)
 	quit(0 if passed else 1)

@@ -192,7 +192,9 @@ func _route() -> void:
 	check(car.position.x >= ROUTE_END and travelled >= ROUTE_END, "Physically follows curves, potholes, water and >=47 streamed seams over 4.6 km")
 	check(resets == 0 and car.boundary_recoveries == 0, "Route requires no unsticking or boundary recovery")
 	check(max_water > 0.30, "Route physically enters water")
-	check(snow_ticks > 60 and max_height - min_height > 15.0, "Route physically crosses snowy roads and real hills (no position/velocity assignments during the route)")
+	# Roads are now graded through the hills; surrounding ridges keep their
+	# relief. A 15 m road-height requirement forced the former steep saddle.
+	check(snow_ticks > 60 and max_height - min_height > 8.0, "Route physically crosses shaded snow patches and graded hills (no pose/velocity assignments during the route)")
 	check(cruise_ticks > 15000 and released_pedal_ticks > 3000, "Cruise stays engaged for >250 seconds, including >50 seconds with the throttle pedal released")
 	check(abrupt_drops == 0 and cruise_losses == 0, "No abrupt (>1 m/s per tick) loss or unexplained cruise cancellation")
 	print("ROUTE SUMMARY metres=%.2f x=%.2f max_drop_per_tick=%.3f resets=%d cruise_losses=%d abrupt_drops=%d terrain_steps=%s snow_seconds=%.2f cruise_seconds=%.2f released_pedal_seconds=%.2f height_span=%.2f" % [travelled, car.position.x, max_step_drop, resets, cruise_losses, abrupt_drops, str(car.get("terrain_steps")), snow_ticks / 60.0, cruise_ticks / 60.0, released_pedal_ticks / 60.0, max_height - min_height])
@@ -353,7 +355,8 @@ func _reverse() -> void:
 	state.fuel = 40.0
 	state.distance = 500.0
 	Input.action_press("brake", 1.0)
-	for i in 850:
+	# Reverse is limited to 5 m/s; allow acceleration plus 160 m of travel.
+	for i in 2400:
 		await frame()
 		if car.position.x < -160.0: break
 	Input.action_release("brake")
@@ -442,6 +445,7 @@ func _terrain_edges() -> void:
 		var impacts: int = car.get("obstacle_impacts")
 		car.speed = 12.0
 		for i in 120: await frame()
+		print("TERRAIN SEAM height=%.2f x=%.3f y=%.3f speed=%.3f impacts=%d steps=%d rejected=%d" % [height, car.position.x, car.position.y, car.speed, car.obstacle_impacts - impacts, car.terrain_steps, car.terrain_step_rejections])
 		if height < 1.0:
 			check(car.position.x > 13.0 and car.position.y > height + 0.3 and int(car.get("obstacle_impacts")) == impacts, "Rounded chassis traverses a physical 18 cm concave terrain seam")
 		else:

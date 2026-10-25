@@ -90,11 +90,11 @@ func _run() -> void:
 	var chunk: Node3D = world.chunks[0]
 	var arrays: Array = chunk.get_meta("terrain_arrays")
 	var width := int(chunk.get_meta("terrain_width"))
-	var index := 5 * width + 51
+	var index := 10 * width + width / 2
 	var p: Vector3 = arrays[Mesh.ARRAY_VERTEX][index]
 	var before := ground(world, p, car.get_rid())
 	for pass_index in 30: world.compact_tyres([p], profile.sample(p.x, p.z), 1.0)
-	world._update_rut_band(chunk, 0)
+	world._update_rut_band(chunk, floori(p.x / DriveTerrainBake.BAND_ROWS))
 	await frames(3)
 	var after := ground(world, p, car.get_rid())
 	var vertex: Vector3 = (chunk.get_meta("terrain_arrays") as Array)[Mesh.ARRAY_VERTEX][index]

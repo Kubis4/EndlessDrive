@@ -1,0 +1,12 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/editor_preview.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/world/generated/canyon.scn" id="2"]
+
+[node name="CanyonPreview" type="Node3D"]
+script = ExtResource("1")
+preview_seed = 1000002
+preview_distance = 180.0
+geometry_path = "res://scenes/world/generated/canyon.scn"
+
+[node name="GeneratedTerrain" parent="." instance=ExtResource("2")]

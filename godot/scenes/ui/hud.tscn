@@ -1,21 +1,29 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://scripts/hud.gd" id="1_8qguk"]
+[ext_resource type="PackedScene" path="res://scenes/ui/expedition_hud.tscn" id="hud_c"]
 [ext_resource type="Texture2D" path="res://assets/ui/checked.svg" id="2_136eg"]
 [ext_resource type="Texture2D" path="res://assets/ui/unchecked.svg" id="3_oj5la"]
 [ext_resource type="Script" path="res://scripts/car_diagram.gd" id="4_gss2c"]
+[ext_resource type="Script" path="res://scripts/dashboard_dial.gd" id="5_dial"]
+
+[ext_resource type="Texture2D" path="res://assets/ui/fuel.svg" id="icon_fuel"]
+[ext_resource type="Texture2D" path="res://assets/ui/oil.svg" id="icon_oil"]
+[ext_resource type="Texture2D" path="res://assets/ui/coolant.svg" id="icon_coolant"]
+[ext_resource type="Texture2D" path="res://assets/ui/battery.svg" id="icon_battery"]
+[ext_resource type="Texture2D" path="res://assets/ui/temperature.svg" id="icon_temperature"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_h022r"]
 content_margin_left = 12.0
 content_margin_top = 8.0
 content_margin_right = 12.0
 content_margin_bottom = 8.0
-bg_color = Color(0.14117648, 0.15294118, 0.14901961, 1)
+bg_color = Color(0.106, 0.145, 0.180, 0.96)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
 border_width_bottom = 1
-border_color = Color(0.25882354, 0.28627452, 0.2627451, 1)
+border_color = Color(0.220, 0.298, 0.349, 1)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -26,12 +34,12 @@ content_margin_left = 12.0
 content_margin_top = 8.0
 content_margin_right = 12.0
 content_margin_bottom = 8.0
-bg_color = Color(0.14117648, 0.16078432, 0.15686275, 1)
+bg_color = Color(0.106, 0.157, 0.192, 1)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
 border_width_bottom = 1
-border_color = Color(0.8980392, 0.72156864, 0.45882353, 1)
+border_color = Color(1, 0.776, 0.420, 1)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -47,7 +55,7 @@ border_width_left = 1
 border_width_top = 1
 border_width_right = 1
 border_width_bottom = 1
-border_color = Color(0.25882354, 0.28627452, 0.2627451, 1)
+border_color = Color(0.220, 0.298, 0.349, 1)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -58,12 +66,12 @@ content_margin_left = 12.0
 content_margin_top = 8.0
 content_margin_right = 12.0
 content_margin_bottom = 8.0
-bg_color = Color(0.14117648, 0.16078432, 0.15686275, 1)
+bg_color = Color(0.106, 0.157, 0.192, 1)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
 border_width_bottom = 1
-border_color = Color(0.25882354, 0.28627452, 0.2627451, 1)
+border_color = Color(0.220, 0.298, 0.349, 1)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -79,7 +87,7 @@ border_width_left = 1
 border_width_top = 1
 border_width_right = 1
 border_width_bottom = 1
-border_color = Color(0.8980392, 0.72156864, 0.45882353, 1)
+border_color = Color(1, 0.776, 0.420, 1)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -90,7 +98,7 @@ content_margin_left = 8.0
 content_margin_top = 7.0
 content_margin_right = 8.0
 content_margin_bottom = 7.0
-bg_color = Color(0.09803922, 0.11372549, 0.11372549, 1)
+bg_color = Color(0.063, 0.098, 0.137, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -101,7 +109,7 @@ content_margin_left = 10.0
 content_margin_top = 10.0
 content_margin_right = 10.0
 content_margin_bottom = 10.0
-bg_color = Color(0.09803922, 0.11372549, 0.11372549, 1)
+bg_color = Color(0.063, 0.098, 0.137, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -112,7 +120,7 @@ content_margin_left = 20.0
 content_margin_top = 10.0
 content_margin_right = 20.0
 content_margin_bottom = 10.0
-bg_color = Color(0.14117648, 0.16078432, 0.15686275, 1)
+bg_color = Color(0.106, 0.157, 0.192, 1)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -123,7 +131,7 @@ content_margin_left = 20.0
 content_margin_top = 10.0
 content_margin_right = 20.0
 content_margin_bottom = 10.0
-bg_color = Color(0.09803922, 0.11372549, 0.11372549, 1)
+bg_color = Color(0.063, 0.098, 0.137, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -131,22 +139,22 @@ corner_radius_bottom_left = 10
 
 [sub_resource type="Theme" id="Theme_o6xly"]
 default_font_size = 17
-Button/colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+Button/colors/font_color = Color(0.961, 0.957, 0.914, 1)
 Button/colors/font_disabled_color = Color(0.46666667, 0.49019608, 0.4627451, 1)
 Button/colors/font_hover_color = Color(1, 1, 1, 1)
-Button/colors/font_pressed_color = Color(0.8980392, 0.72156864, 0.45882353, 1)
+Button/colors/font_pressed_color = Color(1, 0.776, 0.420, 1)
 Button/styles/disabled = SubResource("StyleBoxFlat_h022r")
 Button/styles/focus = SubResource("StyleBoxFlat_4jqwt")
 Button/styles/hover = SubResource("StyleBoxFlat_kicr4")
 Button/styles/normal = SubResource("StyleBoxFlat_mj13f")
 Button/styles/pressed = SubResource("StyleBoxFlat_0h1do")
-CheckBox/colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+CheckBox/colors/font_color = Color(0.961, 0.957, 0.914, 1)
 CheckBox/icons/checked = ExtResource("2_136eg")
 CheckBox/icons/unchecked = ExtResource("3_oj5la")
-Label/colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
-LineEdit/colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+Label/colors/font_color = Color(0.961, 0.957, 0.914, 1)
+LineEdit/colors/font_color = Color(0.961, 0.957, 0.914, 1)
 LineEdit/styles/normal = SubResource("StyleBoxFlat_4d46k")
-TabContainer/colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+TabContainer/colors/font_color = Color(0.961, 0.957, 0.914, 1)
 TabContainer/styles/panel = SubResource("StyleBoxFlat_erw67")
 TabContainer/styles/tab_selected = SubResource("StyleBoxFlat_gonto")
 TabContainer/styles/tab_unselected = SubResource("StyleBoxFlat_cwdlq")
@@ -156,18 +164,23 @@ content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-bg_color = Color(0.09803922, 0.11372549, 0.11372549, 1)
+bg_color = Color(0.063, 0.098, 0.137, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
 corner_radius_bottom_left = 10
+
+border_width_top = 2
+border_color = Color(0.42, 0.60, 0.65, 0.8)
+shadow_color = Color(0.01, 0.02, 0.03, 0.25)
+shadow_size = 5
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_65nxt"]
 content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-bg_color = Color(0.09803922, 0.11372549, 0.11372549, 1)
+bg_color = Color(0.063, 0.098, 0.137, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -288,7 +301,7 @@ content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-bg_color = Color(0.09803922, 0.11372549, 0.11372549, 1)
+bg_color = Color(0.063, 0.098, 0.137, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -299,7 +312,7 @@ content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-bg_color = Color(0.09803922, 0.11372549, 0.11372549, 1)
+bg_color = Color(0.063, 0.098, 0.137, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -310,29 +323,39 @@ content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-bg_color = Color(0.09803922, 0.11372549, 0.11372549, 1)
+bg_color = Color(0.063, 0.098, 0.137, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
 corner_radius_bottom_left = 10
+
+border_width_top = 2
+border_color = Color(0.42, 0.60, 0.65, 0.8)
+shadow_color = Color(0.01, 0.02, 0.03, 0.25)
+shadow_size = 5
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_kfdjh"]
 content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-bg_color = Color(0.09803922, 0.11372549, 0.11372549, 1)
+bg_color = Color(0.063, 0.098, 0.137, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
 corner_radius_bottom_left = 10
+
+border_width_top = 2
+border_color = Color(0.42, 0.60, 0.65, 0.8)
+shadow_color = Color(0.01, 0.02, 0.03, 0.25)
+shadow_size = 5
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_xdlig"]
 content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-bg_color = Color(0.09803922, 0.11372549, 0.11372549, 1)
+bg_color = Color(0.063, 0.098, 0.137, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -343,7 +366,7 @@ content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-bg_color = Color(0.09803922, 0.11372549, 0.11372549, 1)
+bg_color = Color(0.063, 0.098, 0.137, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -354,7 +377,7 @@ content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-bg_color = Color(0.14117648, 0.16078432, 0.15686275, 1)
+bg_color = Color(0.106, 0.157, 0.192, 1)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -409,7 +432,7 @@ content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-bg_color = Color(0.09803922, 0.11372549, 0.11372549, 1)
+bg_color = Color(0.063, 0.098, 0.137, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -420,7 +443,7 @@ content_margin_left = 12.0
 content_margin_top = 9.0
 content_margin_right = 12.0
 content_margin_bottom = 9.0
-bg_color = Color(0.14117648, 0.16078432, 0.15686275, 1)
+bg_color = Color(0.106, 0.157, 0.192, 1)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -465,7 +488,7 @@ content_margin_left = 12.0
 content_margin_top = 9.0
 content_margin_right = 12.0
 content_margin_bottom = 9.0
-bg_color = Color(0.14117648, 0.16078432, 0.15686275, 1)
+bg_color = Color(0.106, 0.157, 0.192, 1)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -510,7 +533,7 @@ content_margin_left = 12.0
 content_margin_top = 9.0
 content_margin_right = 12.0
 content_margin_bottom = 9.0
-bg_color = Color(0.14117648, 0.16078432, 0.15686275, 1)
+bg_color = Color(0.106, 0.157, 0.192, 1)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -555,7 +578,7 @@ content_margin_left = 12.0
 content_margin_top = 9.0
 content_margin_right = 12.0
 content_margin_bottom = 9.0
-bg_color = Color(0.14117648, 0.16078432, 0.15686275, 1)
+bg_color = Color(0.106, 0.157, 0.192, 1)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -600,7 +623,7 @@ content_margin_left = 12.0
 content_margin_top = 9.0
 content_margin_right = 12.0
 content_margin_bottom = 9.0
-bg_color = Color(0.14117648, 0.16078432, 0.15686275, 1)
+bg_color = Color(0.106, 0.157, 0.192, 1)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -645,7 +668,7 @@ content_margin_left = 12.0
 content_margin_top = 9.0
 content_margin_right = 12.0
 content_margin_bottom = 9.0
-bg_color = Color(0.14117648, 0.16078432, 0.15686275, 1)
+bg_color = Color(0.106, 0.157, 0.192, 1)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -690,7 +713,7 @@ content_margin_left = 14.0
 content_margin_top = 12.0
 content_margin_right = 14.0
 content_margin_bottom = 12.0
-bg_color = Color(0.14117648, 0.16078432, 0.15686275, 1)
+bg_color = Color(0.106, 0.157, 0.192, 1)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -713,7 +736,7 @@ content_margin_left = 14.0
 content_margin_top = 12.0
 content_margin_right = 14.0
 content_margin_bottom = 12.0
-bg_color = Color(0.14117648, 0.16078432, 0.15686275, 1)
+bg_color = Color(0.106, 0.157, 0.192, 1)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -736,7 +759,7 @@ content_margin_left = 14.0
 content_margin_top = 12.0
 content_margin_right = 14.0
 content_margin_bottom = 12.0
-bg_color = Color(0.14117648, 0.16078432, 0.15686275, 1)
+bg_color = Color(0.106, 0.157, 0.192, 1)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -759,7 +782,7 @@ content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-bg_color = Color(0.09803922, 0.11372549, 0.11372549, 1)
+bg_color = Color(0.063, 0.098, 0.137, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -770,11 +793,37 @@ content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-bg_color = Color(0.09803922, 0.11372549, 0.11372549, 1)
+bg_color = Color(0.063, 0.098, 0.137, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
 corner_radius_bottom_left = 10
+
+[sub_resource type="StyleBoxFlat" id="ThrottleNormal"]
+content_margin_left = 10.0
+content_margin_top = 8.0
+content_margin_right = 10.0
+content_margin_bottom = 8.0
+bg_color = Color(0.94, 0.61, 0.23, 0.97)
+border_width_top = 2
+border_color = Color(1, 0.79, 0.46, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_left = 14
+corner_radius_bottom_right = 14
+shadow_color = Color(0, 0, 0, 0.25)
+shadow_size = 3
+
+[sub_resource type="StyleBoxFlat" id="ThrottlePressed"]
+content_margin_left = 10.0
+content_margin_top = 8.0
+content_margin_right = 10.0
+content_margin_bottom = 8.0
+bg_color = Color(1, 0.76, 0.39, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_left = 14
+corner_radius_bottom_right = 14
 
 [node name="HUD" type="CanvasLayer" unique_id=681881596]
 process_mode = 3
@@ -789,6 +838,8 @@ anchor_bottom = 1.0
 mouse_filter = 2
 theme = SubResource("Theme_o6xly")
 metadata/layout_bindings = ["_root"]
+
+[node name="ExpeditionHUD" parent="Root" instance=ExtResource("hud_c")]
 
 [node name="PanelContainer" type="PanelContainer" parent="Root" unique_id=1226012558]
 layout_mode = 0
@@ -806,9 +857,9 @@ theme_override_constants/separation = 24
 [node name="EndlessDrive" type="Label" parent="Root/PanelContainer/HBoxContainer" unique_id=1804815137]
 custom_minimum_size = Vector2(260, 0)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.8980392, 0.72156864, 0.45882353, 1)
+theme_override_colors/font_color = Color(1, 0.776, 0.420, 1)
 theme_override_font_sizes/font_size = 22
-text = "ENDLESS / DRIVE"
+text = "ENDLESS  /  DRIVE"
 
 [node name="VBoxContainer" type="VBoxContainer" parent="Root/PanelContainer/HBoxContainer" unique_id=1186291533]
 layout_mode = 2
@@ -817,15 +868,15 @@ theme_override_constants/separation = 2
 
 [node name="Region" type="Label" parent="Root/PanelContainer/HBoxContainer/VBoxContainer" unique_id=75078751]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6666667, 0.6627451, 0.61960787, 1)
-theme_override_font_sizes/font_size = 12
+theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
+theme_override_font_sizes/font_size = 13
 text = "PRAŠNÁ KOTLINA"
 metadata/layout_bindings = ["_region"]
 
 [node name="Distance" type="Label" parent="Root/PanelContainer/HBoxContainer/VBoxContainer" unique_id=1675409368]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
-theme_override_font_sizes/font_size = 20
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
+theme_override_font_sizes/font_size = 23
 text = "0.00 km"
 metadata/layout_bindings = ["_distance"]
 
@@ -836,6 +887,8 @@ focus_mode = 0
 theme_override_font_sizes/font_size = 14
 text = "L  SVETLÁ"
 
+toggle_mode = true
+metadata/layout_bindings = ["_lights_button"]
 [node name="CKamera" type="Button" parent="Root/PanelContainer/HBoxContainer" unique_id=1237388506]
 custom_minimum_size = Vector2(54, 38)
 layout_mode = 2
@@ -854,44 +907,52 @@ text = "Ⅱ"
 layout_mode = 0
 offset_left = 24.0
 offset_top = 104.0
-offset_right = 260.0
-offset_bottom = 332.0
+offset_right = 258.0
+offset_bottom = 346.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_65nxt")
 
 [node name="VBoxContainer" type="VBoxContainer" parent="Root/PanelContainer2" unique_id=1550943563]
 layout_mode = 2
-theme_override_constants/separation = 9
+theme_override_constants/separation = 5
 
 [node name="VozidloZásoby" type="Label" parent="Root/PanelContainer2/VBoxContainer" unique_id=406261399]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6666667, 0.6627451, 0.61960787, 1)
+theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
 theme_override_font_sizes/font_size = 12
-text = "VOZIDLO / ZÁSOBY"
+text = "STAV EXPEDÍCIE"
 
 [node name="VBoxContainer" type="VBoxContainer" parent="Root/PanelContainer2/VBoxContainer" unique_id=597026814]
 layout_mode = 2
-theme_override_constants/separation = 3
+theme_override_constants/separation = 2
 
 [node name="HBoxContainer" type="HBoxContainer" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer" unique_id=1822121780]
 layout_mode = 2
 theme_override_constants/separation = 4
 
+[node name="FuelIcon" type="TextureRect" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer/HBoxContainer"]
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 2
+mouse_filter = 2
+texture = ExtResource("icon_fuel")
+expand_mode = 1
+stretch_mode = 5
+
 [node name="Palivo" type="Label" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer/HBoxContainer" unique_id=252020839]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.6666667, 0.6627451, 0.61960787, 1)
+theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
 theme_override_font_sizes/font_size = 14
 text = "Palivo"
 
 [node name="StatsFuelValue" type="Label" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer/HBoxContainer" unique_id=221903546]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
 theme_override_font_sizes/font_size = 14
 metadata/layout_bindings = ["_stats/fuel/value"]
 
 [node name="StatsFuelBar" type="ProgressBar" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer" unique_id=884254469]
-modulate = Color(0.8980392, 0.72156864, 0.45882353, 1)
-custom_minimum_size = Vector2(0, 5)
+modulate = Color(1, 0.776, 0.420, 1)
+custom_minimum_size = Vector2(0, 4)
 layout_mode = 2
 mouse_filter = 2
 theme_override_styles/background = SubResource("StyleBoxFlat_el1dq")
@@ -902,28 +963,36 @@ metadata/layout_bindings = ["_stats/fuel/bar"]
 
 [node name="VBoxContainer2" type="VBoxContainer" parent="Root/PanelContainer2/VBoxContainer" unique_id=281313061]
 layout_mode = 2
-theme_override_constants/separation = 3
+theme_override_constants/separation = 2
 
 [node name="HBoxContainer" type="HBoxContainer" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer2" unique_id=1351826849]
 layout_mode = 2
 theme_override_constants/separation = 4
 
+[node name="OilIcon" type="TextureRect" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer2/HBoxContainer"]
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 2
+mouse_filter = 2
+texture = ExtResource("icon_oil")
+expand_mode = 1
+stretch_mode = 5
+
 [node name="Olej" type="Label" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer2/HBoxContainer" unique_id=97549896]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.6666667, 0.6627451, 0.61960787, 1)
+theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
 theme_override_font_sizes/font_size = 14
 text = "Olej"
 
 [node name="StatsOilValue" type="Label" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer2/HBoxContainer" unique_id=959014526]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
 theme_override_font_sizes/font_size = 14
 metadata/layout_bindings = ["_stats/oil/value"]
 
 [node name="StatsOilBar" type="ProgressBar" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer2" unique_id=1063841848]
-modulate = Color(0.8980392, 0.72156864, 0.45882353, 1)
-custom_minimum_size = Vector2(0, 5)
+modulate = Color(1, 0.776, 0.420, 1)
+custom_minimum_size = Vector2(0, 4)
 layout_mode = 2
 mouse_filter = 2
 theme_override_styles/background = SubResource("StyleBoxFlat_1e6lo")
@@ -934,28 +1003,36 @@ metadata/layout_bindings = ["_stats/oil/bar"]
 
 [node name="VBoxContainer3" type="VBoxContainer" parent="Root/PanelContainer2/VBoxContainer" unique_id=1395425049]
 layout_mode = 2
-theme_override_constants/separation = 3
+theme_override_constants/separation = 2
 
 [node name="HBoxContainer" type="HBoxContainer" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer3" unique_id=1990773542]
 layout_mode = 2
 theme_override_constants/separation = 4
 
+[node name="CoolantIcon" type="TextureRect" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer3/HBoxContainer"]
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 2
+mouse_filter = 2
+texture = ExtResource("icon_coolant")
+expand_mode = 1
+stretch_mode = 5
+
 [node name="Chladenie" type="Label" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer3/HBoxContainer" unique_id=2144316930]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.6666667, 0.6627451, 0.61960787, 1)
+theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
 theme_override_font_sizes/font_size = 14
 text = "Chladenie"
 
 [node name="StatsCoolantValue" type="Label" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer3/HBoxContainer" unique_id=991651879]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
 theme_override_font_sizes/font_size = 14
 metadata/layout_bindings = ["_stats/coolant/value"]
 
 [node name="StatsCoolantBar" type="ProgressBar" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer3" unique_id=382174750]
-modulate = Color(0.8980392, 0.72156864, 0.45882353, 1)
-custom_minimum_size = Vector2(0, 5)
+modulate = Color(1, 0.776, 0.420, 1)
+custom_minimum_size = Vector2(0, 4)
 layout_mode = 2
 mouse_filter = 2
 theme_override_styles/background = SubResource("StyleBoxFlat_pkwgd")
@@ -966,28 +1043,36 @@ metadata/layout_bindings = ["_stats/coolant/bar"]
 
 [node name="VBoxContainer4" type="VBoxContainer" parent="Root/PanelContainer2/VBoxContainer" unique_id=1521673075]
 layout_mode = 2
-theme_override_constants/separation = 3
+theme_override_constants/separation = 2
 
 [node name="HBoxContainer" type="HBoxContainer" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer4" unique_id=1040624143]
 layout_mode = 2
 theme_override_constants/separation = 4
 
+[node name="BatteryIcon" type="TextureRect" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer4/HBoxContainer"]
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 2
+mouse_filter = 2
+texture = ExtResource("icon_battery")
+expand_mode = 1
+stretch_mode = 5
+
 [node name="Batéria" type="Label" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer4/HBoxContainer" unique_id=186994778]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.6666667, 0.6627451, 0.61960787, 1)
+theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
 theme_override_font_sizes/font_size = 14
 text = "Batéria"
 
 [node name="StatsBatteryValue" type="Label" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer4/HBoxContainer" unique_id=1285278048]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
 theme_override_font_sizes/font_size = 14
 metadata/layout_bindings = ["_stats/battery/value"]
 
 [node name="StatsBatteryBar" type="ProgressBar" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer4" unique_id=469746751]
-modulate = Color(0.8980392, 0.72156864, 0.45882353, 1)
-custom_minimum_size = Vector2(0, 5)
+modulate = Color(1, 0.776, 0.420, 1)
+custom_minimum_size = Vector2(0, 4)
 layout_mode = 2
 mouse_filter = 2
 theme_override_styles/background = SubResource("StyleBoxFlat_7yoph")
@@ -998,28 +1083,36 @@ metadata/layout_bindings = ["_stats/battery/bar"]
 
 [node name="VBoxContainer5" type="VBoxContainer" parent="Root/PanelContainer2/VBoxContainer" unique_id=1980627081]
 layout_mode = 2
-theme_override_constants/separation = 3
+theme_override_constants/separation = 2
 
 [node name="HBoxContainer" type="HBoxContainer" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer5" unique_id=1533982859]
 layout_mode = 2
 theme_override_constants/separation = 4
 
+[node name="TemperatureIcon" type="TextureRect" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer5/HBoxContainer"]
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 2
+mouse_filter = 2
+texture = ExtResource("icon_temperature")
+expand_mode = 1
+stretch_mode = 5
+
 [node name="Teplota" type="Label" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer5/HBoxContainer" unique_id=115097817]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.6666667, 0.6627451, 0.61960787, 1)
+theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
 theme_override_font_sizes/font_size = 14
 text = "Teplota"
 
 [node name="StatsTemperatureValue" type="Label" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer5/HBoxContainer" unique_id=440953496]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
 theme_override_font_sizes/font_size = 14
 metadata/layout_bindings = ["_stats/temperature/value"]
 
 [node name="StatsTemperatureBar" type="ProgressBar" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer5" unique_id=1450446600]
-modulate = Color(0.8980392, 0.72156864, 0.45882353, 1)
-custom_minimum_size = Vector2(0, 5)
+modulate = Color(1, 0.776, 0.420, 1)
+custom_minimum_size = Vector2(0, 4)
 layout_mode = 2
 mouse_filter = 2
 theme_override_styles/background = SubResource("StyleBoxFlat_t0png")
@@ -1034,25 +1127,26 @@ offset_left = 30.0
 offset_top = 348.0
 offset_right = 290.0
 offset_bottom = 408.0
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
 theme_override_font_sizes/font_size = 15
 text = "PRVÁ ZASTÁVKA
 Nájdi zásoby pri púštnej dielni."
 metadata/layout_bindings = ["_objective"]
 
 [node name="PanelContainer3" type="PanelContainer" parent="Root" unique_id=1236735488]
+visible = false
 layout_mode = 0
 offset_left = 24.0
-offset_top = 420.0
-offset_right = 260.0
-offset_bottom = 496.0
+offset_top = 360.0
+offset_right = 258.0
+offset_bottom = 452.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_27rlx")
 
 [node name="RoadInfo" type="Label" parent="Root/PanelContainer3" unique_id=1995687628]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
-theme_override_font_sizes/font_size = 15
-text = "PIESOK"
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
+theme_override_font_sizes/font_size = 14
+text = "ŠTRK\n4×4 · PRIĽNAVOSŤ 84 %"
 autowrap_mode = 3
 metadata/layout_bindings = ["_road_info"]
 
@@ -1069,7 +1163,7 @@ metadata/layout_bindings = ["_junction_panel"]
 
 [node name="JunctionInfo" type="Label" parent="Root/JunctionPanel" unique_id=1937512339]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.8980392, 0.72156864, 0.45882353, 1)
+theme_override_colors/font_color = Color(1, 0.776, 0.420, 1)
 theme_override_font_sizes/font_size = 16
 autowrap_mode = 3
 metadata/layout_bindings = ["_junction_info"]
@@ -1080,44 +1174,73 @@ anchor_left = 0.5
 anchor_top = 1.0
 anchor_right = 0.5
 anchor_bottom = 1.0
-offset_left = -178.0
-offset_top = -134.0
-offset_right = 178.0
-offset_bottom = -26.0
+offset_left = -225.0
+offset_top = -212.0
+offset_right = 225.0
+offset_bottom = -22.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_emer0")
 
 [node name="HBoxContainer" type="HBoxContainer" parent="Root/PanelContainer4" unique_id=1599764517]
 layout_mode = 2
-theme_override_constants/separation = 18
+theme_override_constants/separation = 12
 
-[node name="Speed" type="Label" parent="Root/PanelContainer4/HBoxContainer" unique_id=1007275281]
-custom_minimum_size = Vector2(108, 0)
+alignment = 1
+[node name="Instrument" type="Control" parent="Root/PanelContainer4/HBoxContainer"]
+custom_minimum_size = Vector2(176, 162)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
-theme_override_font_sizes/font_size = 48
-text = "000"
+mouse_filter = 2
+script = ExtResource("5_dial")
+metadata/layout_bindings = ["_dial"]
+
+[node name="Speed" type="Label" parent="Root/PanelContainer4/HBoxContainer/Instrument" unique_id=1007275281]
+custom_minimum_size = Vector2(0, 0)
+layout_mode = 0
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
+theme_override_font_sizes/font_size = 44
+text = "0"
 metadata/layout_bindings = ["_speed"]
 
-[node name="VBoxContainer" type="VBoxContainer" parent="Root/PanelContainer4/HBoxContainer" unique_id=1924760465]
-layout_mode = 2
-theme_override_constants/separation = 5
-
-[node name="KmH" type="Label" parent="Root/PanelContainer4/HBoxContainer/VBoxContainer" unique_id=1694591688]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.6666667, 0.6627451, 0.61960787, 1)
+offset_top = 48.0
+offset_right = 176.0
+offset_bottom = 105.0
+horizontal_alignment = 1
+[node name="KmH" type="Label" parent="Root/PanelContainer4/HBoxContainer/Instrument" unique_id=1694591688]
+layout_mode = 0
+theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
 theme_override_font_sizes/font_size = 11
 text = "KM/H"
 
+offset_top = 103.0
+offset_right = 176.0
+offset_bottom = 123.0
+horizontal_alignment = 1
+
+[node name="DriveState" type="Label" parent="Root/PanelContainer4/HBoxContainer"]
+custom_minimum_size = Vector2(42, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.898, 0.722, 0.459, 1)
+theme_override_font_sizes/font_size = 20
+text = "N\n4×4"
+horizontal_alignment = 1
+metadata/layout_bindings = ["_drive_state"]
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Root/PanelContainer4/HBoxContainer" unique_id=1924760465]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+
+alignment = 1
 [node name="Engine" type="Label" parent="Root/PanelContainer4/HBoxContainer/VBoxContainer" unique_id=9510012]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
-theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
+theme_override_font_sizes/font_size = 14
 text = "MOTOR VYPNUTÝ"
 metadata/layout_bindings = ["_engine"]
 
 [node name="CruiseStatus" type="Label" parent="Root/PanelContainer4/HBoxContainer/VBoxContainer" unique_id=1156166068]
+visible = false
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6666667, 0.6627451, 0.61960787, 1)
+theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
 theme_override_font_sizes/font_size = 12
 text = "Tempomat vypnutý"
 metadata/layout_bindings = ["_cruise_status"]
@@ -1132,7 +1255,7 @@ offset_right = 120.0
 offset_bottom = -24.0
 focus_mode = 0
 theme_override_font_sizes/font_size = 16
-text = "◀  A"
+text = "←"
 metadata/layout_bindings = ["_pedals/left"]
 
 [node name="PedalsRight" type="Button" parent="Root" unique_id=1892349359]
@@ -1145,7 +1268,7 @@ offset_right = 224.0
 offset_bottom = -24.0
 focus_mode = 0
 theme_override_font_sizes/font_size = 16
-text = "D  ▶"
+text = "→"
 metadata/layout_bindings = ["_pedals/right"]
 
 [node name="PedalsBrake" type="Button" parent="Root" unique_id=1929267742]
@@ -1155,13 +1278,12 @@ anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = -240.0
-offset_top = -118.0
+offset_top = -112.0
 offset_right = -140.0
 offset_bottom = -24.0
 focus_mode = 0
 theme_override_font_sizes/font_size = 16
-text = "BRZDA
-S / VZAD"
+text = "↓"
 metadata/layout_bindings = ["_pedals/brake"]
 
 [node name="PedalsThrottle" type="Button" parent="Root" unique_id=674412652]
@@ -1171,15 +1293,20 @@ anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = -132.0
-offset_top = -142.0
+offset_top = -136.0
 offset_right = -24.0
 offset_bottom = -24.0
 focus_mode = 0
-theme_override_font_sizes/font_size = 16
-text = "PLYN
-W"
+theme_override_font_sizes/font_size = 18
+text = "↑"
 metadata/layout_bindings = ["_pedals/throttle"]
 
+theme_override_styles/normal = SubResource("ThrottleNormal")
+theme_override_styles/hover = SubResource("ThrottlePressed")
+theme_override_styles/pressed = SubResource("ThrottlePressed")
+theme_override_colors/font_color = Color(0.07, 0.12, 0.16, 1)
+theme_override_colors/font_hover_color = Color(0.07, 0.12, 0.16, 1)
+theme_override_colors/font_pressed_color = Color(0.07, 0.12, 0.16, 1)
 [node name="EngineButton" type="Button" parent="Root" unique_id=1868794376]
 layout_mode = 0
 anchor_top = 1.0
@@ -1202,7 +1329,7 @@ offset_right = 224.0
 offset_bottom = -172.0
 focus_mode = 0
 theme_override_font_sizes/font_size = 14
-text = "TAB  VOZIDLO / KUFOR"
+text = "TAB  SERVIS / KUFOR"
 
 [node name="CruiseButton" type="Button" parent="Root" unique_id=1303342573]
 layout_mode = 0
@@ -1211,9 +1338,9 @@ anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = -240.0
-offset_top = -204.0
+offset_top = -194.0
 offset_right = -24.0
-offset_bottom = -160.0
+offset_bottom = -150.0
 tooltip_text = "Zapamätá držaný plyn. Brzda, pauza alebo vypnutie motora ho zruší. Spotreba pri automatickom plyne je vyššia."
 focus_mode = 0
 toggle_mode = true
@@ -1228,9 +1355,9 @@ anchor_top = 1.0
 anchor_right = 0.5
 anchor_bottom = 1.0
 offset_left = -250.0
-offset_top = -244.0
+offset_top = -348.0
 offset_right = 250.0
-offset_bottom = -160.0
+offset_bottom = -270.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_kfdjh")
 metadata/layout_bindings = ["_near_panel"]
 
@@ -1241,7 +1368,7 @@ theme_override_constants/separation = 16
 [node name="NearTitle" type="Label" parent="Root/NearPanel/HBoxContainer" unique_id=351616782]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
 theme_override_font_sizes/font_size = 16
 metadata/layout_bindings = ["_near_title"]
 
@@ -1255,18 +1382,42 @@ metadata/layout_bindings = ["_search"]
 [node name="WeatherPanel" type="PanelContainer" parent="Root" unique_id=2067970459]
 layout_mode = 0
 offset_left = 24.0
-offset_top = 344.0
-offset_right = 260.0
-offset_bottom = 412.0
+offset_top = 466.0
+offset_right = 258.0
+offset_bottom = 542.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_xdlig")
 metadata/layout_bindings = ["_weather_panel"]
 
 [node name="NextStop" type="Label" parent="Root/WeatherPanel" unique_id=235889284]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6666667, 0.6627451, 0.61960787, 1)
+theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
 theme_override_font_sizes/font_size = 14
 autowrap_mode = 3
 metadata/layout_bindings = ["_next_stop"]
+
+[node name="RoadAssist" type="PanelContainer" parent="Root"]
+visible = false
+layout_mode = 0
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -225.0
+offset_top = -266.0
+offset_right = 225.0
+offset_bottom = -222.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_emer0")
+metadata/layout_bindings = ["_assist_panel"]
+
+[node name="RoadAssistText" type="Label" parent="Root/RoadAssist"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.949, 0.929, 0.875, 1)
+theme_override_font_sizes/font_size = 15
+text = "↑ PO CESTE · 4×4"
+horizontal_alignment = 1
+metadata/layout_bindings = ["_road_assist"]
 
 [node name="Shade" type="ColorRect" parent="Root" unique_id=271847954]
 visible = false
@@ -1305,13 +1456,13 @@ theme_override_constants/separation = 3
 
 [node name="PrehľadávanieZásoby" type="Label" parent="Root/Loot/VBoxContainer/HBoxContainer/VBoxContainer" unique_id=849172696]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.8980392, 0.72156864, 0.45882353, 1)
+theme_override_colors/font_color = Color(1, 0.776, 0.420, 1)
 theme_override_font_sizes/font_size = 12
 text = "PREHĽADÁVANIE / ZÁSOBY"
 
 [node name="LootTitle" type="Label" parent="Root/Loot/VBoxContainer/HBoxContainer/VBoxContainer" unique_id=452248701]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
 theme_override_font_sizes/font_size = 27
 text = "Púštna dielňa"
 metadata/layout_bindings = ["_loot_title"]
@@ -1378,13 +1529,13 @@ theme_override_constants/separation = 7
 
 [node name="MiestoVKufri" type="Label" parent="Root/Loot/VBoxContainer/HBoxContainer3/PanelContainer/SummaryScroll/VBoxContainer" unique_id=563750076]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.8980392, 0.72156864, 0.45882353, 1)
+theme_override_colors/font_color = Color(1, 0.776, 0.420, 1)
 theme_override_font_sizes/font_size = 13
 text = "MIESTO V KUFRI"
 
 [node name="LootCapacity" type="Label" parent="Root/Loot/VBoxContainer/HBoxContainer3/PanelContainer/SummaryScroll/VBoxContainer" unique_id=819065721]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
 theme_override_font_sizes/font_size = 17
 text = "12.5 / 230 kg
 4 / 10 miest"
@@ -1392,12 +1543,12 @@ metadata/layout_bindings = ["_loot_capacity"]
 
 [node name="Hmotnosť" type="Label" parent="Root/Loot/VBoxContainer/HBoxContainer3/PanelContainer/SummaryScroll/VBoxContainer" unique_id=1745084104]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6666667, 0.6627451, 0.61960787, 1)
+theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
 theme_override_font_sizes/font_size = 11
 text = "HMOTNOSŤ"
 
 [node name="LootWeight" type="ProgressBar" parent="Root/Loot/VBoxContainer/HBoxContainer3/PanelContainer/SummaryScroll/VBoxContainer" unique_id=1413707111]
-modulate = Color(0.8980392, 0.72156864, 0.45882353, 1)
+modulate = Color(1, 0.776, 0.420, 1)
 custom_minimum_size = Vector2(0, 5)
 layout_mode = 2
 mouse_filter = 2
@@ -1409,12 +1560,12 @@ metadata/layout_bindings = ["_loot_weight"]
 
 [node name="ÚložnéMiesta" type="Label" parent="Root/Loot/VBoxContainer/HBoxContainer3/PanelContainer/SummaryScroll/VBoxContainer" unique_id=257122276]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6666667, 0.6627451, 0.61960787, 1)
+theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
 theme_override_font_sizes/font_size = 11
 text = "ÚLOŽNÉ MIESTA"
 
 [node name="LootSlots" type="ProgressBar" parent="Root/Loot/VBoxContainer/HBoxContainer3/PanelContainer/SummaryScroll/VBoxContainer" unique_id=1994547670]
-modulate = Color(0.8980392, 0.72156864, 0.45882353, 1)
+modulate = Color(1, 0.776, 0.420, 1)
 custom_minimum_size = Vector2(0, 5)
 layout_mode = 2
 mouse_filter = 2
@@ -1427,7 +1578,7 @@ metadata/layout_bindings = ["_loot_slots"]
 [node name="LootSelection" type="Label" parent="Root/Loot/VBoxContainer/HBoxContainer3/PanelContainer/SummaryScroll/VBoxContainer" unique_id=1424363195]
 custom_minimum_size = Vector2(310, 42)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
 theme_override_font_sizes/font_size = 17
 text = "Označ zásoby, ktoré chceš vziať."
 autowrap_mode = 3
@@ -1443,7 +1594,7 @@ metadata/layout_bindings = ["_loot_diagram"]
 [node name="LootDetail" type="Label" parent="Root/Loot/VBoxContainer/HBoxContainer3/PanelContainer/SummaryScroll/VBoxContainer" unique_id=867073047]
 custom_minimum_size = Vector2(310, 100)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6666667, 0.6627451, 0.61960787, 1)
+theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
 theme_override_font_sizes/font_size = 14
 text = "Klikni na ikonu nálezu. Zobrazí sa jeho význam a porovnanie s autom.
 
@@ -1501,7 +1652,7 @@ theme_override_constants/separation = 16
 [node name="VozidloPrípravaNaCestu" type="Label" parent="Root/Service/VBoxContainer/HBoxContainer" unique_id=2117812625]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.8980392, 0.72156864, 0.45882353, 1)
+theme_override_colors/font_color = Color(1, 0.776, 0.420, 1)
 theme_override_font_sizes/font_size = 26
 text = "VOZIDLO / PRÍPRAVA NA CESTU"
 
@@ -1512,7 +1663,7 @@ text = "ZAVRIEŤ  ESC"
 
 [node name="CargoInfo" type="Label" parent="Root/Service/VBoxContainer" unique_id=163569195]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6666667, 0.6627451, 0.61960787, 1)
+theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
 theme_override_font_sizes/font_size = 15
 text = "KUFOR · zásoby a náhradné diely aktuálnej jazdy"
 metadata/layout_bindings = ["_cargo_info"]
@@ -1536,7 +1687,7 @@ theme_override_constants/separation = 9
 
 [node name="VyberDielNaAute" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer" unique_id=1328706341]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.8980392, 0.72156864, 0.45882353, 1)
+theme_override_colors/font_color = Color(1, 0.776, 0.420, 1)
 theme_override_font_sizes/font_size = 13
 text = "VYBER DIEL NA AUTE"
 
@@ -1549,7 +1700,7 @@ metadata/layout_bindings = ["_car_diagram"]
 [node name="ComponentInfo" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer" unique_id=641370108]
 custom_minimum_size = Vector2(290, 64)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
 theme_override_font_sizes/font_size = 14
 text = "Vyber diel na schéme auta."
 autowrap_mode = 3
@@ -1573,7 +1724,7 @@ theme_override_constants/separation = 9
 
 [node name="NamontovanéDiely" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer2" unique_id=2137583649]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6666667, 0.6627451, 0.61960787, 1)
+theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
 theme_override_font_sizes/font_size = 13
 text = "NAMONTOVANÉ DIELY"
 
@@ -1599,7 +1750,7 @@ stretch_mode = 5
 [node name="Motor" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer2/PanelContainer/VBoxContainer/HBoxContainer" unique_id=1109860008]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
 theme_override_font_sizes/font_size = 15
 text = "Motor"
 
@@ -1610,7 +1761,7 @@ theme_override_font_sizes/font_size = 12
 metadata/layout_bindings = ["_part_buttons/engine"]
 
 [node name="PartBarsEngine" type="ProgressBar" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer2/PanelContainer/VBoxContainer" unique_id=587961113]
-modulate = Color(0.8980392, 0.72156864, 0.45882353, 1)
+modulate = Color(1, 0.776, 0.420, 1)
 custom_minimum_size = Vector2(0, 5)
 layout_mode = 2
 mouse_filter = 2
@@ -1642,7 +1793,7 @@ stretch_mode = 5
 [node name="Pneumatiky" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer2/PanelContainer2/VBoxContainer/HBoxContainer" unique_id=509541198]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
 theme_override_font_sizes/font_size = 15
 text = "Pneumatiky"
 
@@ -1653,7 +1804,7 @@ theme_override_font_sizes/font_size = 12
 metadata/layout_bindings = ["_part_buttons/tires"]
 
 [node name="PartBarsTires" type="ProgressBar" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer2/PanelContainer2/VBoxContainer" unique_id=27627082]
-modulate = Color(0.8980392, 0.72156864, 0.45882353, 1)
+modulate = Color(1, 0.776, 0.420, 1)
 custom_minimum_size = Vector2(0, 5)
 layout_mode = 2
 mouse_filter = 2
@@ -1685,7 +1836,7 @@ stretch_mode = 5
 [node name="Brzdy" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer2/PanelContainer3/VBoxContainer/HBoxContainer" unique_id=1705205093]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
 theme_override_font_sizes/font_size = 15
 text = "Brzdy"
 
@@ -1696,7 +1847,7 @@ theme_override_font_sizes/font_size = 12
 metadata/layout_bindings = ["_part_buttons/brakes"]
 
 [node name="PartBarsBrakes" type="ProgressBar" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer2/PanelContainer3/VBoxContainer" unique_id=2035760865]
-modulate = Color(0.8980392, 0.72156864, 0.45882353, 1)
+modulate = Color(1, 0.776, 0.420, 1)
 custom_minimum_size = Vector2(0, 5)
 layout_mode = 2
 mouse_filter = 2
@@ -1728,7 +1879,7 @@ stretch_mode = 5
 [node name="Odpruženie" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer2/PanelContainer4/VBoxContainer/HBoxContainer" unique_id=1956698425]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
 theme_override_font_sizes/font_size = 15
 text = "Odpruženie"
 
@@ -1739,7 +1890,7 @@ theme_override_font_sizes/font_size = 12
 metadata/layout_bindings = ["_part_buttons/suspension"]
 
 [node name="PartBarsSuspension" type="ProgressBar" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer2/PanelContainer4/VBoxContainer" unique_id=1310563953]
-modulate = Color(0.8980392, 0.72156864, 0.45882353, 1)
+modulate = Color(1, 0.776, 0.420, 1)
 custom_minimum_size = Vector2(0, 5)
 layout_mode = 2
 mouse_filter = 2
@@ -1771,7 +1922,7 @@ stretch_mode = 5
 [node name="Chladič" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer2/PanelContainer5/VBoxContainer/HBoxContainer" unique_id=934172689]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
 theme_override_font_sizes/font_size = 15
 text = "Chladič"
 
@@ -1782,7 +1933,7 @@ theme_override_font_sizes/font_size = 12
 metadata/layout_bindings = ["_part_buttons/radiator"]
 
 [node name="PartBarsRadiator" type="ProgressBar" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer2/PanelContainer5/VBoxContainer" unique_id=890288676]
-modulate = Color(0.8980392, 0.72156864, 0.45882353, 1)
+modulate = Color(1, 0.776, 0.420, 1)
 custom_minimum_size = Vector2(0, 5)
 layout_mode = 2
 mouse_filter = 2
@@ -1814,7 +1965,7 @@ stretch_mode = 5
 [node name="Alternátor" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer2/PanelContainer6/VBoxContainer/HBoxContainer" unique_id=511647587]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
 theme_override_font_sizes/font_size = 15
 text = "Alternátor"
 
@@ -1825,7 +1976,7 @@ theme_override_font_sizes/font_size = 12
 metadata/layout_bindings = ["_part_buttons/alternator"]
 
 [node name="PartBarsAlternator" type="ProgressBar" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer2/PanelContainer6/VBoxContainer" unique_id=1939580183]
-modulate = Color(0.8980392, 0.72156864, 0.45882353, 1)
+modulate = Color(1, 0.776, 0.420, 1)
 custom_minimum_size = Vector2(0, 5)
 layout_mode = 2
 mouse_filter = 2
@@ -1842,7 +1993,7 @@ theme_override_constants/separation = 12
 
 [node name="KvapalinyAZásoby" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer3" unique_id=28506432]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6666667, 0.6627451, 0.61960787, 1)
+theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
 theme_override_font_sizes/font_size = 13
 text = "KVAPALINY A ZÁSOBY"
 
@@ -1867,13 +2018,13 @@ stretch_mode = 5
 
 [node name="Palivo" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer3/PanelContainer/VBoxContainer/HBoxContainer" unique_id=2065565545]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
 theme_override_font_sizes/font_size = 18
 text = "Palivo"
 
 [node name="FluidInfoFuel" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer3/PanelContainer/VBoxContainer" unique_id=1484171563]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6666667, 0.6627451, 0.61960787, 1)
+theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
 theme_override_font_sizes/font_size = 14
 metadata/layout_bindings = ["_fluid_info/fuel"]
 
@@ -1903,13 +2054,13 @@ stretch_mode = 5
 
 [node name="MotorovýOlej" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer3/PanelContainer2/VBoxContainer/HBoxContainer" unique_id=720336365]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
 theme_override_font_sizes/font_size = 18
 text = "Motorový olej"
 
 [node name="FluidInfoOil" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer3/PanelContainer2/VBoxContainer" unique_id=1483648073]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6666667, 0.6627451, 0.61960787, 1)
+theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
 theme_override_font_sizes/font_size = 14
 metadata/layout_bindings = ["_fluid_info/oil"]
 
@@ -1939,13 +2090,13 @@ stretch_mode = 5
 
 [node name="ChladiacaVoda" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer3/PanelContainer3/VBoxContainer/HBoxContainer" unique_id=11159218]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
 theme_override_font_sizes/font_size = 18
 text = "Chladiaca voda"
 
 [node name="FluidInfoCoolant" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer3/PanelContainer3/VBoxContainer" unique_id=1465799011]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6666667, 0.6627451, 0.61960787, 1)
+theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
 theme_override_font_sizes/font_size = 14
 metadata/layout_bindings = ["_fluid_info/coolant"]
 
@@ -1974,7 +2125,7 @@ metadata/_tab_index = 2
 
 [node name="StopServiceInfo" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Prevádzka · lak" unique_id=1692889190]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.8980392, 0.72156864, 0.45882353, 1)
+theme_override_colors/font_color = Color(1, 0.776, 0.420, 1)
 theme_override_font_sizes/font_size = 18
 text = "Platené služby sú dostupné pri príslušnej budove."
 autowrap_mode = 3
@@ -2000,7 +2151,7 @@ metadata/layout_bindings = ["_shop_buttons/repair"]
 
 [node name="LakKarosérie1AutolakVKufriAlebo" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Prevádzka · lak" unique_id=1639329227]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6666667, 0.6627451, 0.61960787, 1)
+theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
 theme_override_font_sizes/font_size = 14
 text = "LAK KAROSÉRIE / 1 AUTOLAK V KUFRI ALEBO 4 ŠROTU V LAKOVNI"
 
@@ -2058,7 +2209,7 @@ metadata/layout_bindings = ["_paint_buttons/a54e43"]
 
 [node name="ZásobyZoSkriniekVBudoveAPlatenéSl" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Prevádzka · lak" unique_id=1959531026]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6666667, 0.6627451, 0.61960787, 1)
+theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
 theme_override_font_sizes/font_size = 16
 text = "Zásoby zo skriniek v budove a platené služby sú oddelené.
 Stojany majú konečnú zásobu; opravy ani lakovanie nie sú zadarmo."
@@ -2083,13 +2234,13 @@ theme_override_constants/separation = 16
 
 [node name="CestaPočká" type="Label" parent="Root/Pause/VBoxContainer" unique_id=1810990737]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.8980392, 0.72156864, 0.45882353, 1)
+theme_override_colors/font_color = Color(1, 0.776, 0.420, 1)
 theme_override_font_sizes/font_size = 30
 text = "CESTA POČKÁ."
 
 [node name="PostupSaPriPauzeAutomatickyUloží" type="Label" parent="Root/Pause/VBoxContainer" unique_id=1162875420]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6666667, 0.6627451, 0.61960787, 1)
+theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
 theme_override_font_sizes/font_size = 16
 text = "Postup sa pri pauze automaticky uloží."
 
@@ -2103,7 +2254,7 @@ text = "POKRAČOVAŤ"
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 focus_mode = 0
-text = "ULOŽIŤ CESTU"
+text = "REŠTARTOVAŤ CESTU"
 
 [node name="HlavnéMenu" type="Button" parent="Root/Pause/VBoxContainer" unique_id=2076276007]
 custom_minimum_size = Vector2(0, 48)
@@ -2130,7 +2281,7 @@ metadata/layout_bindings = ["_toast_panel"]
 
 [node name="Message" type="Label" parent="Root/ToastPanel" unique_id=1692779602]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.9490196, 0.92941177, 0.8745098, 1)
+theme_override_colors/font_color = Color(0.961, 0.957, 0.914, 1)
 theme_override_font_sizes/font_size = 17
 horizontal_alignment = 1
 autowrap_mode = 3
@@ -2148,6 +2299,57 @@ title = "Potvrdiť výmenu dielu"
 ok_button_text = "Vymeniť diel"
 cancel_button_text = "Ponechať pôvodný"
 metadata/layout_bindings = ["_install_confirmation"]
+
+[node name="EquipmentControls" type="HBoxContainer" parent="Root"]
+layout_mode = 0
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -282.0
+offset_top = -264.0
+offset_right = 282.0
+offset_bottom = -222.0
+theme_override_constants/separation = 6
+
+[node name="drive_mode" type="Button" parent="Root/EquipmentControls"]
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+toggle_mode = true
+theme_override_font_sizes/font_size = 13
+text = "V  4×4"
+
+[node name="differential" type="Button" parent="Root/EquipmentControls"]
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+toggle_mode = true
+theme_override_font_sizes/font_size = 13
+text = "B  DIFF"
+
+[node name="winch" type="Button" parent="Root/EquipmentControls"]
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+toggle_mode = true
+theme_override_font_sizes/font_size = 13
+text = "G  NAVIJAK"
+
+[node name="winch_pull" type="Button" parent="Root/EquipmentControls"]
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+toggle_mode = true
+theme_override_font_sizes/font_size = 13
+text = "H  ŤAHAŤ"
+
+[node name="RestartConfirmation" type="ConfirmationDialog" parent="Root"]
+title = "Reštartovať cestu?"
+size = Vector2i(560, 180)
+ok_button_text = "Reštartovať"
+cancel_button_text = "Späť"
+dialog_text = "Vrátiš sa na začiatok tejto cesty. Postup aktuálnej jazdy sa nahradí."
 
 [connection signal="pressed" from="Root/PanelContainer/HBoxContainer/LSvetlá" to="." method="_dispatch" binds= ["lights"]]
 [connection signal="pressed" from="Root/PanelContainer/HBoxContainer/CKamera" to="." method="_dispatch" binds= ["camera"]]
@@ -2195,8 +2397,16 @@ metadata/layout_bindings = ["_install_confirmation"]
 [connection signal="pressed" from="Root/Service/VBoxContainer/ServiceTabs/Prevádzka · lak/HBoxContainer2/PaintButtonsD8d8c9" to="." method="_dispatch" binds= ["paint:d8d8c9"]]
 [connection signal="pressed" from="Root/Service/VBoxContainer/ServiceTabs/Prevádzka · lak/HBoxContainer2/PaintButtonsA54e43" to="." method="_dispatch" binds= ["paint:a54e43"]]
 [connection signal="pressed" from="Root/Pause/VBoxContainer/Pokračovať" to="." method="_dispatch" binds= ["resume"]]
-[connection signal="pressed" from="Root/Pause/VBoxContainer/UložiťCestu" to="." method="_dispatch" binds= ["save"]]
+[connection signal="pressed" from="Root/Pause/VBoxContainer/UložiťCestu" to="." method="_dispatch" binds= ["restart"]]
 [connection signal="pressed" from="Root/Pause/VBoxContainer/HlavnéMenu" to="." method="_dispatch" binds= ["menu"]]
 [connection signal="pressed" from="Root/Pause/VBoxContainer/UložiťAUkončiť" to="." method="_dispatch" binds= ["quit"]]
 [connection signal="confirmed" from="Root/Confirmation" to="." method="_dispatch" binds= ["new"]]
 [connection signal="confirmed" from="Root/InstallConfirmation" to="." method="_confirm_install"]
+
+[connection signal="pressed" from="Root/EquipmentControls/drive_mode" to="." method="_dispatch" binds= ["drive_mode"]]
+
+[connection signal="pressed" from="Root/EquipmentControls/differential" to="." method="_dispatch" binds= ["differential"]]
+
+[connection signal="pressed" from="Root/EquipmentControls/winch" to="." method="_dispatch" binds= ["winch"]]
+
+[connection signal="pressed" from="Root/EquipmentControls/winch_pull" to="." method="_dispatch" binds= ["winch_pull"]]

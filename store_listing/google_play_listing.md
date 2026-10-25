@@ -98,4 +98,7 @@ The selected source images are real in-game captures from the project. The older
 - Full description: keep within the 4,000-character Play limit.
 - Add the screenshots from `screenshots/` in the order above.
 - Before publishing, add the final developer name, support email, privacy policy URL, content rating and Data safety answers.
+- Developer website (required for AdMob app-ads.txt): `https://kubis4.github.io`
+- Privacy policy URL: `https://kubis4.github.io/privacy.html`
+- Verify that `https://kubis4.github.io/app-ads.txt` returns the AdMob publisher line before requesting verification.
 - Verify that the final screenshots match the build uploaded to Play Console.

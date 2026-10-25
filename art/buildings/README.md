@@ -31,16 +31,26 @@ autumn backdrop. Other environments keep the original art. The same season is
 used for the station and its relay mast. All three sets preload with GameAssets.
 The previous procedural roof snow line is replaced by the authored winter art.
 
+House, garage, fuel, repair and paint also have a `_night` PNG. These are full
+nighttime material textures with their window and lamp light painted into the
+image, not emissive masks or runtime overlays. The five silhouettes and canvas
+dimensions match their base sprites exactly. `BuildingSpritePainter` crossfades
+the whole daytime/seasonal sprite into the whole night sprite through twilight;
+looted buildings remain on their dark daytime material. Relay keeps only its
+small dynamic status signal and does not have a night texture.
+
 `BuildingArtTest` checks all 18 transparent cutouts, distinct seasonal artwork and
 stable rendering. It exports `building-seasons.png` from the actual Android
 renderer: house, garage, fuel, repair, paint and relay columns, with original,
-autumn and winter rows. `building-review.png` is the previous base-art gallery.
+autumn and winter rows. It also verifies the five night silhouettes and exports
+`building-day-night.png`. `building-review.png` is the previous base-art gallery.
 
 ## Validation
 
 - Debug APK and instrumentation APK build successfully.
-- Both BuildingSeasonTest checks and all four BuildingArtTest checks pass;
-  the latter ran on the connected Android device against all 18 sprites.
+- All eight current building/damage-art instrumentation checks pass on the
+  Android emulator, including exact day/night silhouette alignment.
+- Damage animation frame and fixed-capacity burst-buffer unit tests pass.
 - Previous base-art full unit suite: 214 passed, 13 failed in physics/world/economy tests; those
   failures remain outside this artwork change.
 - The additional Compose screen smoke test cannot initialize Espresso input

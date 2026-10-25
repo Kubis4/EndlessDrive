@@ -1,5 +1,7 @@
 extends Node3D
 
+const Locale = preload("res://scripts/localization.gd")
+
 @export_group("Desert overview camera")
 @export_range(30.0, 90.0, 1.0) var overview_size := 53.0
 @export var overview_offset := Vector3(-36, 52, 44)
@@ -12,12 +14,15 @@ var camera: Camera3D
 var sun: DirectionalLight3D
 var environment: Environment
 var _save_timer := 0.0
+var _save_worker: Thread
 var _camera_mode := 0
 var _capturing := false
 var _capture_path := ""
 var _capture_frames := 0
 var _ephemeral := false
+var _focus_pause_enabled := true
 var _camera_focus := Vector3.ZERO
+var _camera_grade_offset := 0.0
 var active_building_id := -1
 var menu: DriveMenu
 var _in_menu := false
@@ -26,13 +31,20 @@ var _session_started := false
 var _had_save := false
 var _camera_preference := 1.0
 var _volume_preference := 0.8
+var _language_preference := 0
 var _paint_materials: Array[ShaderMaterial] = []
 var weather: DriveWeather
 var effects: DriveEffects
+var winch: Node3D
 var profile: DriveProfile
 var route_decisions_enabled := true
-var _sun_day_tint := Color("fff1d8")
+var _sun_day_tint := Color("f0ede6")
 var _sky_last_daylight := -1.0
+var _last_dust_visibility := -1.0
+var route_origin := Vector3.ZERO
+var origin_rebasing_enabled := true
+const ORIGIN_STEP := 2048.0
+var _last_mechanical_events := 0
 
 
 func _ready() -> void:
@@ -44,6 +56,7 @@ func _ready() -> void:
 		if argument == "--fresh" or argument == "--test-session":
 			_ephemeral = true
 	run = DriveRun.new()
+	origin_rebasing_enabled = not _ephemeral
 	profile = DriveProfile.new() if _ephemeral else DriveProfile.restore()
 	var saved := {} if _ephemeral else DriveSave.restore()
 	_had_save = not saved.is_empty()
@@ -51,13 +64,15 @@ func _ready() -> void:
 	if not saved.is_empty():
 		run = DriveRun.from_data(saved)
 	elif not _ephemeral:
+		run.world_seed = DriveTerrain.new_journey_seed()
 		profile.prepare_run(run)
 	_setup_lighting()
 	world = DriveWorld.new()
 	add_child(world)
 	world.configure(run.world_seed)
+	world.terrain.soil_moisture = clampf(float(run.weather_state.get("wetness", 0.0)), 0, 1)
 	world.terrain.route_choices = run.route_choices.duplicate()
-	world.terrain.deformation.restore(run.terrain_deformation)
+	world.restore_deformation(run.terrain_deformation)
 	world.clock = run.elapsed
 	world.hazards_enabled = not _ephemeral
 	var pose := Vector3(0, 1.0, world.center_at(0))
@@ -122,31 +137,50 @@ func _ready() -> void:
 	weather.world = world
 	add_child(weather)
 	hud.weather = weather
+	winch = preload("res://scripts/winch.gd").new()
+	winch.vehicle = vehicle
+	winch.world = world
+	add_child(winch)
+	_last_mechanical_events = run.mechanical_events
+	_rebase_world(true)
 	world.async_streaming = not _ephemeral
 	route_decisions_enabled = not _ephemeral
-	hud.toast("E / MOTOR naštartuje auto. Pri garáži zastav a prehľadaj zásoby.")
 	if not saved.is_empty():
-		hud.toast("Cesta obnovená. Auto stojí a motor je vypnutý.")
+		hud.toast(tr("Cesta obnovená. Auto stojí a motor je vypnutý."))
 	if "--night" in OS.get_cmdline_user_args():
 		run.day_time = 0.82
 		run.headlights = true
 	if not _ephemeral:
 		_open_menu(false)
+		if DisplayServer.get_name() != "headless":
+			var light_primer := preload("res://scripts/light_primer.gd").new()
+			light_primer.vehicle = vehicle
+			light_primer.environment = environment
+			add_child(light_primer)
+			var warmup := load("res://scripts/render_warmup.gd").new() as SubViewport
+			warmup.set("environment_template", environment)
+			warmup.set("vehicle_template", vehicle._visual)
+			add_child(warmup)
 
 
 func _process(dt: float) -> void:
+	_finish_auto_save()
+	_rebase_world()
+	if run.mechanical_events > _last_mechanical_events:
+		_last_mechanical_events = run.mechanical_events
+		hud.toast(run.last_mechanical_event)
 	if route_decisions_enabled:
 		var choice := world.choose_route(vehicle.position)
 		if not choice.is_empty():
 			run.route_choices = world.terrain.route_choices.duplicate()
-			_save(false)
+			_auto_save()
 	world.update_stream(vehicle.position.x)
 	_update_camera(dt)
 	_update_lighting()
 	_save_timer += dt
 	if _save_timer >= 20.0:
 		_save_timer = 0.0
-		_save(false)
+		_auto_save()
 	if not _capture_path.is_empty() and not _capturing:
 		_capture_frames += 1
 		if _capture_frames >= 20:
@@ -162,11 +196,37 @@ func _action(action: String) -> void:
 			hud.toast(run.toggle_engine())
 			if not run.engine_running: vehicle.cancel_cruise()
 		"lights":
-			run.headlights = not run.headlights
+			if not run.headlights:
+				run.headlights = true
+				run.high_beams = false
+			elif not run.high_beams: run.high_beams = true
+			else:
+				run.headlights = false
+				run.high_beams = false
+		"high_beams":
+			run.high_beams = not run.high_beams
+			run.headlights = true
+		"drain_intake":
+			run.current_water_depth = world.terrain.water_depth(vehicle.position.x, vehicle.position.z)
+			hud.toast(tr(run.drain_intake()))
+			hud.refresh_service()
+		"snorkel":
+			var stop := world.nearest_building(vehicle.position)
+			if stop.is_empty(): hud.toast(tr("Šnorchel namontujú v dielni alebo autoservise."))
+			else: hud.toast(tr(run.install_snorkel(int(stop.id))))
+			hud.refresh_service()
 		"camera":
 			_camera_mode = (_camera_mode + 1) % 3
 		"cruise":
-			hud.toast(vehicle.toggle_cruise())
+			vehicle.toggle_cruise()
+		"drive_mode":
+			hud.toast(tr(vehicle.toggle_drive_mode()))
+		"differential":
+			hud.toast(tr(vehicle.toggle_differential()))
+		"winch":
+			hud.toast(tr(winch.toggle_attachment()))
+		"winch_pull":
+			hud.toast(tr(winch.toggle_reel()))
 		"search":
 			if absf(vehicle.speed) > 0.5:
 				hud.toast("Pred prehľadaním budovy zastav.")
@@ -199,15 +259,21 @@ func _action(action: String) -> void:
 			_save(false)
 		"save":
 			_save(true)
-		"new":
+		"new", "restart":
+			_finish_auto_save(true)
+			winch.disconnect_cable()
 			_in_menu = false
 			_garage_from_menu = false
 			_session_started = true
 			menu.hide_menu()
 			hud.visible = true
 			get_tree().paused = false
+			var previous_seed: int = run.world_seed
+			profile.best_distance = maxf(profile.best_distance, run.distance)
+			if not _ephemeral: profile.store()
 			run = DriveRun.new()
-			run.world_seed = randi_range(1, 1000000)
+			_last_mechanical_events = 0
+			run.world_seed = previous_seed if action == "restart" else DriveTerrain.new_journey_seed(previous_seed)
 			if not _ephemeral: profile.prepare_run(run)
 			active_building_id = -1
 			world.async_streaming = false
@@ -216,18 +282,21 @@ func _action(action: String) -> void:
 			world.async_streaming = not _ephemeral
 			vehicle.run = run
 			weather.run = run
-			weather.storm_active = false
-			weather._next_storm = 120
+			weather.reset_weather()
 			_apply_paint()
 			vehicle.park()
 			vehicle.heading = 0.0
-			vehicle.position = Vector3(0, world.height_at(0, 0) + 0.55, 0)
+			var start_z := world.center_at(0)
+			vehicle.position = Vector3(0, world.height_at(0, start_z) + 0.55, start_z)
+			vehicle.reset_physics_interpolation()
+			effects.reset_trails()
 			vehicle.controls_enabled = true
 			hud.run = run
 			hud.show_modal("")
+			_rebase_world(true)
 			_update_camera(1.0, true)
 			_save(false)
-			hud.toast("Nová cesta. Motor čaká na teba.")
+			hud.toast(tr("Cesta reštartovaná.") if action == "restart" else tr("Nová cesta. Motor čaká na teba."))
 		"quit":
 			if _save(true):
 				get_tree().quit()
@@ -284,6 +353,7 @@ func _take_selected_loot() -> void:
 
 
 func _modal(kind: String) -> void:
+	if winch != null: winch.stop_reeling()
 	vehicle.clear_inputs()
 	hud._message_time = 0.0
 	if kind in ["service", "loot"]: vehicle.park()
@@ -294,6 +364,8 @@ func _modal(kind: String) -> void:
 
 
 func _save(show_message: bool) -> bool:
+	_finish_auto_save(true)
+	world.flush_soil_updates()
 	run.terrain_deformation = world.terrain.deformation.to_data()
 	if _ephemeral or (not _session_started and not _had_save):
 		return true
@@ -301,19 +373,52 @@ func _save(show_message: bool) -> bool:
 	if result != OK:
 		hud.toast("Cestu sa nepodarilo uložiť: %s" % error_string(result))
 		return false
+	if run.distance > profile.best_distance:
+		profile.best_distance = run.distance
+		profile.store()
 	if show_message:
 		hud.toast("Cesta uložená.")
 	return true
 
 
+func _auto_save(path: String = DriveSave.PATH) -> void:
+	if _ephemeral or (not _session_started and not _had_save) or _save_worker != null: return
+	var snapshot := DriveDeformation.new()
+	var field := world.terrain.deformation
+	snapshot.cells = field.cells.duplicate()
+	snapshot._order = field._order.duplicate()
+	snapshot._order_head = field._order_head
+	_save_worker = Thread.new()
+	_save_worker.start(DriveSave.store_soil_snapshot.bind(run.to_data(false), snapshot, vehicle.position, vehicle.heading, path), Thread.PRIORITY_LOW)
+
+
+func _finish_auto_save(wait: bool = false) -> void:
+	if _save_worker == null or (not wait and _save_worker.is_alive()): return
+	var result: int = _save_worker.wait_to_finish()
+	_save_worker = null
+	if result != OK:
+		hud.toast("Cestu sa nepodarilo uložiť: %s" % error_string(result))
+	elif run.distance > profile.best_distance:
+		profile.best_distance = run.distance
+		profile.store()
+
+
+func _exit_tree() -> void:
+	if _save_worker != null:
+		_save_worker.wait_to_finish()
+		_save_worker = null
+
+
 func _open_menu(save_before: bool = true) -> void:
-	if save_before: _save(false)
+	if save_before and not _save(false): return
+	if winch != null: winch.stop_reeling()
 	vehicle.park()
 	vehicle.controls_enabled = false
 	hud.show_modal("")
 	hud.visible = false
 	_in_menu = true
 	menu.set_parts(run.parts)
+	menu.best_distance = maxf(profile.best_distance, run.distance)
 	menu.show_menu(_had_save or _session_started, run.distance)
 	get_tree().paused = true
 
@@ -350,21 +455,25 @@ func _load_settings() -> void:
 	if not _ephemeral and config.load("user://preferences.cfg") == OK:
 		var volume: Variant = config.get_value("audio", "volume", 0.8)
 		var zoom: Variant = config.get_value("view", "camera", 1.0)
+		var language: Variant = config.get_value("language", "index", 0)
 		if (volume is float or volume is int) and is_finite(float(volume)): _volume_preference = clampf(float(volume), 0.0, 1.0)
 		if (zoom is float or zoom is int) and is_finite(float(zoom)): _camera_preference = clampf(float(zoom), 0.76, 1.3)
+		if (language is float or language is int) and is_finite(float(language)): _language_preference = clampi(int(language), 0, 1)
+	Locale.configure(_language_preference)
 	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(_volume_preference, 0.0001)))
 	menu.set_settings(_volume_preference, _camera_preference)
+	menu.set_language(_language_preference)
 
 
 func _show_upgrades() -> void:
 	menu.show_panel("upgrades")
-	menu._upgrade_bank.text = "ŠROT V GARÁŽI: %d\nVylepšenia sa použijú pri NOVEJ jazde. Aktuálne auto si zachová svoj stav." % profile.bank
+	menu._upgrade_bank.text = Locale.translate("ŠROT V GARÁŽI: %d\nVylepšenia sa použijú pri NOVEJ jazde. Aktuálne auto si zachová svoj stav." % profile.bank)
 	var available := maxi(0, mini(int(run.inventory.scrap), run.found_scrap - run.deposited_scrap))
-	menu._deposit_button.text = "ODLOŽIŤ NAJDENÝ ŠROT Z JAZDY: %d" % available
+	menu._deposit_button.text = Locale.translate("ODLOŽIŤ NAJDENÝ ŠROT Z JAZDY: %d" % available)
 	menu._deposit_button.disabled = available <= 0
 	for slot: String in profile.upgrades:
 		var button: Button = menu._upgrade_buttons[slot]
-		button.text = "%s · ÚROVEŇ %d/3\n%d ŠROTU · LEPŠÍ ŠTART" % [DriveRun.PART_NAMES[slot], profile.upgrades[slot], profile.price(slot)]
+		button.text = Locale.translate("%s · ÚROVEŇ %d/3\n%d ŠROTU · LEPŠÍ ŠTART" % [DriveRun.PART_NAMES[slot], profile.upgrades[slot], profile.price(slot)])
 		button.disabled = profile.bank < profile.price(slot) or int(profile.upgrades[slot]) >= 3
 	menu._layout()
 
@@ -403,10 +512,15 @@ func _settings_changed(key: String, value: float) -> void:
 	elif key == "camera":
 		_camera_preference = clampf(value, 0.76, 1.3)
 		_update_camera(1.0, true)
+	elif key == "language":
+		_language_preference = clampi(roundi(value), 0, 1)
+		Locale.configure(_language_preference)
+		menu.set_language(_language_preference)
 	if _ephemeral: return
 	var config := ConfigFile.new()
 	config.set_value("audio", "volume", _volume_preference)
 	config.set_value("view", "camera", _camera_preference)
+	config.set_value("language", "index", _language_preference)
 	var result := config.save("user://preferences.cfg")
 	if result != OK: hud.toast("Nastavenia sa nepodarilo uložiť.")
 
@@ -429,7 +543,7 @@ func _notification(what: int) -> void:
 	if vehicle == null or hud == null:
 		return
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
-		if not _in_menu: _modal("pause")
+		if _focus_pause_enabled and not _in_menu: _modal("pause")
 	elif what == NOTIFICATION_WM_CLOSE_REQUEST:
 		_action("quit")
 	elif what == NOTIFICATION_WM_GO_BACK_REQUEST:
@@ -445,10 +559,10 @@ func _setup_lighting() -> void:
 		_sun_day_tint = sun.light_color
 		return
 	var sky_material := ProceduralSkyMaterial.new()
-	sky_material.sky_top_color = Color("8eaaac")
-	sky_material.sky_horizon_color = Color("d6c19a")
-	sky_material.ground_bottom_color = Color("8e7550")
-	sky_material.ground_horizon_color = Color("d6c19a")
+	sky_material.sky_top_color = Color("809da8")
+	sky_material.sky_horizon_color = Color("bbc7c6")
+	sky_material.ground_bottom_color = Color("858073")
+	sky_material.ground_horizon_color = Color("ada898")
 	var sky := Sky.new()
 	sky.sky_material = sky_material
 	environment = Environment.new()
@@ -456,10 +570,10 @@ func _setup_lighting() -> void:
 	environment.sky = sky
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_sky_contribution = 0.0
-	environment.ambient_light_color = Color("d5c8b4")
+	environment.ambient_light_color = Color("c8cccb")
 	environment.ambient_light_energy = 0.28
 	environment.tonemap_mode = Environment.TONE_MAPPER_LINEAR
-	environment.fog_enabled = true
+	environment.fog_enabled = false
 	environment.fog_light_color = Color("d0b68b")
 	environment.fog_density = 0.0012
 	var node := WorldEnvironment.new()
@@ -467,7 +581,7 @@ func _setup_lighting() -> void:
 	add_child(node)
 	sun = DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-28, 75, 0)
-	sun.light_color = Color("fff1d8")
+	sun.light_color = Color("f0ede6")
 	sun.light_energy = 0.85
 	sun.shadow_bias = 0.3
 	sun.shadow_normal_bias = 3.0
@@ -480,37 +594,62 @@ func _setup_lighting() -> void:
 func _update_lighting() -> void:
 	var daylight := clampf(sin((run.day_time - 0.23) * TAU) * 2.0, 0.0, 1.0)
 	sun.light_energy = lerpf(0.28, 0.85, daylight)
-	sun.light_color = Color("b1c6ef").lerp(_sun_day_tint, daylight)
+	sun.light_color = Color("b1c6df").lerp(_sun_day_tint, daylight)
 	sun.rotation.x = -0.4 - daylight * 0.12
 	environment.ambient_light_energy = lerpf(0.55, 0.28, daylight)
-	environment.ambient_light_color = Color("9eb6d6").lerp(Color("d5c8b4"), daylight)
-	environment.fog_light_color = Color("152532").lerp(Color("d0b68b"), daylight)
+	environment.ambient_light_color = Color("9eb6d6").lerp(Color("c8cccb"), daylight)
+	# Weather is expressed by precipitation, wind and the local dust front.
+	# Keep the landscape clear while the material palettes set its colour.
+	var dust_visibility := weather.storm_visibility if weather != null else 0.0
+	if absf(dust_visibility - _last_dust_visibility) > 0.005:
+		_last_dust_visibility = dust_visibility
+		environment.fog_enabled = dust_visibility > 0.02
+		environment.fog_light_color = Color("b49b72")
+		environment.fog_density = dust_visibility * 0.012
 	if weather != null:
-		environment.fog_density = lerpf(0.0007, 0.012, weather.intensity)
-		environment.fog_light_color = environment.fog_light_color.lerp(Color("b28d60") if weather.storm_active else Color("9caeaf"), weather.intensity * 0.8)
-		sun.light_energy *= 1.0 - weather.intensity * 0.40
+		sun.light_energy *= 1.0 - weather.intensity * 0.18
 	var sky_material := environment.sky.sky_material as ProceduralSkyMaterial
 	# Every tiny colour write invalidates the sky's reflection cubemap. Quantize
 	# below perceptible colour differences instead of rebuilding it every frame.
 	if absf(daylight - _sky_last_daylight) > 0.003:
 		_sky_last_daylight = daylight
-		sky_material.sky_top_color = Color("050c19").lerp(Color("8eaaac"), daylight)
-		sky_material.sky_horizon_color = Color("182936").lerp(Color("d6c19a"), daylight)
+		sky_material.sky_top_color = Color("050c19").lerp(Color("809da8"), daylight)
+		sky_material.sky_horizon_color = Color("182936").lerp(Color("bbc7c6"), daylight)
 		sky_material.ground_horizon_color = sky_material.sky_horizon_color
 
 
 func _update_camera(dt: float, instant: bool = false) -> void:
 	# Fixed world azimuth: steering rotates the vehicle, never the landscape.
-	var car_position := vehicle.position if instant else vehicle.get_global_transform_interpolated().origin
+	var car_position := vehicle.position if instant else to_local(vehicle.get_global_transform_interpolated().origin)
 	var target := car_position + Vector3(2.0, 0.4, -1.0)
 	if instant: vehicle.reset_physics_interpolation()
 	_camera_focus = target if instant else _camera_focus.lerp(target, 1.0 - exp(-4.0 * dt))
 	camera.position = _camera_focus + overview_offset
-	var grade := (world.height_at(car_position.x + 5, car_position.z) - world.height_at(car_position.x - 5, car_position.z)) / 10.0
-	camera.position.y += clampf(grade * 8.0, -4.0, 4.0)
-	camera.look_at(_camera_focus, Vector3.UP)
+	# Tyre compaction must not make the entire camera bob every soil update.
+	var ahead := world.height_at(car_position.x + 5, car_position.z) + world.terrain.deformation.depth_at(car_position.x + 5, car_position.z)
+	var behind := world.height_at(car_position.x - 5, car_position.z) + world.terrain.deformation.depth_at(car_position.x - 5, car_position.z)
+	var wanted_grade := clampf((ahead - behind) * 0.8, -4.0, 4.0)
+	_camera_grade_offset = wanted_grade if instant else lerpf(_camera_grade_offset, wanted_grade, 1.0 - exp(-3.0 * dt))
+	camera.position.y += _camera_grade_offset
+	camera.look_at(to_global(_camera_focus), Vector3.UP)
 	var zoom: float = overview_size * _camera_preference * [1.0, 0.76, 1.3][_camera_mode]
 	camera.size = zoom if instant else lerpf(camera.size, zoom, 1.0 - exp(-5.0 * dt))
+
+
+func _rebase_world(force: bool = false) -> void:
+	if not origin_rebasing_enabled: return
+	var wanted := Vector3(roundf(vehicle.position.x / ORIGIN_STEP) * ORIGIN_STEP, 0, roundf(vehicle.position.z / ORIGIN_STEP) * ORIGIN_STEP)
+	if not force and Vector2(vehicle.position.x - route_origin.x, vehicle.position.z - route_origin.z).length() < ORIGIN_STEP * 1.25: return
+	if wanted == route_origin: return
+	route_origin = wanted
+	position = -route_origin
+	world.set_route_origin(route_origin)
+	vehicle.reset_physics_interpolation()
+	if effects != null: effects.reset_particles()
+	if weather != null: weather.reset_particles()
+	# Camera focus/zoom are logical route coordinates too. Keep the current
+	# follow lag and lens through a rebase instead of snapping back to the car.
+	camera.reset_physics_interpolation()
 
 
 func _register_inputs() -> void:
@@ -520,6 +659,9 @@ func _register_inputs() -> void:
 		"engine": [KEY_E], "search": [KEY_F], "service": [KEY_TAB],
 		"lights": [KEY_L], "camera": [KEY_C], "pause": [KEY_ESCAPE],
 		"cruise": [KEY_R],
+		"drive_mode": [KEY_V], "differential": [KEY_B],
+		"winch": [KEY_G], "winch_pull": [KEY_H],
+		"handbrake": [KEY_SPACE], "high_beams": [KEY_K],
 	}
 	for action: String in keys:
 		if not InputMap.has_action(action):
