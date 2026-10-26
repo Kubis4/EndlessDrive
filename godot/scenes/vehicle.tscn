@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://rpspkdys1gnf" path="res://scripts/vehicle.gd" id="1"]
 [ext_resource type="PackedScene" path="res://assets/models/jeep/jeep_cherokee.tscn" id="2"]
 [ext_resource type="Shape3D" path="res://assets/models/jeep/jeep_chassis.res" id="3"]
-[ext_resource type="PackedScene" uid="uid://dlgey34iemcik" path="res://assets/models/jeep/off-road+winch+3d+model.glb" id="4_psfx0"]
+[ext_resource type="PackedScene" path="res://scenes/winch_mount.tscn" id="4_psfx0"]
 
 [ext_resource type="PackedScene" path="res://scenes/vehicle_equipment.tscn" id="5_equipment"]
 [ext_resource type="PackedScene" path="res://scenes/vehicle_visibility.tscn" id="6_visibility"]
@@ -42,8 +42,7 @@ shape = SubResource("TyreContact")
 
 [node name="Visual" parent="." unique_id=743338518 instance=ExtResource("2")]
 
-[node name="off-road+winch+3d+model2" parent="." unique_id=1863737789 instance=ExtResource("4_psfx0")]
-transform = Transform3D(-0.016280925, 0, 0.62599385, 0, 0.6922678, 0, -0.8122031, 0, -0.012548289, 2.3382366, 0.01327908, -0.0025278926)
+[node name="WinchMount" parent="." instance=ExtResource("4_psfx0")]
 
 [node name="ExpeditionEquipment" parent="Visual" instance=ExtResource("5_equipment")]
 

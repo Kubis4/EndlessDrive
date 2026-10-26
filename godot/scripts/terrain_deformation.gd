@@ -11,6 +11,15 @@ var track_changes := false
 var changed_cells: Dictionary = {}
 var _order: Array[Vector2i] = []
 var _order_head := 0
+var _min_x := INF
+var _max_x := -INF
+
+
+func overlaps_x(from_x: float, to_x: float) -> bool:
+	# Bounds may remain conservatively wide after FIFO eviction. This can cause
+	# an extra copy, never omit a real rut. Externally supplied dictionaries have
+	# unknown bounds and also take the safe path.
+	return not cells.is_empty() and (_max_x == -INF or (_max_x >= from_x and _min_x <= to_x))
 
 
 func depth_at(x: float, z: float) -> float:
@@ -40,6 +49,11 @@ static func rut_limit(surface: Dictionary) -> float:
 
 
 func _store(key: Vector2i, value: float) -> void:
+	if _max_x == -INF and not cells.is_empty():
+		_min_x = -INF
+		_max_x = INF
+	_min_x = minf(_min_x, key.x * CELL_SIZE)
+	_max_x = maxf(_max_x, key.x * CELL_SIZE)
 	if not cells.has(key):
 		if cells.size() >= MAX_CELLS:
 			var evicted := _order[_order_head]
@@ -118,6 +132,8 @@ func to_data() -> Array:
 
 func restore(data: Array) -> void:
 	cells.clear()
+	_min_x = INF
+	_max_x = -INF
 	changed_cells.clear()
 	_order.clear()
 	_order_head = 0

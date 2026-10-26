@@ -1,0 +1,39 @@
+[gd_scene format=4]
+
+[ext_resource type="Shader" path="res://shaders/expedition_surface.gdshader" id="1_eakmw"]
+[ext_resource type="Texture2DArray" path="res://assets/textures/expedition-materials-v1.res" id="2_1hsvl"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_1hsvl"]
+resource_name = "Leaf"
+render_priority = 0
+shader = ExtResource("1_eakmw")
+shader_parameter/model_atlas = ExtResource("2_1hsvl")
+shader_parameter/texture_enabled = true
+shader_parameter/material_layer = 3
+shader_parameter/texture_average = Color(0.38355666, 0.38061255, 0.2644126, 1)
+shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_scale = 0.2
+shader_parameter/texture_strength = 0.75
+shader_parameter/texture_roughness = 0.94
+shader_parameter/tint = Color(0.44705883, 0.50980395, 0.35686275, 1)
+shader_parameter/roughness_value = 0.94
+shader_parameter/metallic_value = 0.0
+shader_parameter/snow_cover = null
+
+[sub_resource type="ArrayMesh" id="ArrayMesh_2y1vs"]
+_surfaces = [{
+"aabb": AABB(-1.1504437, 0.36, -1.1638523, 2.318777, 0.36, 2.2920625),
+"format": 34359742471,
+"index_count": 270,
+"index_data": PackedByteArray("AAABAAIAAAADAAIABAAFAAYABAAHAAYACAAJAAoACAALAAoADAANAA4ADAAPAA4AEAARABIAEAATABIAFAAVABYAFAAXABYAGAAZABoAGAAbABoAHAAdAB4AHAAfAB4AIAAhACIAIAAjACIAJAAlACYAJAAnACYAKAApACoAKAArACoALAAtAC4ALAAvAC4AMAAxADIAMAAzADIANAA1ADYANAA3ADYAOAA5ADoAOAA7ADoAPAA9AD4APAA/AD4AQABBAEIAQABDAEIARABFAEYARABHAEYASABJAEoASABLAEoATABNAE4ATABPAE4AUABRAFIAUABTAFIAVABVAFYAVABXAFYAWABZAFoAWABbAFoAXABdAF4AXABfAF4AYABhAGIAYABjAGIAZABlAGYAZABnAGYAaABpAGoAaABrAGoAbABtAG4AbABvAG4AcABxAHIAcABzAHIAdAB1AHYAdAB3AHYAeAB5AHoAeAB7AHoAfAB9AH4AfAB/AH4AgACBAIIAgACDAIIAhACFAIYAhACHAIYAiACJAIoAiACLAIoAjACNAI4AjACPAI4AkACRAJIAkACTAJIAlACVAJYAlACXAJYAmACZAJoAmACbAJoAnACdAJ4AnACfAJ4AoAChAKIAoACjAKIApAClAKYApACnAKYAqACpAKoAqACrAKoArACtAK4ArACvAK4AsACxALIAsACzALIA"),
+"primitive": 3,
+"uv_scale": Vector4(0, 0, 0, 0),
+"vertex_count": 180,
+"vertex_data": PackedByteArray("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6ie5vuxROD+QXTK/RB1FPexROD9l3AO/69S0vjWgHz8oMy6/nAABvzWgHz+DleO+Jl3mvjWgHz9a6l2/lHaWvTWgHz+h/Cq/JArivuxRuD7xv1m/ylEAv+xRuD67bSm/MMkJv+xRuD6Ru4S/umWBvuxRuD45c0q/cFY4PuxRuD43w4Y9ONHFPexRuD5K9+i9XyfBPuxRuD4tNQ0+gF/yOexRuD5vzxg+cFa4PjWgHz83wwY+V6OfPjWgHz99qxO+TKkOPzWgHz/IllA+/scUPjWgHz9AYZ8+1EAKP+xROD/RJEo+TTMBP+xROD/yu+i96L48P+xROD8x/Ik+LfefPuxROD8YHNM+cFY4PzWgHz83w4Y+5PwrPzWgHz9ghE68hNRqPzWgHz8Aras+OF0BPzWgHz/bwuI+C2xmP+xRuD4EdKg+lhBRP+xRuD7IChk+D3WMP+xRuD7NXc0+unQ4P+xRuD7uKtM+//////9/AIAAgP//AAD/v///////fwCAAIAAAAAA/7///////38AgACA//8AAP+///////9/AIAAgAAAAAD/v///////fwCAAID//wAA/7///////38AgACAAAAAAP+///////9/AIAAgP//AAD/v///////fwCAAIAAAAAA/7///////38AgACA//8AAP+///////9/AIAAgAAAAAD/v///////fwCAAID//wAA/7///////38AgACAAAAAAP+///////9/AIAAgP//AAD/v///////fwCAAIAAAAAA/7///////38AgACA//8AAP+///////9/AIAAgAAAAAD/v///////fwCAAID//wAA/7///////38AgACAAAAAAP+///////9/AIAAgP//AAD/v///////fwCAAIAAAAAA/7///////38AgACA//8AAP+///////9/AIAAgAAAAAD/v///////fwCAAID//wAA/7///////38AgACAAAAAAP+///////9/AIAAgP//AAD/v///////fwCAAIAAAAAA/7///////38AgACA//8AAP+///////9/AIAAgAAAAAD/v///////fwCAAID//wAA/7///////38AgACAAAAAAP+///////9/AIAAgP//AAD/v///////fwCAAIAAAAAA/7///////38AgACA//8AAP+///////9/AIAAgAAAAAD/v///////fwCAAID//wAA/7///////38AgACAAAAAAP+///////9/AIAAgP//AAD/v///////fwCAAIAAAAAA/7///////38AgACA//8AAP+///////9/AIAAgAAAAAD/v///////fwCAAID//wAA/7///////38AgACAAAAAAP+///////9/AIAAgP//AAD/v///////fwCAAIAAAAAA/7///////38AgACA//8AAP+///////9/AIAAgAAAAAD/v///////fwCAAID//wAA/7///////38AgACAAAAAAP+///////9/AIAAgP//AAD/v///////fwCAAIAAAAAA/7///////38AgACA//8AAP+///////9/AIAAgAAAAAD/v///////fwCAAID//wAA/7///////38AgACAAAAAAP+///////9/AIAAgP//AAD/v///////fwCAAIAAAAAA/7///////38AgACA//8AAP+///////9/AIAAgAAAAAD/v///////fwCAAID//wAA/7///////38AgACAAAAAAP+///////9/AIAAgP//AAD/v///////fwCAAIAAAAAA/7///////38AgACA//8AAP+///////9/AIAAgAAAAAD/v///////fwCAAID//wAA/7///////38AgACAAAAAAP+///////9/AIAAgP//AAD/v///////fwCAAIAAAAAA/7///////38AgACA//8AAP+///////9/AIAAgAAAAAD/v///////fwCAAID//wAA/7///////38AgACAAAAAAP+///////9/AIAAgP//AAD/v///////fwCAAIAAAAAA/7///////38AgACA//8AAP+///////9/AIAAgAAAAAD/v///////fwCAAID//wAA/7///////38AgACAAAAAAP+///////9/AIAAgP//AAD/v///////fwCAAIAAAAAA/7///////38AgACA//8AAP+///////9/AIAAgAAAAAD/v///////fwCAAID//wAA/7///////38AgACAAAAAAP+///////9/AIAAgP//AAD/v///////fwCAAIAAAAAA/7///////38AgACA//8AAP+///////9/AIAAgAAAAAD/v///////fwCAAID//wAA/7///////38AgACAAAAAAP+/")
+}]
+
+[node name="FernPatch" type="Node3D" unique_id=1336382774]
+
+[node name="Leaf" type="MeshInstance3D" parent="." unique_id=758631602]
+material_override = SubResource("ShaderMaterial_1hsvl")
+mesh = SubResource("ArrayMesh_2y1vs")

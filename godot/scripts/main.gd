@@ -32,6 +32,8 @@ var _had_save := false
 var _camera_preference := 1.0
 var _volume_preference := 0.8
 var _language_preference := 0
+var _quality_preference := 1 if OS.has_feature("mobile") else 2
+var _fps_preference := 30 if OS.has_feature("mobile") else 60
 var _paint_materials: Array[ShaderMaterial] = []
 var weather: DriveWeather
 var effects: DriveEffects
@@ -45,6 +47,7 @@ var route_origin := Vector3.ZERO
 var origin_rebasing_enabled := true
 const ORIGIN_STEP := 2048.0
 var _last_mechanical_events := 0
+var _renderer_primer: SubViewport
 
 
 func _ready() -> void:
@@ -68,6 +71,7 @@ func _ready() -> void:
 		profile.prepare_run(run)
 	_setup_lighting()
 	world = DriveWorld.new()
+	world.graphics_quality = _quality_preference
 	add_child(world)
 	world.configure(run.world_seed)
 	world.terrain.soil_moisture = clampf(float(run.weather_state.get("wetness", 0.0)), 0, 1)
@@ -137,6 +141,7 @@ func _ready() -> void:
 	weather.world = world
 	add_child(weather)
 	hud.weather = weather
+	_apply_video_settings()
 	winch = preload("res://scripts/winch.gd").new()
 	winch.vehicle = vehicle
 	winch.world = world
@@ -157,10 +162,16 @@ func _ready() -> void:
 			light_primer.vehicle = vehicle
 			light_primer.environment = environment
 			add_child(light_primer)
-			var warmup := load("res://scripts/render_warmup.gd").new() as SubViewport
-			warmup.set("environment_template", environment)
-			warmup.set("vehicle_template", vehicle._visual)
-			add_child(warmup)
+			_prime_renderer()
+
+
+func _prime_renderer() -> void:
+	if _ephemeral or DisplayServer.get_name() == "headless": return
+	if is_instance_valid(_renderer_primer): _renderer_primer.queue_free()
+	_renderer_primer = load("res://scripts/render_warmup.gd").new() as SubViewport
+	_renderer_primer.environment_template = environment
+	_renderer_primer.vehicle_template = vehicle._visual
+	add_child(_renderer_primer)
 
 
 func _process(dt: float) -> void:
@@ -386,8 +397,8 @@ func _auto_save(path: String = DriveSave.PATH) -> void:
 	var snapshot := DriveDeformation.new()
 	var field := world.terrain.deformation
 	snapshot.cells = field.cells.duplicate()
-	snapshot._order = field._order.duplicate()
-	snapshot._order_head = field._order_head
+	snapshot._order = field._order.slice(field._order_head)
+	snapshot._order_head = 0
 	_save_worker = Thread.new()
 	_save_worker.start(DriveSave.store_soil_snapshot.bind(run.to_data(false), snapshot, vehicle.position, vehicle.heading, path), Thread.PRIORITY_LOW)
 
@@ -456,13 +467,25 @@ func _load_settings() -> void:
 		var volume: Variant = config.get_value("audio", "volume", 0.8)
 		var zoom: Variant = config.get_value("view", "camera", 1.0)
 		var language: Variant = config.get_value("language", "index", 0)
+		var quality: Variant = config.get_value("view", "quality", _quality_preference)
+		var fps: Variant = config.get_value("view", "fps", _fps_preference)
 		if (volume is float or volume is int) and is_finite(float(volume)): _volume_preference = clampf(float(volume), 0.0, 1.0)
 		if (zoom is float or zoom is int) and is_finite(float(zoom)): _camera_preference = clampf(float(zoom), 0.76, 1.3)
 		if (language is float or language is int) and is_finite(float(language)): _language_preference = clampi(int(language), 0, 1)
+		if (quality is float or quality is int) and is_finite(float(quality)): _quality_preference = clampi(int(quality), 0, 2)
+		if (fps is float or fps is int) and is_finite(float(fps)) and int(fps) in [0, 30, 60]: _fps_preference = int(fps)
 	Locale.configure(_language_preference)
 	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(_volume_preference, 0.0001)))
 	menu.set_settings(_volume_preference, _camera_preference)
 	menu.set_language(_language_preference)
+	menu.set_video_settings(_quality_preference, _fps_preference)
+
+
+func _apply_video_settings() -> void:
+	preload("res://scripts/quality_settings.gd").apply(self, _quality_preference)
+	# Benchmarks/test sessions own their clocks; never cap a fixed-step test.
+	if not _ephemeral: Engine.max_fps = _fps_preference
+	if menu != null: menu.set_video_settings(_quality_preference, _fps_preference)
 
 
 func _show_upgrades() -> void:
@@ -516,11 +539,22 @@ func _settings_changed(key: String, value: float) -> void:
 		_language_preference = clampi(roundi(value), 0, 1)
 		Locale.configure(_language_preference)
 		menu.set_language(_language_preference)
+		menu.set_video_settings(_quality_preference, _fps_preference)
+	elif key == "quality":
+		var changed := _quality_preference != clampi(roundi(value), 0, 2)
+		_quality_preference = clampi(roundi(value), 0, 2)
+		_apply_video_settings()
+		if changed: _prime_renderer()
+	elif key == "fps" and roundi(value) in [0, 30, 60]:
+		_fps_preference = roundi(value)
+		_apply_video_settings()
 	if _ephemeral: return
 	var config := ConfigFile.new()
 	config.set_value("audio", "volume", _volume_preference)
 	config.set_value("view", "camera", _camera_preference)
 	config.set_value("language", "index", _language_preference)
+	config.set_value("view", "quality", _quality_preference)
+	config.set_value("view", "fps", _fps_preference)
 	var result := config.save("user://preferences.cfg")
 	if result != OK: hud.toast("Nastavenia sa nepodarilo uložiť.")
 

@@ -63,6 +63,9 @@ func toggle_attachment() -> String:
 	var forward := Vector3(cos(vehicle.heading), 0, sin(vehicle.heading))
 	for candidate: Node in get_tree().get_nodes_in_group("winch_anchor"):
 		if not candidate is Node3D or not candidate.is_inside_tree(): continue
+		# Private render-primer/editor viewports have their own physics worlds.
+		# Their invisible props must never become gameplay recovery anchors.
+		if (candidate as Node3D).get_world_3d() != vehicle.get_world_3d(): continue
 		var delta := (candidate as Node3D).global_position - outlet()
 		var distance := delta.length()
 		if distance < 2.0 or distance > RANGE or absf(delta.y) > 8.0: continue

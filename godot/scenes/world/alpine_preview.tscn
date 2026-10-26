@@ -3,10 +3,10 @@
 [ext_resource type="Script" path="res://scripts/editor_preview.gd" id="1_fypsx"]
 [ext_resource type="PackedScene" path="res://scenes/world/generated/alpine.scn" id="2_rqf3l"]
 
-[node name="AlpinePreview" type="Node3D" unique_id=1238512913]
+[node name="AlpinePreview" type="Node3D" unique_id=785852631]
 script = ExtResource("1_fypsx")
 preview_seed = 1000005
 preview_distance = 180.0
 geometry_path = "res://scenes/world/generated/alpine.scn"
 
-[node name="GeneratedTerrain" type="Node3D" parent="." unique_id=1471131338 instance=ExtResource("2_rqf3l")]
+[node name="GeneratedTerrain" type="Node3D" parent="." unique_id=826581233 instance=ExtResource("2_rqf3l")]

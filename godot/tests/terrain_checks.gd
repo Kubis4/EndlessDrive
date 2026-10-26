@@ -147,7 +147,7 @@ static func run(game, suite) -> void:
 	game.run.distance = 480
 	vehicle.position = Vector3(480, profile.height_at(480, lanes[ford_branch]) + 0.6, lanes[ford_branch])
 	await suite.frames(5)
-	suite.check(not game.hud._junction_panel.visible and not game.hud._next_stop.visible, "Exploration HUD hides route and upcoming-building predictions")
+	suite.check(not game.hud._junction_panel.is_visible_in_tree() and not game.hud._next_stop.is_visible_in_tree(), "Exploration HUD hides route and upcoming-building predictions")
 	suite.check(float(profile.sample(vehicle.position.x, vehicle.position.z).water) > 0.0 and not game.hud._road_info.get_parent().visible, "Water remains physically active while verbose surface descriptions stay hidden")
 	game.hud.toast("Kontrola bezpečnej cesty.")
 	await suite.frames(2)

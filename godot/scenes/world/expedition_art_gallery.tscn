@@ -1,0 +1,265 @@
+[gd_scene format=3]
+
+[ext_resource type="Shader" path="res://shaders/expedition_surface.gdshader" id="1_ci1t7"]
+[ext_resource type="PackedScene" path="res://assets/models/expedition/mountain_ridge.tscn" id="2_ufsd2"]
+[ext_resource type="PackedScene" path="res://assets/models/expedition/alpine_peak.tscn" id="3_au2lb"]
+[ext_resource type="PackedScene" path="res://assets/models/expedition/rocky_peak.tscn" id="4_5twh8"]
+[ext_resource type="PackedScene" path="res://assets/models/expedition/snowy_peak.tscn" id="5_ewf4g"]
+[ext_resource type="PackedScene" path="res://assets/models/expedition/tunnel_portal.tscn" id="6_xayxg"]
+[ext_resource type="PackedScene" path="res://assets/models/expedition/tunnel_rib.tscn" id="7_s8l3u"]
+[ext_resource type="PackedScene" path="res://assets/models/expedition/rail_portal.tscn" id="8_28ykr"]
+[ext_resource type="PackedScene" path="res://assets/models/expedition/mountain_pine.tscn" id="9_0kgvy"]
+[ext_resource type="PackedScene" path="res://assets/models/expedition/alpine_pine.tscn" id="10_cwfem"]
+[ext_resource type="PackedScene" path="res://assets/models/expedition/juniper.tscn" id="11_8wea0"]
+[ext_resource type="PackedScene" path="res://assets/models/expedition/woodland_tree.tscn" id="12_73hak"]
+[ext_resource type="PackedScene" path="res://assets/models/expedition/wetland_tree.tscn" id="13_wprug"]
+[ext_resource type="PackedScene" path="res://assets/models/expedition/dead_tree.tscn" id="14_x426i"]
+[ext_resource type="PackedScene" path="res://assets/models/expedition/locomotive.tscn" id="15_smb8n"]
+[ext_resource type="PackedScene" path="res://assets/models/expedition/tank_wagon.tscn" id="16_xrih3"]
+[ext_resource type="PackedScene" path="res://assets/models/expedition/freight_wagon.tscn" id="17_gnge3"]
+[ext_resource type="PackedScene" path="res://assets/models/expedition/timber_wagon.tscn" id="18_mnlde"]
+[ext_resource type="PackedScene" path="res://assets/models/expedition/marsh_reeds.tscn" id="19_n3ssg"]
+[ext_resource type="PackedScene" path="res://assets/models/expedition/fern_patch.tscn" id="20_xnk54"]
+[ext_resource type="PackedScene" path="res://assets/models/expedition/meadow_shrub.tscn" id="21_162n1"]
+
+[sub_resource type="Environment" id="Environment_q48u6"]
+background_mode = 1
+background_color = Color(0.65882355, 0.7137255, 0.70980394, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.8352941, 0.8666667, 0.85490197, 1)
+ambient_light_energy = 0.4
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_plom6"]
+resource_name = "StoneLight"
+render_priority = 0
+shader = ExtResource("1_ci1t7")
+shader_parameter/tint = Color(0.6392157, 0.60784316, 0.5019608, 1)
+shader_parameter/roughness_value = 0.94
+shader_parameter/metallic_value = 0.0
+shader_parameter/snow_cover = null
+
+[sub_resource type="BoxMesh" id="BoxMesh_uig1y"]
+size = Vector3(100, 0.8, 74)
+
+[node name="ExpeditionArtGallery" type="Node3D" unique_id=1435848480]
+
+[node name="@WorldEnvironment@8" type="WorldEnvironment" parent="." unique_id=727214130]
+environment = SubResource("Environment_q48u6")
+
+[node name="@DirectionalLight3D@9" type="DirectionalLight3D" parent="." unique_id=537878968]
+transform = Transform3D(0.8660254, 0.37157243, -0.33456528, 0, 0.66913056, 0.74314487, 0.5, -0.64358234, 0.57948405, 0, 0, 0)
+light_color = Color(1, 0.9411765, 0.8235294, 1)
+light_energy = 0.85
+shadow_enabled = true
+directional_shadow_max_distance = 180.0
+
+[node name="SandDisplayBase" type="MeshInstance3D" parent="." unique_id=483561698]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.6, 0)
+material_override = SubResource("ShaderMaterial_plom6")
+mesh = SubResource("BoxMesh_uig1y")
+
+[node name="MountainRidge" type="Node3D" parent="." unique_id=1766306379 instance=ExtResource("2_ufsd2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -42, 0, -32)
+
+[node name="@Label3D@10" type="Label3D" parent="." unique_id=928614992]
+transform = Transform3D(1, 0, 0, 0, 0.42261824, 0.9063078, 0, -0.9063078, 0.42261824, -42, 0.08, -21)
+pixel_size = 0.025
+modulate = Color(0.1882353, 0.23137255, 0.21960784, 1)
+text = "MOUNTAIN RIDGE"
+outline_size = 0
+
+[node name="AlpinePeak" type="Node3D" parent="." unique_id=744742213 instance=ExtResource("3_au2lb")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -28, 0, -32)
+
+[node name="@Label3D@11" type="Label3D" parent="." unique_id=1523495722]
+transform = Transform3D(1, 0, 0, 0, 0.42261824, 0.9063078, 0, -0.9063078, 0.42261824, -28, 0.08, -21)
+pixel_size = 0.025
+modulate = Color(0.1882353, 0.23137255, 0.21960784, 1)
+text = "ALPINE PEAK"
+outline_size = 0
+
+[node name="RockyPeak" type="Node3D" parent="." unique_id=960049294 instance=ExtResource("4_5twh8")]
+transform = Transform3D(0.55, 0, 0, 0, 0.55, 0, 0, 0, 0.55, -14, 0, -32)
+
+[node name="@Label3D@12" type="Label3D" parent="." unique_id=1158105480]
+transform = Transform3D(1, 0, 0, 0, 0.42261824, 0.9063078, 0, -0.9063078, 0.42261824, -14, 0.08, -21)
+pixel_size = 0.025
+modulate = Color(0.1882353, 0.23137255, 0.21960784, 1)
+text = "ROCKY PEAK"
+outline_size = 0
+
+[node name="SnowyPeak" type="Node3D" parent="." unique_id=677412975 instance=ExtResource("5_ewf4g")]
+transform = Transform3D(0.55, 0, 0, 0, 0.55, 0, 0, 0, 0.55, 0, 0, -32)
+
+[node name="@Label3D@13" type="Label3D" parent="." unique_id=303204410]
+transform = Transform3D(1, 0, 0, 0, 0.42261824, 0.9063078, 0, -0.9063078, 0.42261824, 0, 0.08, -21)
+pixel_size = 0.025
+modulate = Color(0.1882353, 0.23137255, 0.21960784, 1)
+text = "SNOWY PEAK"
+outline_size = 0
+
+[node name="TunnelPortal" type="Node3D" parent="." unique_id=1341453965 instance=ExtResource("6_xayxg")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 0, -24)
+
+[node name="@Label3D@14" type="Label3D" parent="." unique_id=1705325613]
+transform = Transform3D(1, 0, 0, 0, 0.42261824, 0.9063078, 0, -0.9063078, 0.42261824, 14, 0.08, -13)
+pixel_size = 0.025
+modulate = Color(0.1882353, 0.23137255, 0.21960784, 1)
+text = "TUNNEL PORTAL"
+outline_size = 0
+
+[node name="TunnelRib" type="Node3D" parent="." unique_id=1778998635 instance=ExtResource("7_s8l3u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 28, 0, -24)
+
+[node name="@Label3D@15" type="Label3D" parent="." unique_id=283015278]
+transform = Transform3D(1, 0, 0, 0, 0.42261824, 0.9063078, 0, -0.9063078, 0.42261824, 28, 0.08, -13)
+pixel_size = 0.025
+modulate = Color(0.1882353, 0.23137255, 0.21960784, 1)
+text = "TUNNEL RIB"
+outline_size = 0
+
+[node name="RailPortal" type="Node3D" parent="." unique_id=1460254890 instance=ExtResource("8_28ykr")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 42, 0, -24)
+
+[node name="@Label3D@16" type="Label3D" parent="." unique_id=52966796]
+transform = Transform3D(1, 0, 0, 0, 0.42261824, 0.9063078, 0, -0.9063078, 0.42261824, 42, 0.08, -13)
+pixel_size = 0.025
+modulate = Color(0.1882353, 0.23137255, 0.21960784, 1)
+text = "RAIL PORTAL"
+outline_size = 0
+
+[node name="MountainPine" type="Node3D" parent="." unique_id=798023515 instance=ExtResource("9_0kgvy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 0, -1)
+
+[node name="@Label3D@17" type="Label3D" parent="." unique_id=1008803556]
+transform = Transform3D(1, 0, 0, 0, 0.42261824, 0.9063078, 0, -0.9063078, 0.42261824, -30, 0.08, 5)
+pixel_size = 0.025
+modulate = Color(0.1882353, 0.23137255, 0.21960784, 1)
+text = "MOUNTAIN PINE"
+outline_size = 0
+
+[node name="AlpinePine" type="Node3D" parent="." unique_id=1040227313 instance=ExtResource("10_cwfem")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 0, -1)
+
+[node name="@Label3D@18" type="Label3D" parent="." unique_id=1568018191]
+transform = Transform3D(1, 0, 0, 0, 0.42261824, 0.9063078, 0, -0.9063078, 0.42261824, -18, 0.08, 5)
+pixel_size = 0.025
+modulate = Color(0.1882353, 0.23137255, 0.21960784, 1)
+text = "ALPINE PINE"
+outline_size = 0
+
+[node name="Juniper" type="Node3D" parent="." unique_id=209211588 instance=ExtResource("11_8wea0")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0, -1)
+
+[node name="@Label3D@19" type="Label3D" parent="." unique_id=1880751067]
+transform = Transform3D(1, 0, 0, 0, 0.42261824, 0.9063078, 0, -0.9063078, 0.42261824, -6, 0.08, 5)
+pixel_size = 0.025
+modulate = Color(0.1882353, 0.23137255, 0.21960784, 1)
+text = "JUNIPER"
+outline_size = 0
+
+[node name="WoodlandTree" type="Node3D" parent="." unique_id=960563727 instance=ExtResource("12_73hak")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0, -1)
+
+[node name="@Label3D@20" type="Label3D" parent="." unique_id=1411061460]
+transform = Transform3D(1, 0, 0, 0, 0.42261824, 0.9063078, 0, -0.9063078, 0.42261824, 6, 0.08, 5)
+pixel_size = 0.025
+modulate = Color(0.1882353, 0.23137255, 0.21960784, 1)
+text = "WOODLAND TREE"
+outline_size = 0
+
+[node name="WetlandTree" type="Node3D" parent="." unique_id=2036647327 instance=ExtResource("13_wprug")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18, 0, -1)
+
+[node name="@Label3D@21" type="Label3D" parent="." unique_id=941631414]
+transform = Transform3D(1, 0, 0, 0, 0.42261824, 0.9063078, 0, -0.9063078, 0.42261824, 18, 0.08, 5)
+pixel_size = 0.025
+modulate = Color(0.1882353, 0.23137255, 0.21960784, 1)
+text = "WETLAND TREE"
+outline_size = 0
+
+[node name="DeadTree" type="Node3D" parent="." unique_id=1348124471 instance=ExtResource("14_x426i")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 0, -1)
+
+[node name="@Label3D@22" type="Label3D" parent="." unique_id=253924400]
+transform = Transform3D(1, 0, 0, 0, 0.42261824, 0.9063078, 0, -0.9063078, 0.42261824, 30, 0.08, 5)
+pixel_size = 0.025
+modulate = Color(0.1882353, 0.23137255, 0.21960784, 1)
+text = "DEAD TREE"
+outline_size = 0
+
+[node name="Locomotive" type="Node3D" parent="." unique_id=1841339632 instance=ExtResource("15_smb8n")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -36, 0, 22)
+
+[node name="@Label3D@23" type="Label3D" parent="." unique_id=671678007]
+transform = Transform3D(1, 0, 0, 0, 0.42261824, 0.9063078, 0, -0.9063078, 0.42261824, -36, 0.08, 28)
+pixel_size = 0.025
+modulate = Color(0.1882353, 0.23137255, 0.21960784, 1)
+text = "LOCOMOTIVE"
+outline_size = 0
+
+[node name="TankWagon" type="Node3D" parent="." unique_id=146570150 instance=ExtResource("16_xrih3")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -24, 0, 22)
+
+[node name="@Label3D@24" type="Label3D" parent="." unique_id=973698040]
+transform = Transform3D(1, 0, 0, 0, 0.42261824, 0.9063078, 0, -0.9063078, 0.42261824, -24, 0.08, 28)
+pixel_size = 0.025
+modulate = Color(0.1882353, 0.23137255, 0.21960784, 1)
+text = "TANK WAGON"
+outline_size = 0
+
+[node name="FreightWagon" type="Node3D" parent="." unique_id=1792809482 instance=ExtResource("17_gnge3")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -12, 0, 22)
+
+[node name="@Label3D@25" type="Label3D" parent="." unique_id=1619234136]
+transform = Transform3D(1, 0, 0, 0, 0.42261824, 0.9063078, 0, -0.9063078, 0.42261824, -12, 0.08, 28)
+pixel_size = 0.025
+modulate = Color(0.1882353, 0.23137255, 0.21960784, 1)
+text = "FREIGHT WAGON"
+outline_size = 0
+
+[node name="TimberWagon" type="Node3D" parent="." unique_id=1141816231 instance=ExtResource("18_mnlde")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 22)
+
+[node name="@Label3D@26" type="Label3D" parent="." unique_id=2048578875]
+transform = Transform3D(1, 0, 0, 0, 0.42261824, 0.9063078, 0, -0.9063078, 0.42261824, 0, 0.08, 28)
+pixel_size = 0.025
+modulate = Color(0.1882353, 0.23137255, 0.21960784, 1)
+text = "TIMBER WAGON"
+outline_size = 0
+
+[node name="MarshReeds" type="Node3D" parent="." unique_id=1359955543 instance=ExtResource("19_n3ssg")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 0, 22)
+
+[node name="@Label3D@27" type="Label3D" parent="." unique_id=812268992]
+transform = Transform3D(1, 0, 0, 0, 0.42261824, 0.9063078, 0, -0.9063078, 0.42261824, 12, 0.08, 28)
+pixel_size = 0.025
+modulate = Color(0.1882353, 0.23137255, 0.21960784, 1)
+text = "MARSH REEDS"
+outline_size = 0
+
+[node name="FernPatch" type="Node3D" parent="." unique_id=1336382774 instance=ExtResource("20_xnk54")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 24, 0, 22)
+
+[node name="@Label3D@28" type="Label3D" parent="." unique_id=930303125]
+transform = Transform3D(1, 0, 0, 0, 0.42261824, 0.9063078, 0, -0.9063078, 0.42261824, 24, 0.08, 28)
+pixel_size = 0.025
+modulate = Color(0.1882353, 0.23137255, 0.21960784, 1)
+text = "FERN PATCH"
+outline_size = 0
+
+[node name="MeadowShrub" type="Node3D" parent="." unique_id=1966473648 instance=ExtResource("21_162n1")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 36, 0, 22)
+
+[node name="@Label3D@29" type="Label3D" parent="." unique_id=12203751]
+transform = Transform3D(1, 0, 0, 0, 0.42261824, 0.9063078, 0, -0.9063078, 0.42261824, 36, 0.08, 28)
+pixel_size = 0.025
+modulate = Color(0.1882353, 0.23137255, 0.21960784, 1)
+text = "MEADOW SHRUB"
+outline_size = 0
+
+[node name="GalleryCamera" type="Camera3D" parent="." unique_id=658417001]
+transform = Transform3D(0.9805806, -0.12556472, 0.15064871, 0, 0.7681607, 0.640257, -0.19611612, -0.6278236, 0.75324357, 20, 85, 100)
+projection = 1
+size = 108.0
+far = 300.0

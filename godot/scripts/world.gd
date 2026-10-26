@@ -3,10 +3,12 @@ extends Node3D
 ## Original desert art direction, deterministic streaming and shared terrain collision.
 
 const TerrainDetail = preload("res://scripts/terrain_detail.gd")
+const GROUND_SHADERS = [preload("res://shaders/desert_surface_low.gdshader"), preload("res://shaders/desert_surface_balanced.gdshader"), preload("res://shaders/desert_surface.gdshader")]
 const CHUNK_LENGTH := 96.0
 const HALF_WIDTH := 120.0
 const BOUNDARY_OFFSET := 36.0
 const SAFE_HALF_WIDTH := BOUNDARY_OFFSET - 6.0
+const TREE_SPACING := 12.0
 const BIOMES := DriveTerrain.BIOMES
 var world_seed := 24601
 var terrain := DriveTerrain.new()
@@ -49,12 +51,38 @@ var _material_wetness := -1.0
 var route_origin := Vector3.ZERO
 var _encounter_cache: Dictionary = {}
 var _retiring_chunks: Dictionary = {}
+var _wire_mesh: CylinderMesh
+var graphics_quality := 2
+
+
+func set_graphics_quality(level: int) -> void:
+	graphics_quality = clampi(level, 0, 2)
+	for chunk: Node3D in chunks.values() + _retiring_chunks.values():
+		var ground := chunk.get_node_or_null("SandAndTracks") as MeshInstance3D
+		if ground != null:
+			var material := ground.material_override as ShaderMaterial
+			if material != null: _configure_ground_material(material)
+
+
+func _configure_ground_material(material: ShaderMaterial) -> void:
+	material.shader = GROUND_SHADERS[graphics_quality]
+	material.set_shader_parameter("surface_atlas", load("res://assets/textures/surface-albedo-atlas.png"))
+	material.set_shader_parameter("micro_height", load("res://assets/textures/surface-microheight-2k.png") if graphics_quality == 2 else null)
+	material.set_shader_parameter("surface_data_enabled", true)
+	material.set_shader_parameter("rain_wetness", terrain.soil_moisture)
+	material.set_shader_parameter("route_origin", Vector2(route_origin.x, route_origin.z))
 
 
 func _ready() -> void:
+	_wire_mesh = CylinderMesh.new()
+	_wire_mesh.height = 1.0
+	_wire_mesh.top_radius = 1.0
+	_wire_mesh.bottom_radius = 1.0
+	_wire_mesh.radial_segments = 5
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	process_physics_priority = -50
 	_atlas = load("res://assets/textures/desert-materials.png")
+	preload("res://scripts/expedition_scenery.gd").warmup()
 	for key: String in ["adobe_workshop", "saguaro", "desert_scrub", "mesa_rock", "utility_pole", "ranch_fence", "water_tower", "road_delineator"]:
 		_models[key] = load("res://assets/models/" + key + ".tscn")
 	for kind: String in DriveStops.KINDS:
@@ -171,6 +199,7 @@ func _process(_dt: float) -> void:
 		for key: Vector2i in candidates:
 			if not chunks.has(key.x): continue
 			var chunk: Node3D = chunks[key.x]
+			if not chunk.get_meta("terrain_ready", false): continue
 			jobs.append({"key": key, "owner_id": chunk.get_instance_id(), "arrays": chunk.get_meta("terrain_arrays"), "rest": chunk.get_meta("rest_heights"), "width": int(chunk.get_meta("terrain_width")), "force": _rut_dirty.has(key)})
 		if not jobs.is_empty() or not _soil_commands.is_empty():
 			var snapshot := _soil_snapshot()
@@ -206,7 +235,9 @@ func _process(_dt: float) -> void:
 				max_job_ms = job_ms
 				slowest_job = str(entry.label)
 	max_commit_ms = maxf(max_commit_ms, (Time.get_ticks_usec() - started) / 1000.0)
-	if _worker == null and _jobs.is_empty() and not _pending.is_empty():
+	# Numeric preparation can overlap the small publication jobs of the previous
+	# chunk. Waiting for every decorative prop starved fast-moving vehicles.
+	if _worker == null and _jobs.size() < 512 and not _pending.is_empty():
 		_pending.sort_custom(func(a: int, b: int) -> bool: return absi(a - _current) < absi(b - _current))
 		_worker_index = _pending.pop_front()
 		_worker_epoch = _epoch
@@ -214,7 +245,10 @@ func _process(_dt: float) -> void:
 		snapshot.seed_value = world_seed
 		snapshot.route_choices = terrain.route_choices.duplicate()
 		snapshot.soil_moisture = terrain.soil_moisture
-		snapshot.deformation.cells = terrain.deformation.cells.duplicate()
+		# Most new chunks are ahead of every driven tyre. Do not clone 65k
+		# historical cells just to produce a completely untouched future chunk.
+		if terrain.deformation.overlaps_x(_worker_index * CHUNK_LENGTH - 1.0, (_worker_index + 1) * CHUNK_LENGTH + 1.0):
+			snapshot.deformation.cells = terrain.deformation.cells.duplicate()
 		_worker = Thread.new()
 		_worker.start(DriveTerrainBake.bake.bind(snapshot, _worker_index), Thread.PRIORITY_LOW)
 
@@ -229,8 +263,8 @@ func _soil_snapshot() -> DriveTerrain:
 	snapshot.route_choices = terrain.route_choices.duplicate()
 	snapshot.soil_moisture = terrain.soil_moisture
 	snapshot.deformation.cells = terrain.deformation.cells.duplicate()
-	snapshot.deformation._order = terrain.deformation._order.duplicate()
-	snapshot.deformation._order_head = terrain.deformation._order_head
+	snapshot.deformation._order = terrain.deformation._order.slice(terrain.deformation._order_head)
+	snapshot.deformation._order_head = 0
 	return snapshot
 
 
@@ -391,6 +425,7 @@ func _create_chunk(index: int, baked: Dictionary = {}) -> void:
 	chunks[index] = chunk
 	chunk.visible = not _retiring_chunks.has(index)
 	var start := index * CHUNK_LENGTH
+	chunk.set_meta("chunk_start", start)
 	var stop := DriveStops.for_chunk(index, terrain.seed_at(start))
 	if not stop.is_empty() and terrain.road_centers(float(stop.x)).size() > 1: stop = {}
 	# Include adjoining owners: a yard/driveway can extend across a chunk seam.
@@ -402,19 +437,11 @@ func _create_chunk(index: int, baked: Dictionary = {}) -> void:
 	if baked.is_empty(): baked = DriveTerrainBake.bake(terrain, index)
 	var ground := MeshInstance3D.new()
 	ground.name = "SandAndTracks"
-	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, baked.render_bands[0], [], {}, Mesh.ARRAY_FLAG_USE_DYNAMIC_UPDATE | DriveTerrainBake.MATERIAL_FORMAT)
-	ground.mesh = mesh
 	# Receives prop shadows, but does not self-shadow its huge grazing-angle
 	# triangles: that produced the diagonal shadow-acne film in Compatibility.
 	ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var material := ShaderMaterial.new()
-	material.shader = load("res://shaders/desert_surface.gdshader")
-	material.set_shader_parameter("surface_atlas", load("res://assets/textures/surface-albedo-atlas.png"))
-	material.set_shader_parameter("micro_height", load("res://assets/textures/surface-microheight-2k.png"))
-	material.set_shader_parameter("surface_data_enabled", true)
-	material.set_shader_parameter("rain_wetness", terrain.soil_moisture)
-	material.set_shader_parameter("route_origin", Vector2(route_origin.x, route_origin.z))
+	_configure_ground_material(material)
 	ground.material_override = material
 	chunk.add_child(ground)
 	var body := StaticBody3D.new()
@@ -430,23 +457,17 @@ func _create_chunk(index: int, baked: Dictionary = {}) -> void:
 		body.add_child(collision)
 		_schedule(func() -> void:
 			if is_instance_valid(collision): shape.set_faces(baked.collision_bands[band]), chunk, "collision_bands")
-	for band in range(1, DriveTerrainBake.BAND_COUNT):
-		var strip := MeshInstance3D.new()
-		strip.name = "TerrainStrip%d" % band
-		var strip_mesh := ArrayMesh.new()
-		strip_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, baked.render_bands[band], [], {}, DriveTerrainBake.MATERIAL_FORMAT)
-		strip.mesh = strip_mesh
-		strip.material_override = material
-		strip.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		ground.add_child(strip)
+	for band in DriveTerrainBake.BAND_COUNT:
+		_schedule(_publish_terrain_strip.bind(ground, baked.render_bands[band], band), chunk, "terrain_mesh")
 	# The worker already located restored soil; never scan the entire saved
 	# field while publishing a new streamed chunk on the render thread.
 	for band: int in baked.get("soil_bands", []): _rut_dirty[Vector2i(index, band)] = true
 	_schedule(func() -> void:
 		if is_instance_valid(chunk): _create_deck(chunk, baked.deck), chunk, "_create_deck")
 	_schedule(_finish_chunk_collision.bind(chunk, index), chunk, "publish_collision")
-	for segment in 12: _schedule(func() -> void:
-		if is_instance_valid(chunk): _create_boundaries(chunk, start, segment), chunk, "_create_boundaries")
+	for segment in 12:
+		for side: float in [-1.0, 1.0]:
+			_schedule(_create_boundaries.bind(chunk, start, segment, side), chunk, "_create_boundaries")
 	for marker in 3:
 		var marker_x := start + 12.0 + marker * 32.0
 		_schedule(_create_road_markers.bind(chunk, marker_x, nearby_stops), chunk, "road_markers")
@@ -456,42 +477,13 @@ func _create_chunk(index: int, baked: Dictionary = {}) -> void:
 	rng.seed = world_seed + index * 104729
 	var vegetation_blend := terrain.blend_at(start + CHUNK_LENGTH * 0.5)
 	var woodland := lerpf(1.0 if int(vegetation_blend.from) in [3, 5] else 0.0, 1.0 if int(vegetation_blend.to) in [3, 5] else 0.0, float(vegetation_blend.amount))
-	for count in roundi(lerpf(46.0, 156.0, woodland)):
+	for count in roundi(lerpf(40.0, 72.0, woodland)):
 		# Root probes and terrain/yard tests belong to the frame-budgeted jobs too.
 		_schedule(_create_scenery_prop.bind(chunk, start, count, rng.randi(), nearby_stops), chunk, "scenery_prop")
 	for pole_index in 3:
-		var x := start + 12.0 + pole_index * 32.0
-		if not terrain.mountain_at(x).is_empty(): continue
-		var a := _roadside_point(x, -10.5)
-		var b := _roadside_point(x + 32.0, -10.5)
-		var river_a := terrain.feature_at(x)
-		var river_b := terrain.feature_at(x + 32)
-		if (not river_a.is_empty() and river_a.kind == "bridge") or (not river_b.is_empty() and river_b.kind == "bridge"): continue
-		if terrain.water_depth(a.x, a.z) > 0.05 or terrain.water_depth(b.x, b.z) > 0.05: continue
-		if not _reserved_for_stop(a, nearby_stops, 0.5) and absf(terrain.road_distance(a.x, a.z)) > 8.5:
-			_schedule(func() -> void:
-				if is_instance_valid(chunk): _place_model(chunk, "utility_pole", a), chunk, "_place_model")
-		for side: float in [0.0]:
-			for segment in 6:
-				var t0 := segment / 6.0
-				var t1 := (segment + 1) / 6.0
-				var p0 := a.lerp(b, t0) + Vector3(0, 9.22 - sin(t0 * PI) * 0.85, side)
-				var p1 := a.lerp(b, t1) + Vector3(0, 9.22 - sin(t1 * PI) * 0.85, side)
-				_schedule(func() -> void:
-					if is_instance_valid(chunk): DesertModels.beam(chunk, "PowerLine", p0, p1, 0.022, DesertModels.mat("rubber")), chunk, "PowerLine")
+		_schedule(_plan_utility_line.bind(chunk, start + 12.0 + pole_index * 32.0, nearby_stops), chunk, "utility_layout")
 	for fence_index in 19:
-		var x := start + fence_index * 5.0
-		if not terrain.mountain_at(x).is_empty(): continue
-		var fence_point := _point(x, -24.0)
-		var feature := terrain.feature_at(x)
-		if not feature.is_empty() and feature.kind == "bridge": continue
-		if terrain.water_depth(x, fence_point.z) > 0.05: continue
-		if _reserved_for_stop(_point(x + 2.5, -24.0), nearby_stops, 3.0) or terrain.is_offroad_trail(x + 2.5, _point(x + 2.5, -24.0).z):
-			continue
-		if terrain.fork_at(x).is_empty() and absf(terrain.road_distance(fence_point.x, fence_point.z)) > 9.0:
-			var pos := _point(x, -24.0)
-			_schedule(func() -> void:
-				if is_instance_valid(chunk): _place_model(chunk, "ranch_fence", pos), chunk, "_place_model")
+		_schedule(_place_fence.bind(chunk, start + fence_index * 5.0, nearby_stops), chunk, "fence_layout")
 	if not stop.is_empty():
 		_schedule(func() -> void:
 			if is_instance_valid(chunk): _create_stop(chunk, stop, baked.get("stop_access", {})), chunk, "_create_stop")
@@ -534,6 +526,59 @@ func _create_chunk(index: int, baked: Dictionary = {}) -> void:
 				crate.add_child(crate_shape), chunk, "RoadDebris")
 
 
+func _plan_utility_line(chunk: Node3D, x: float, stops: Array[Dictionary]) -> void:
+	if not terrain.mountain_at(x).is_empty(): return
+	var a := _roadside_point(x, -10.5)
+	var b := _roadside_point(x + 32.0, -10.5)
+	if terrain.feature_at(x).get("kind", "") == "bridge" or terrain.feature_at(x + 32).get("kind", "") == "bridge": return
+	if terrain.water_depth(a.x, a.z) > 0.05 or terrain.water_depth(b.x, b.z) > 0.05: return
+	if not _reserved_for_stop(a, stops, 0.5) and absf(terrain.road_distance(a.x, a.z)) > 8.5:
+		_place_model(chunk, "utility_pole", a)
+	for segment in 6:
+		var t0 := segment / 6.0
+		var t1 := (segment + 1) / 6.0
+		var p0 := a.lerp(b, t0) + Vector3.UP * (9.22 - sin(t0 * PI) * 0.85)
+		var p1 := a.lerp(b, t1) + Vector3.UP * (9.22 - sin(t1 * PI) * 0.85)
+		_schedule(_place_wire.bind(chunk, p0, p1), chunk, "PowerLine")
+
+
+func _place_wire(chunk: Node3D, a: Vector3, b: Vector3) -> void:
+	var wire := MeshInstance3D.new()
+	wire.name = "PowerLine"
+	wire.mesh = _wire_mesh
+	wire.material_override = DesertModels.mat("rubber")
+	wire.position = (a + b) * 0.5
+	wire.quaternion = Quaternion(Vector3.UP, (b - a).normalized())
+	wire.scale = Vector3(0.022, a.distance_to(b), 0.022)
+	wire.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	chunk.add_child(wire)
+	if batch_scenery: _batch_visuals(wire, chunk)
+
+
+func _place_fence(chunk: Node3D, x: float, stops: Array[Dictionary]) -> void:
+	if not terrain.mountain_at(x).is_empty() or terrain.feature_at(x).get("kind", "") == "bridge": return
+	var point := _point(x, -24.0)
+	if terrain.water_depth(x, point.z) > 0.05: return
+	var middle := _point(x + 2.5, -24.0)
+	if _reserved_for_stop(middle, stops, 3.0) or terrain.is_offroad_trail(middle.x, middle.z): return
+	if terrain.fork_at(x).is_empty() and absf(terrain.road_distance(point.x, point.z)) > 9.0:
+		_place_model(chunk, "ranch_fence", point)
+
+
+func _publish_terrain_strip(ground: MeshInstance3D, arrays: Array, band: int) -> void:
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, Mesh.ARRAY_FLAG_USE_DYNAMIC_UPDATE | DriveTerrainBake.MATERIAL_FORMAT)
+	if band == 0:
+		ground.mesh = mesh
+		return
+	var strip := MeshInstance3D.new()
+	strip.name = "TerrainStrip%d" % band
+	strip.mesh = mesh
+	strip.material_override = ground.material_override
+	strip.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	ground.add_child(strip)
+
+
 func _schedule(job: Callable, owner_node: Node = null, label: String = "") -> void:
 	if async_streaming: _jobs.append({"job": job, "owner": weakref(owner_node) if owner_node != null else null, "epoch": _epoch, "label": label})
 	else: job.call()
@@ -562,6 +607,12 @@ func _create_scenery_prop(chunk: Node3D, start: float, count: int, random_seed: 
 	if _reserved_for_stop(pos, nearby_stops, 3.0) or terrain.is_offroad_trail(pos.x, pos.z):
 		return
 	var scale_value := rng.randf_range(0.65, 1.30)
+	var blend := terrain.blend_at(x)
+	var local_biome := int(blend.to) if rng.randf() < float(blend.amount) else int(blend.from)
+	var yaw := rng.randf_range(-PI, PI)
+	if local_biome in [2, 3, 4, 5] and (count % 3 == 0 or (local_biome == 3 and count % 4 != 0) or (local_biome == 5 and count % 4 == 1)):
+		_place_spaced_tree(chunk, pos, nearby_stops)
+		return
 	var support_min := pos.y
 	var support_max := pos.y
 	for foot: Vector2 in [Vector2(0.28, 0), Vector2(-0.28, 0), Vector2(0, 0.28), Vector2(0, -0.28)]:
@@ -574,24 +625,64 @@ func _create_scenery_prop(chunk: Node3D, start: float, count: int, random_seed: 
 	var contacts: PackedVector3Array = chunk.get_meta("vegetation_contacts", PackedVector3Array())
 	contacts.append(pos)
 	chunk.set_meta("vegetation_contacts", contacts)
-	var blend := terrain.blend_at(x)
-	var local_biome := int(blend.to) if rng.randf() < float(blend.amount) else int(blend.from)
-	var snow_cover := lerpf(1.0 if int(blend.from) == 4 else 0.0, 1.0 if int(blend.to) == 4 else 0.0, float(blend.amount))
-	var yaw := rng.randf_range(-PI, PI)
-	if local_biome in [2, 3, 4, 5] and (count % 3 == 0 or (local_biome == 3 and count % 4 != 0) or (local_biome == 5 and count % 4 == 1)):
-		BiomeModels.tree(chunk, pos, scale_value, local_biome == 4, local_biome == 5, snow_cover, count % 3)
-		var tree_root := chunk.get_child(chunk.get_child_count() - 1) as Node3D
-		_add_anchor(tree_root, "tree", Vector3.UP * 0.85)
-		if batch_scenery: _batch_visuals(tree_root, chunk)
-	elif local_biome == 5:
+	if local_biome == 5:
 		var reeds := BiomeModels.reeds(chunk, pos, scale_value, yaw)
 		if batch_scenery: _batch_visuals(reeds, chunk)
+	elif local_biome in [2, 3, 4]:
+		var plant := BiomeModels.undergrowth(chunk, pos, scale_value, yaw, local_biome == 3)
+		if batch_scenery: _batch_visuals(plant, chunk)
 	elif local_biome < 2 and count % 4 == 0: _place_model(chunk, "saguaro", pos, Vector3.ONE * scale_value * 0.8, yaw)
 	elif count % 7 == 0: _place_model(chunk, "mesa_rock", pos, Vector3(1.8, 0.7, 1.2) * scale_value, x)
 	else: _place_model(chunk, "desert_scrub", pos, Vector3.ONE * scale_value, x)
 
+func _place_spaced_tree(chunk: Node3D, candidate: Vector3, stops: Array[Dictionary]) -> void:
+	# The same world-space lattice spans adjoining chunks. Jitter is bounded,
+	# so crowns remain separated even across a seam or after regeneration.
+	var cell := Vector2i(floori(candidate.x / TREE_SPACING), floori(candidate.z / TREE_SPACING))
+	var occupied: Dictionary = chunk.get_meta("tree_cells", {})
+	if occupied.has(cell): return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = world_seed + cell.x * 73856093 + cell.y * 19349663
+	var pos := Vector3((cell.x + 0.5) * TREE_SPACING + rng.randf_range(-0.8, 0.8), 0, (cell.y + 0.5) * TREE_SPACING + rng.randf_range(-0.8, 0.8))
+	var start := float(chunk.get_meta("chunk_start", 0.0))
+	if pos.x < start or pos.x >= start + CHUNK_LENGTH: return
+	if absf(pos.z - terrain.corridor_center(pos.x)) > terrain.boundary_width(pos.x) - 7.0: return
+	if absf(terrain.road_distance(pos.x, pos.z)) < 12.0 or terrain.is_offroad_trail(pos.x, pos.z): return
+	if _reserved_for_stop(pos, stops, 5.0): return
+	var blend := terrain.blend_at(pos.x)
+	var biome := int(blend.to) if rng.randf() < float(blend.amount) else int(blend.from)
+	if biome not in [2, 3, 4, 5]: return
+	if terrain.water_depth(pos.x, pos.z) > (0.65 if biome == 5 else 0.12): return
+	var minimum := rendered_height_at(pos.x, pos.z)
+	var maximum := minimum
+	for foot: Vector2 in [Vector2(0.4, 0), Vector2(-0.4, 0), Vector2(0, 0.4), Vector2(0, -0.4)]:
+		var height := rendered_height_at(pos.x + foot.x, pos.z + foot.y)
+		minimum = minf(minimum, height)
+		maximum = maxf(maximum, height)
+	if maximum - minimum > 0.55: return
+	pos.y = minimum - 0.045
+	var size_value := rng.randf_range(0.75, 1.10)
+	var variant := rng.randi_range(0, 2)
+	# The supplied cedar is a sparse landmark, not a replacement for every tree.
+	if biome in [2, 3, 4] and rng.randf() < 0.08: variant = 4
+	if biome == 5 and rng.randf() < 0.08: variant = 3
+	var snow := lerpf(1.0 if int(blend.from) == 4 else 0.0, 1.0 if int(blend.to) == 4 else 0.0, float(blend.amount))
+	BiomeModels.tree(chunk, pos, size_value, biome == 4, biome == 5, snow, variant)
+	var tree := chunk.get_child(chunk.get_child_count() - 1) as Node3D
+	_add_anchor(tree, "tree", Vector3.UP * 0.85)
+	occupied[cell] = true
+	chunk.set_meta("tree_cells", occupied)
+	var sites: Array = chunk.get_meta("tree_sites", [])
+	sites.append({"position": pos, "radius": float(tree.get_meta("canopy_radius", 2.7)) * size_value, "variant": variant})
+	chunk.set_meta("tree_sites", sites)
+	var contacts: PackedVector3Array = chunk.get_meta("vegetation_contacts", PackedVector3Array())
+	contacts.append(pos)
+	chunk.set_meta("vegetation_contacts", contacts)
+	if batch_scenery: _batch_visuals(tree, chunk)
+
 
 func _finish_chunk_collision(chunk: Node3D, index: int) -> void:
+	chunk.set_meta("terrain_ready", true)
 	if _retiring_chunks.has(index) and _retiring_chunks[index] != chunk:
 		var old: Node3D = _retiring_chunks[index]
 		remove_child(old)
@@ -748,11 +839,11 @@ func _create_access_mesh(chunk: Node3D, vertices: PackedVector3Array, label: Str
 	preload("res://scripts/world_materials.gd").decorate(patch)
 
 
-func _create_boundaries(chunk: Node3D, start: float, segment: int) -> void:
+func _create_boundaries(chunk: Node3D, start: float, segment: int, only_side: float = 0.0) -> void:
 	var body := StaticBody3D.new()
 	body.name = "MapBoundary"
 	chunk.add_child(body)
-	for side: float in [-1.0, 1.0]:
+	for side: float in ([-1.0, 1.0] if only_side == 0.0 else [only_side]):
 		for index in range(segment, segment + 1):
 			var x := start + index * 8.0
 			var next_x := x + 8.0
@@ -774,10 +865,25 @@ func _create_boundaries(chunk: Node3D, start: float, segment: int) -> void:
 				continue
 			if biome in [3, 5]:
 				# Forest edges use vegetation rather than a belt of desert blocks.
-				var edge := _boundary_point(x + 4.0, side)
-				edge.y = rendered_height_at(edge.x, edge.z) - 0.08
-				BiomeModels.tree(chunk, edge, 1.15, false, biome == 5, 0.0, segment % 3)
-				if batch_scenery: _batch_visuals(chunk.get_child(chunk.get_child_count() - 1), chunk)
+				if segment % 3 == 0:
+					_place_spaced_tree(chunk, _boundary_point(x + 4.0, side, -8.0), [])
+				continue
+			if biome in [2, 4] or not terrain.mountain_at(x + 4).is_empty():
+				var ridge := preload("res://scripts/expedition_scenery.gd").instance("alpine_peak" if biome == 4 else "mountain_ridge")
+				ridge.position = _boundary_point(x + 4, side) - Vector3.UP * 1.0
+				# Mirror only the outward axis; mass never crosses the road-facing
+				# edge. Existing solid boundary is authoritative for collisions.
+				ridge.scale = Vector3(0.82, 0.85 + 0.12 * sin(x * 0.03), side)
+				ridge.name = "UpperMountainRidge" if side < 0 else "LowerMountainRidge"
+				chunk.add_child(ridge, true)
+				_add_anchor(ridge, "rock", Vector3(0, 1.0, 0.5))
+				if batch_scenery: _batch_visuals(ridge, chunk)
+				if segment % 4 == 0:
+					var peak := preload("res://scripts/expedition_scenery.gd").instance("snowy_peak" if biome == 4 else "rocky_peak")
+					peak.position = _boundary_point(x + 4, side) - Vector3.UP * 2.0
+					peak.scale = Vector3(0.85, 0.8 + 0.15 * sin(x * 0.017), side * 0.8)
+					chunk.add_child(peak, true)
+					if batch_scenery: _batch_visuals(peak, chunk)
 				continue
 			# Overlapping full-size rocks on BOTH sides, including every chunk seam.
 			var rock := _place_model(chunk, "mesa_rock", _boundary_point(x + 4.0, side) - Vector3.UP * 1.0,

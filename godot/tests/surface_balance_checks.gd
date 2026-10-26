@@ -52,13 +52,13 @@ func _run() -> void:
 	var maximum_rut := 0.0
 	for x in range(130, 230):
 		maximum_rut = maxf(maximum_rut, profile.authored_rut_depth(x, profile.center_at(x) + 1.15))
-	check(maximum_rut > 0.15 and maximum_rut <= 0.25 and profile.authored_rut_depth(128, profile.center_at(128)) == 0, "Broader geometric wheel channels reach 15–24 cm with tapered entries")
+	check(maximum_rut > 0.075 and maximum_rut <= 0.121 and profile.authored_rut_depth(128, profile.center_at(128)) == 0, "Maintained-road wheel channels stay 8–12 cm deep with tapered entries")
 	var game := (load("res://scenes/main.tscn") as PackedScene).instantiate() as Node3D
 	game._ephemeral = true
 	root.add_child(game)
 	var world: DriveWorld = game.world
 	world.restore_deformation([[80, floori(point.z), 1.0]])
-	check(world.terrain.deformation.depth_at(80, floori(point.z)) < 0.25, "Old excessive ordinary-soil ruts are rebalanced on world restore")
+	check(world.terrain.deformation.depth_at(80, floori(point.z)) > 0.01 and world.terrain.deformation.depth_at(80, floori(point.z)) <= 0.30, "Old metre-deep ordinary-sand saves retain shallow supporting-layer ruts")
 	# Cross a bank with a worn starter, using real contacts, engine forces and
 	# asynchronous compaction. No speed/position assignments during the drive.
 	var car: DriveVehicle = game.vehicle

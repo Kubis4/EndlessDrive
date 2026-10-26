@@ -32,6 +32,8 @@ func _ready() -> void:
 		button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		button.expand_icon = true
 		button.add_theme_constant_override("icon_max_width", 56)
+	_center_icon($Tools, 44)
+	_center_icon($service, 28)
 	for key: String in ["drive_mode", "differential", "winch"]:
 		var parent := get_node(key)
 		if not parent.has_node("Icon"):
@@ -59,6 +61,24 @@ func _ready() -> void:
 	set_equipment_open(preview_equipment if Engine.is_editor_hint() else false)
 	resized.connect(_layout)
 	_layout()
+
+func _center_icon(button: Button, width: float) -> void:
+	# A separate centered rect avoids Button text/icon spacing and skin margins.
+	button.icon = null
+	var glyph := button.get_node_or_null("Glyph") as TextureRect
+	if glyph == null:
+		glyph = TextureRect.new()
+		glyph.name = "Glyph"
+		button.add_child(glyph)
+	glyph.texture = load("res://assets/ui/tools.svg")
+	glyph.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	glyph.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	glyph.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	glyph.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	glyph.offset_left = -width * 0.5
+	glyph.offset_top = -width * 0.5
+	glyph.offset_right = width * 0.5
+	glyph.offset_bottom = width * 0.5
 
 func _apply_skin() -> void:
 	for child in get_children():
@@ -228,7 +248,10 @@ func _layout() -> void:
 	for index in 3: _rect(["lights", "camera", "pause"][index], Vector2(w - margin - 280 + index * 98, 20), Vector2(84, 76))
 	_rect("AlertPlate", Vector2(w * 0.5 - 182, 20), Vector2(364, 54))
 	_rect("AlertIcon", Vector2(w * 0.5 - 166, 31), Vector2(26, 32))
-	_rect("Alert", Vector2(w * 0.5 - 130, 28), Vector2(294, 36))
+	_rect("Alert", Vector2(w * 0.5 - 130, 24), Vector2(294, 44))
+	$Alert.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	$Alert.clip_text = true
+	$Alert.add_theme_font_size_override("font_size", 16)
 	_rect("Weather", Vector2(w * 0.5 - 210, 82), Vector2(420, 28))
 	_rect("left", Vector2(margin, h - 124), Vector2(172, 94))
 	_rect("right", Vector2(margin + 172, h - 124), Vector2(172, 94))
@@ -269,8 +292,9 @@ func set_equipment_open(value: bool) -> void:
 	equipment_open = value
 	for key: String in ["drive_mode", "differential", "winch", "service", "engine", "cruise", "InputMode"]: get_node(key).visible = value
 	$VehicleSummary.hide()
-	$Tools.text = "×" if value else ""
-	$Tools.icon = null if value else load("res://assets/ui/tools.svg")
+	$Tools.text = ""
+	$Tools.icon = null
+	$Tools/Glyph.modulate = GOLD if value else Color.WHITE
 	$Tools.add_theme_font_size_override("font_size", 38)
 
 func touch_button_at(point: Vector2) -> Button:
@@ -298,7 +322,8 @@ func refresh(hud: DriveHUD) -> void:
 	if hud.modal_open: set_equipment_open(false)
 	var run := hud.run
 	var vehicle := hud.vehicle
-	$Distance.text = "%.2f km" % (run.distance / 1000)
+	$Distance.text = "%.2f km" % (run.odometer / 1000)
+	$Distance.tooltip_text = tr("Prejdená vzdialenosť") + " · " + tr("Dosah trasy") + ": %.2f km" % (run.distance / 1000)
 	$Region.text = tr(DriveWorld.BIOMES[hud.world.biome_at(vehicle.position.x)]).to_upper()
 	$FuelText.text = "%.1f l" % run.fuel
 	$TempText.text = "%d °C" % roundi(run.temperature)
@@ -333,9 +358,15 @@ func refresh(hud: DriveHUD) -> void:
 	$Alert.modulate = Color("ff5959")
 	if run.water_ingress >= 1.0: $Alert.text = tr("Motor nasal vodu")
 	elif run.water_ingress > 0.25: $Alert.text = tr("Voda v nasávaní")
+	var diagnostic := vehicle.motion_diagnostic()
+	if not diagnostic.is_empty() and run.temperature <= 110 and run.water_ingress < 1.0:
+		$Alert.text = tr(diagnostic)
+	$Alert.tooltip_text = tr(diagnostic)
 	$AlertPlate.visible = not $Alert.text.is_empty()
 	$AlertIcon.visible = $AlertPlate.visible
 	$Weather.text = tr("V ÚKRYTE SI V BEZPEČÍ") if hud.weather != null and hud.weather.sheltered else (tr("Piesočná búrka") if hud.weather != null and hud.weather.storm_visibility > 0.20 else "")
+	if hud.weather != null and hud.weather.storm_active and hud.weather.storm_warning > 0 and not hud.weather.sheltered:
+		$Weather.text = tr("Búrka za %d s · vyhľadaj prístrešok") % ceili(hud.weather.storm_warning)
 	$VehicleSummary.text = tr("Olej %.1f l · Chladenie %.1f l · Batéria %d %%") % [run.oil, run.coolant, roundi(run.battery * 100)]
 	$search.visible = not hud.world.nearest_building(vehicle.position).is_empty()
 	$search.disabled = absf(vehicle.speed) > 0.5

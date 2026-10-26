@@ -783,7 +783,7 @@ func sample(x: float, z: float, include_water: bool = true) -> Dictionary:
 	# shoulders and in occasional shaded road patches, not as a uniform sheet.
 	var snowy := alpine * maxf(smoothstep(11.0, 28.0, absf(lateral)), smoothstep(0.63, 0.78, patch) * 0.75)
 	if alpine > 0:
-		ground = ground.lerp(Color("d3d9d5"), snowy)
+		ground = ground.lerp(Color("aebbb9"), snowy)
 		color = color.lerp(Color("b9c4c2"), smoothstep(0.3, 0.75, snowy))
 		grip = lerpf(grip, 0.58, snowy)
 		if biome_at(x) == 4: surface = "Sneh / posypaná cesta" if snowy > 0.45 else "Horský štrk"
@@ -840,7 +840,7 @@ func sample(x: float, z: float, include_water: bool = true) -> Dictionary:
 				soil_color = Color("665e49") if material == SurfaceKind.MUD else (Color("796444") if material == SurfaceKind.LEAVES else ground)
 			4:
 				material = SurfaceKind.SNOW if snowy > 0.45 else SurfaceKind.ROCK
-				soil_color = Color("858d80").lerp(Color("d3d9d5"), snowy)
+				soil_color = Color("858d80").lerp(Color("aebbb9"), snowy)
 				if snowy > 0.75 and patch > 0.76:
 					material = SurfaceKind.ICE
 					soil_color = Color("91a6b4")
@@ -922,10 +922,13 @@ func _ground_palette(biome: int, patch: float, moisture: float, snowy: float) ->
 			if patch < 0.32: material = SurfaceKind.DIRT; color = Color("93816b")
 		3:
 			material = SurfaceKind.MUD if moisture > 0.65 else (SurfaceKind.LEAVES if patch > 0.35 else SurfaceKind.GRASS)
-			color = Color("665e49") if material == SurfaceKind.MUD else (Color("796444") if material == SurfaceKind.LEAVES else GROUND[biome])
+			# Physical material selection stays intact, but colour crosses patches
+			# gradually instead of drawing hard brown/green pixel-like borders.
+			color = GROUND[biome].lerp(Color("817961"), smoothstep(0.25, 0.62, patch))
+			color = color.lerp(Color("716b59"), smoothstep(0.50, 0.85, moisture))
 		4:
 			material = SurfaceKind.SNOW if snowy > 0.45 else SurfaceKind.ROCK
-			color = Color("858d80").lerp(Color("d3d9d5"), snowy)
+			color = Color("858d80").lerp(Color("aebbb9"), snowy)
 			if snowy > 0.75 and patch > 0.76: material = SurfaceKind.ICE; color = Color("91a6b4")
 		5:
 			color = Color("736951")

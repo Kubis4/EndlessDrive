@@ -1,0 +1,23 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://assets/models/vegetation/plants.tres" id="1_8ob10"]
+[ext_resource type="ArrayMesh" path="res://assets/models/vegetation/calocedrus.res" id="2_2s803"]
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_6aisv"]
+height = 3.0
+radius = 0.2
+
+[node name="Calocedrus" type="Node3D" unique_id=539596664]
+metadata/source_pack = "CL04 Calocedrus LOD2"
+metadata/triangles = 3618
+metadata/canopy_radius = 1.8916758
+
+[node name="Foliage" type="MeshInstance3D" parent="." unique_id=872854282]
+material_override = ExtResource("1_8ob10")
+mesh = ExtResource("2_2s803")
+
+[node name="TrunkBody" type="StaticBody3D" parent="." unique_id=1099895436]
+
+[node name="TrunkCollision" type="CollisionShape3D" parent="TrunkBody" unique_id=360164171]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+shape = SubResource("CylinderShape3D_6aisv")

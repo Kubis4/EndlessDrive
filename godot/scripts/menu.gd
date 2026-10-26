@@ -45,6 +45,10 @@ var _close_button: Button
 var _volume_slider: HSlider
 var _camera_slider: HSlider
 var _language_select: OptionButton
+var _quality_select: OptionButton
+var _fps_select: OptionButton
+var _quality := 2
+var _fps := 60
 var _setting_labels: Dictionary = {}
 var _diagram: CarDiagram
 var _part_title: Label
@@ -74,6 +78,7 @@ func _ready() -> void:
 	_ensure_built()
 	preload("res://scripts/hud_skin.gd").polish(_root)
 	_setup_language_control()
+	_setup_video_controls()
 	_layout()
 	if Engine.is_editor_hint(): _preview_layout()
 
@@ -163,6 +168,53 @@ func set_settings(volume: float, camera: float) -> void:
 		_camera_slider.set_value_no_signal(_camera)
 		(_setting_labels["camera"] as Label).text = _setting_text("camera", _camera)
 	set_language(Locale.language_index())
+	set_video_settings(_quality, _fps)
+
+
+func set_video_settings(quality: int, fps: int) -> void:
+	_quality = clampi(quality, 0, 2)
+	_fps = fps if fps in [0, 30, 60] else 60
+	if is_instance_valid(_quality_select):
+		for i in 3: _quality_select.set_item_text(i, tr(["Úsporná", "Vyvážená", "Vysoká"][i]))
+		_quality_select.select(_quality)
+	if is_instance_valid(_fps_select):
+		_fps_select.set_item_text(2, tr("Bez limitu"))
+		_fps_select.select([30, 60, 0].find(_fps))
+
+
+func _setup_video_controls() -> void:
+	var settings: Node = _panels.get("settings", _modal_body)
+	for key: String in ["Quality", "FrameLimit"]:
+		var row := settings.get_node_or_null(key + "Row") as HBoxContainer
+		if row == null:
+			row = _row(16)
+			row.name = key + "Row"
+			var label := _label(tr("KVALITA GRAFIKY" if key == "Quality" else "SNÍMKY ZA SEKUNDU"), 16, GOLD)
+			label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			row.add_child(label)
+			var select := OptionButton.new()
+			select.name = key
+			select.custom_minimum_size = Vector2(240, 42)
+			for title: String in (["Úsporná", "Vyvážená", "Vysoká"] if key == "Quality" else ["30 FPS", "60 FPS", "Bez limitu"]): select.add_item(tr(title))
+			row.add_child(select)
+			settings.add_child(row)
+			settings.move_child(row, mini(2, settings.get_child_count() - 1))
+		var option := row.get_node(key) as OptionButton
+		if key == "Quality":
+			_quality_select = option
+			if not option.item_selected.is_connected(_quality_changed): option.item_selected.connect(_quality_changed)
+		else:
+			_fps_select = option
+			if not option.item_selected.is_connected(_fps_changed): option.item_selected.connect(_fps_changed)
+	set_video_settings(_quality, _fps)
+
+
+func _quality_changed(index: int) -> void:
+	setting_changed.emit("quality", float(index))
+
+
+func _fps_changed(index: int) -> void:
+	setting_changed.emit("fps", float([30, 60, 0][index]))
 
 
 func set_language(index: int) -> void:
@@ -363,12 +415,11 @@ func _build_settings() -> void:
 	_modal_body.add_child(_paragraph(tr("Nalaď si cestu podľa seba. Zmeny sa prejavia počas jazdy."), 18))
 	_volume_slider = _setting_row(tr("HLASITOSŤ"), tr("Zvuk motora a okolia"), "volume", 0.0, 1.0, _volume)
 	_camera_slider = _setting_row(tr("ODSTUP KAMERY"), tr("Bližšie k autu alebo širší výhľad na cestu"), "camera", 0.76, 1.3, _camera)
-	var note := _paragraph(tr("OVLÁDANIE\nWASD / šípky: jazda   ·   E: motor   ·   Esc: ponuka\nNa dotykovej obrazovke použi pedále a tlačidlá."), 17)
-	_modal_body.add_child(note)
 	_modal_body.add_child(_spacer())
 	var reset := _button(tr("OBNOVIŤ PREDVOLENÉ"), _reset_settings)
 	_modal_body.add_child(reset)
 	_setup_language_control()
+	_setup_video_controls()
 
 
 func _setting_row(title: String, description: String, key: String, minimum: float, maximum: float, value: float) -> HSlider:
@@ -587,6 +638,8 @@ func _request(action: String) -> void:
 func _reset_settings() -> void:
 	_volume_slider.value = 0.8
 	_camera_slider.value = 1.0
+	setting_changed.emit("quality", 1.0 if OS.has_feature("mobile") else 2.0)
+	setting_changed.emit("fps", 30.0 if OS.has_feature("mobile") else 60.0)
 
 
 func _setting_changed(current: float, key: String) -> void:

@@ -1,0 +1,13 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://assets/models/vegetation/plants.tres" id="1_dl3aw"]
+[ext_resource type="ArrayMesh" path="res://assets/models/vegetation/bush.res" id="2_6eyly"]
+
+[node name="Bush" type="Node3D" unique_id=540995247]
+metadata/source_pack = "Shapespark low-poly plants"
+metadata/triangles = 54
+metadata/canopy_radius = 0.57412267
+
+[node name="Foliage" type="MeshInstance3D" parent="." unique_id=1638744713]
+material_override = ExtResource("1_dl3aw")
+mesh = ExtResource("2_6eyly")

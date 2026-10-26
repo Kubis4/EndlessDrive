@@ -30,17 +30,17 @@ void fragment() {
 	vec3 color = OUTPUT_IS_SRGB ? tint.rgb : pow(max(tint.rgb, vec3(0.001)), vec3(0.454545));
 	vec3 detail = clamp(sample_color / average, vec3(0.60), vec3(1.35));
 	float footprint = length(fwidth(position_world));
-	color *= mix(vec3(1.0), detail, 0.55 * (1.0 - smoothstep(0.025, 0.20, footprint)));
+	color *= mix(vec3(1.0), detail, 0.12 * (1.0 - smoothstep(0.025, 0.20, footprint)));
 	float luma = dot(sample_color, vec3(0.2126, 0.7152, 0.0722));
 	vec3 r1 = cross(dFdy(VERTEX), NORMAL);
 	vec3 r2 = cross(NORMAL, dFdx(VERTEX));
 	float det = dot(dFdx(VERTEX), r1);
 	vec3 gradient = (r1 * dFdx(luma) + r2 * dFdy(luma)) * sign(det) / max(abs(det), 0.00001);
 	float detail_fade = 1.0 - smoothstep(0.025, 0.16, footprint);
-	NORMAL = normalize(NORMAL - gradient * 0.001 * detail_fade);
+	NORMAL = normalize(NORMAL - gradient * 0.00015 * detail_fade);
 	color = mix(vec3(dot(color, vec3(0.2126, 0.7152, 0.0722))), color, 0.7);
 	ALBEDO = pow(max(color, vec3(0.001)), vec3(2.2));
-	ROUGHNESS = clamp(roughness_value + (luma - 0.5) * 0.12, 0.25, 1.0);
+	ROUGHNESS = clamp(roughness_value + (luma - 0.5) * 0.025, 0.25, 1.0);
 	METALLIC = metallic_value;
 	SPECULAR = 0.25;
 }

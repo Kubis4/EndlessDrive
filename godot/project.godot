@@ -11,8 +11,8 @@ config_version=5
 [application]
 
 config/name="Endless Drive"
-config/version="3.0.0"
 config/description="A road, an old car, and everything you need to keep going."
+config/version="4.0.0"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"

@@ -5,6 +5,7 @@ var world: DriveWorld
 var kind := ""
 var feature_x := 0.0
 var _train: AnimatableBody3D
+var _train_wheels: Array[Node3D] = []
 var _gates: Array[Node3D] = []
 var _lamps: Array[StandardMaterial3D] = []
 var _bell: AudioStreamPlayer3D
@@ -92,11 +93,14 @@ func _tunnel() -> void:
 			ring.append(center + right * (cos(angle) * 6.4) + Vector3.UP * (2.4 + sin(angle) * 4.6))
 		ring.append(center - right * 6.4 - Vector3.UP)
 		rings.append(ring)
-		# Visible ribs at both portals and spaced along the swept curve.
+		# Authored masonry follows the same swept road frame as the collision.
 		if i % 4 == 0:
 			_step(func() -> void:
-				for arc in range(ring.size() - 1):
-					_beam(self, "TunnelArchRib", ring[arc], ring[arc + 1], 0.12, stone))
+				var portal := i == 0 or i == 24
+				var model := preload("res://scripts/expedition_scenery.gd").instance("tunnel_portal" if portal else "tunnel_rib")
+				model.name = "TunnelEntrance" if i == 0 else ("TunnelExit" if i == 24 else "TunnelArchRib")
+				model.transform = Transform3D(preload("res://scripts/expedition_scenery.gd").road_basis(tangent), center)
+				add_child(model))
 		if i % 8 == 4:
 			_step(func() -> void:
 				var light := OmniLight3D.new()
@@ -148,18 +152,18 @@ func _rail() -> void:
 	add_child(_train)
 	for i in 4:
 		_step(func() -> void:
-			var p := Vector3(0, 1.5, -i * 8.0)
-			_box(_train, "Locomotive" if i == 0 else "Wagon", p, Vector3(2.8, 2.8, 7.0), BiomeModels.material(Color("765a43") if i > 0 else Color("395e5a")))
+			var label: String = ["locomotive", "tank_wagon", "freight_wagon", "timber_wagon"][i]
+			var model := preload("res://scripts/expedition_scenery.gd").instance(label)
+			model.position.z = -i * 8.0
+			_train.add_child(model)
+			for wheel: Node in model.find_children("TrainWheel*", "MeshInstance3D", true, false):
+				_train_wheels.append(wheel as Node3D)
 			var shape := CollisionShape3D.new()
 			var box := BoxShape3D.new()
-			box.size = Vector3(2.8, 2.8, 7.0)
+			box.size = Vector3(2.8, 3.2, 7.0)
 			shape.shape = box
-			shape.position = p
-			_train.add_child(shape)
-			for z: float in [-2.4, 2.4]:
-				for side: float in [-1.3, 1.3]:
-					var wheel := _cylinder(_train, "TrainWheel", Vector3(side, 0.3, p.z + z), 0.42, 0.16, DesertModels.mat("rubber"), 8)
-					wheel.rotation.z = PI * 0.5)
+			shape.position = Vector3(0, 1.65, -i * 8.0)
+			_train.add_child(shape))
 	for side: float in [-1.0, 1.0]:
 		var post := _point(feature_x + side * 10.0, side * 6.0)
 		# Seal both shoulders all the way into the existing solid map boundaries.
@@ -280,6 +284,8 @@ func _physics_process(dt: float) -> void:
 	_train.position = center + Vector3(0, 0.24, -180 + phase * 24.0)
 	_train.visible = phase < 18
 	_train.collision_layer = 1 if phase < 18 else 0
+	if phase < 18:
+		for wheel: Node3D in _train_wheels: wheel.rotate_object_local(Vector3.UP, -24.0 * dt / 0.43)
 	for i in _gates.size():
 		_gates[i].rotation.x = (0.0 if closed else PI * 0.5) * (-1.0 if i == 0 else 1.0)
 	for lamp: StandardMaterial3D in _lamps: lamp.emission_energy_multiplier = 2.0 if closed and fposmod(phase, 0.7) < 0.35 else 0.0
@@ -316,8 +322,9 @@ func _segment_solid(label: String, a: Vector3, b: Vector3, height: float, width:
 	body.add_child(collision)
 
 
-func _filled_span(label: String, a: Vector3, b: Vector3, height: float, width: float, material: Material) -> void:
+func _filled_span(label: String, a: Vector3, b: Vector3, height: float, width: float, material: Material, visible_mesh := true) -> void:
 	_segment_solid(label + "Collision", a, b, height, width)
+	if not visible_mesh: return
 	var node := Node3D.new()
 	node.name = label
 	var axis := (b - a).normalized()
@@ -337,6 +344,10 @@ func _rail_portal(center: Vector3, side: float) -> void:
 	dark.cull_mode = BaseMaterial3D.CULL_DISABLED
 	var front := center + Vector3(0, 0, side * (world.terrain.boundary_width(feature_x) - 5.0))
 	var back := front + Vector3(0, 0, side * 10.0)
+	var masonry := preload("res://scripts/expedition_scenery.gd").instance("rail_portal")
+	masonry.position = front
+	masonry.rotation.y = PI if side > 0 else 0.0
+	portal.add_child(masonry)
 	var faces := PackedVector3Array()
 	var ring := PackedVector3Array([Vector3(2.5, -1, 0)])
 	for arc in 13:
@@ -348,12 +359,15 @@ func _rail_portal(center: Vector3, side: float) -> void:
 		var b := front + ring[index + 1]
 		var depth := back - front
 		faces.append_array(PackedVector3Array([a, b, a + depth, b, b + depth, a + depth]))
-		_beam(portal, "PortalArch", a, b, 0.35, stone)
 	_shell(label + "Interior", faces, dark)
 	# Wing walls replace the removed cliff tiles on either side of the opening.
 	for edge: float in [-1, 1]:
-		_filled_span(label + "Wing", front + Vector3(edge * 3.0, 3.0, 0), front + Vector3(edge * 9.0, 3.0, 0), 12, 12, stone)
-	_filled_span(label + "Crown", front + Vector3(-3.5, 8.0, 0), front + Vector3(3.5, 8.0, 0), 4, 12, stone)
+		_filled_span(label + "Wing", front + Vector3(edge * 3.0, 3.0, 0), front + Vector3(edge * 9.0, 3.0, 0), 12, 12, stone, false)
+		var hillside := preload("res://scripts/expedition_scenery.gd").instance("mountain_ridge")
+		hillside.position = front + Vector3(edge * 6.2, 0, -side * 5.5)
+		hillside.scale = Vector3(0.55, 1.0, side * 0.65)
+		portal.add_child(hillside)
+	_filled_span(label + "Crown", front + Vector3(-3.5, 8.0, 0), front + Vector3(3.5, 8.0, 0), 4, 12, stone, false)
 	# Dark depth backdrop prevents the player driving out of the map down the
 	# railway; the kinematic train emerges through it from the hidden staging area.
 	_filled_span(label + "Depth", back + Vector3(-2.6, 2.6, 0), back + Vector3(2.6, 2.6, 0), 7.4, 0.5, dark)

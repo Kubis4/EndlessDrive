@@ -9,6 +9,7 @@ func _initialize() -> void:
 func _capture() -> void:
 	var game := load("res://scenes/main.tscn").instantiate() as Node3D
 	game._ephemeral = true
+	game._focus_pause_enabled = false
 	root.add_child(game)
 	var output := "res://../build/godot-preview.png"
 	for argument: String in OS.get_cmdline_user_args():

@@ -19,6 +19,14 @@ class SoilTerrain extends DriveTerrain:
 class SoilWorld extends DriveWorld:
 	func _ready() -> void: pass
 	func _process(_dt: float) -> void: pass
+	func _soil_snapshot() -> DriveTerrain:
+		# Preserve this fixture's saturated material in worker commands. The
+		# production snapshot intentionally constructs the standard world profile.
+		var base := super._soil_snapshot()
+		var soil := SoilTerrain.new()
+		soil.deformation = base.deformation
+		soil.seed_value = base.seed_value
+		return soil
 
 func _initialize() -> void:
 	if not "--test-session" in OS.get_cmdline_user_args():
@@ -37,7 +45,7 @@ func frames(n: int) -> void:
 		await process_frame
 
 func _run() -> void:
-	for action: String in ["throttle", "brake", "left", "right"]:
+	for action: String in ["throttle", "brake", "handbrake", "left", "right"]:
 		if not InputMap.has_action(action): InputMap.add_action(action)
 	var material := {"soil_softness": 1.0, "soil_bearing": 0.4, "soil_depth": 1.1}
 	var a := DriveDeformation.new()
@@ -63,6 +71,10 @@ func _run() -> void:
 	root.add_child(world)
 	# Create the exact same renderer and collision bands used in the game.
 	world._create_chunk(0, DriveTerrainBake.bake(world.terrain, 0))
+	# This fixture disables the world's process loop. Publish the same terrain
+	# jobs explicitly before removing scenery jobs; never drive on missing bands.
+	for entry: Dictionary in world._jobs:
+		if entry.label in ["terrain_mesh", "collision_bands"]: entry.job.call()
 	for band in 3: world._update_rut_band(world.chunks[0], band)
 	world._jobs.clear()
 	var state := DriveRun.new()
@@ -84,6 +96,7 @@ func _run() -> void:
 	var hit_belly := false
 	for tick in 1800:
 		if tick % 12 == 0:
+			world.flush_soil_updates()
 			for band in 3: world._update_rut_band(world.chunks[0], band)
 		await frames(1)
 		max_sink = maxf(max_sink, car.sink_depth)

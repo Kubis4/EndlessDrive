@@ -959,7 +959,7 @@ metadata/layout_bindings = ["_modal_body"]
 visible = false
 layout_mode = 2
 size_flags_vertical = 3
-theme_override_constants/separation = 16
+theme_override_constants/separation = 10
 metadata/layout_bindings = ["_panels/settings"]
 
 [node name="NalaďSiCestuPodľaSebaZmenySaPrej" type="Label" parent="Root/Stage/Modal/PanelContainer/VBoxContainer/ModalBody/PanelsSettings" unique_id=723698741]
@@ -989,6 +989,42 @@ popup/item_0/text = "Slovenčina"
 popup/item_0/id = 0
 popup/item_1/text = "English"
 popup/item_1/id = 1
+
+[node name="QualityRow" type="HBoxContainer" parent="Root/Stage/Modal/PanelContainer/VBoxContainer/ModalBody/PanelsSettings"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="QualityLabel" type="Label" parent="Root/Stage/Modal/PanelContainer/VBoxContainer/ModalBody/PanelsSettings/QualityRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "KVALITA GRAFIKY"
+
+[node name="Quality" type="OptionButton" parent="Root/Stage/Modal/PanelContainer/VBoxContainer/ModalBody/PanelsSettings/QualityRow"]
+custom_minimum_size = Vector2(240, 42)
+layout_mode = 2
+item_count = 3
+selected = 2
+popup/item_0/text = "Úsporná"
+popup/item_1/text = "Vyvážená"
+popup/item_2/text = "Vysoká"
+
+[node name="FrameLimitRow" type="HBoxContainer" parent="Root/Stage/Modal/PanelContainer/VBoxContainer/ModalBody/PanelsSettings"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="FrameLimitLabel" type="Label" parent="Root/Stage/Modal/PanelContainer/VBoxContainer/ModalBody/PanelsSettings/FrameLimitRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "SNÍMKY ZA SEKUNDU"
+
+[node name="FrameLimit" type="OptionButton" parent="Root/Stage/Modal/PanelContainer/VBoxContainer/ModalBody/PanelsSettings/FrameLimitRow"]
+custom_minimum_size = Vector2(240, 42)
+layout_mode = 2
+item_count = 3
+selected = 1
+popup/item_0/text = "30 FPS"
+popup/item_1/text = "60 FPS"
+popup/item_2/text = "Bez limitu"
 
 [node name="VBoxContainer" type="VBoxContainer" parent="Root/Stage/Modal/PanelContainer/VBoxContainer/ModalBody/PanelsSettings" unique_id=231789923]
 layout_mode = 2
@@ -1066,6 +1102,7 @@ value = 1.0
 metadata/layout_bindings = ["_camera_slider"]
 
 [node name="Ovládanie" type="Label" parent="Root/Stage/Modal/PanelContainer/VBoxContainer/ModalBody/PanelsSettings" unique_id=747147982]
+visible = false
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.7058824, 0.72156864, 0.6745098, 1)

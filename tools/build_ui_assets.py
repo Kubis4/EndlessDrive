@@ -18,7 +18,7 @@ symbols.update({
     "drivetrain": '<rect x="10" y="9" width="8" height="13" rx="2"/><rect x="46" y="9" width="8" height="13" rx="2"/><rect x="10" y="42" width="8" height="13" rx="2"/><rect x="46" y="42" width="8" height="13" rx="2"/><path d="M18 16h28M18 48h28M32 16v11m0 10v11"/><rect x="27" y="27" width="10" height="10" rx="2"/>',
     "differential": '<path d="M11 10v14m42-14v14M11 17h42M32 17v10M27 35v-5a5 5 0 0 1 10 0v5"/><rect x="22" y="35" width="20" height="18" rx="3"/><path d="M32 42v5"/>',
     "winch": '<path d="M10 17v28m44-28v28M10 21h44M10 41h44M19 22v18m7-18v18m7-18v18m7-18v18m6-18v18M31 41v7c0 8 12 8 12 0v-3"/>',
-    "camera": '<path d="M23 14h18l5 10v25H18V24zM23 25h18M23 39h18M14 25h4m28 0h4M24 49v5m16-5v5M9 22a26 26 0 0 1 46 0M9 42a26 26 0 0 0 46 0"/>',
+    "camera": '<path d="M9 22h11l5-7h14l5 7h11v29H9z"/><circle cx="32" cy="35" r="9"/><path d="M46 28h3"/>',
     "cruise": '<path d="M10 47a24 24 0 1 1 44 0M32 10v7M15 19l5 5m29-5-5 5M9 35h7m32 0h7M32 35l12-12M17 52h30"/><circle cx="32" cy="35" r="3"/>',
     "power": '<path d="M32 9v23M20 14a22 22 0 1 0 24 0"/>',
     "engine": '<path d="M12 25h10l5-8h17v9h9v7h5v13h-5v6H23L14 43H8V28h4M31 17V9m-7 0h14M8 33H3v10h5"/>',

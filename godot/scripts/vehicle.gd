@@ -17,6 +17,7 @@ var wheel_angle := 0.0
 var throttle_input := 0.0
 var brake_input := 0.0
 var handbrake_input := 0.0
+var stationary_time := 0.0
 var steering_input := 0.0
 var winch_pull_velocity := Vector3.ZERO
 var controls_enabled := true
@@ -249,6 +250,7 @@ func _physics_process(dt: float) -> void:
 	rotation = Vector3(body_roll, -heading, body_pitch)
 	var previous_speed := absf(speed)
 	var before_move := position
+	var _recoveries_before_move := boundary_recoveries
 	var intended_motion := Vector3(velocity.x, 0.0, velocity.z) * dt
 	move_and_slide()
 	belly_contact = false
@@ -316,6 +318,7 @@ func _physics_process(dt: float) -> void:
 	else:
 		last_speed_loss = 0.0
 	last_motion_distance = position.distance_to(before_move)
+	stationary_time = stationary_time + dt if last_motion_distance < dt * 0.15 and throttle_input > 0.02 else 0.0
 	if previous_speed > 2.0 and absf(speed) < 0.1 and not has_obstacle:
 		unexplained_stops += 1
 		stop_reason = "unexplained"
@@ -335,6 +338,9 @@ func _physics_process(dt: float) -> void:
 	if sink_depth > 0.20 and absf(speed) < 0.15 and effort > 0.02:
 		stop_reason = "high_centered" if belly_contact or wheel_support < 0.3 else "bogged"
 	_ensure_safe_position()
+	# Only swept vehicle motion counts. Rescue moves and world-origin rebasing
+	# happen outside this interval and must never award kilometres.
+	run.odometer += Vector2(position.x - before_move.x, position.z - before_move.z).length() if boundary_recoveries == _recoveries_before_move else 0.0
 	run.distance = maxf(run.distance, position.x)
 	run.advance(dt, speed, throttle_input, offroad, cruise_enabled and manual_throttle < 0.02, maxf(_brake_pressure, handbrake_input * 0.6), water_depth)
 	_update_visual(dt, slope)
@@ -384,6 +390,12 @@ func _soil_traction(dt: float, grip: float, engine_force: float, effort: float) 
 	var slip := clampf((demand - available) / maxf(demand, 0.01), 0.0, 1.0)
 	soil_slip = lerpf(soil_slip, slip, 1.0 - exp(-8.0 * dt))
 	soil_resistance = soft * (sink_depth * 2.6 + burial * burial * 0.8) / suitable
+	# Saturated ground takes work to displace before a deep rut exists. Without
+	# this bearing loss a worn car skated over bottomless peat while its mesh
+	# deformation always lagged behind the moving tyres. Ordinary soil is zero.
+	var saturation := smoothstep(0.80, 0.98, soft)
+	var bearing_overload := maxf(0.0, (1.0 + run.cargo_weight() / 1000.0) / suitable / maxf(0.20, float(surface_info.get("soil_bearing", 2.0))) - 1.0)
+	soil_resistance += saturation * bearing_overload * 1.4
 	if belly_contact: soil_resistance += soft * 2.0
 	# Spinning tread shears the supporting soil; a gentle pedal retains more grip.
 	return available * (1.0 - soil_slip * soft * 0.45)
@@ -492,7 +504,7 @@ func _update_visual(dt: float, slope: float) -> void:
 			mat.emission_energy_multiplier = 2.5 if rear_mode & 2 else (0.5 if run.headlights else 0.0)
 	if _snorkel.visible != run.snorkel_installed: _snorkel.visible = run.snorkel_installed
 	# Headless verification has no listener/audio clock to drain playback on exit.
-	if DisplayServer.get_name() == "headless": return
+	if DisplayServer.get_name() == "headless" or AudioServer.get_driver_name() == "Dummy": return
 	if run.engine_running and not _audio.playing:
 		_audio.play()
 	elif not run.engine_running and _audio.playing:
@@ -640,8 +652,25 @@ func _try_terrain_step(motion: Vector3) -> bool:
 	return true
 
 
+func motion_diagnostic() -> String:
+	if not controls_enabled: return ""
+	if handbrake_input > 0.0: return "Ručná brzda · uvoľni ju pred rozjazdom"
+	if brake_input > 0.0 and not _reverse_engaged: return "Brzdíš · pre cúvanie podrž brzdu po zastavení"
+	if stationary_time < 0.8: return ""
+	if run.water_ingress >= 1.0: return "Zatopené nasávanie · vytiahni auto a vysuš ho v servise"
+	if run.fuel <= 0.0: return "Prázdna nádrž · doplň palivo z kufra"
+	if float(run.parts.engine) <= 0.05: return "Poškodený motor · otvor vozidlo a oprav ho"
+	if not run.engine_running:
+		return "Vybitá batéria · použi štartovací zdroj" if run.battery < 0.08 else "Motor je vypnutý · naštartuj"
+	if stop_reason == "high_centered": return "Podvozok leží na teréne · použi navijak"
+	if stop_reason == "bogged": return "Zapadol si · uber plyn, skús cúvať alebo použi navijak"
+	if stop_reason == "obstacle": return "Prekážka pred autom · skús cúvať a obísť ju"
+	if stop_reason == "water_drag": return "Hlboká voda · skús plytšiu trasu alebo navijak"
+	return "Nedostatok trakcie · skús 4×4, uzávierku alebo navijak"
+
+
 func _strength(action: String) -> float:
-	return maxf(Input.get_action_strength(action), 1.0 if action in _touches.values() else 0.0)
+	return maxf(Input.get_action_strength(action) if InputMap.has_action(action) else 0.0, 1.0 if action in _touches.values() else 0.0)
 
 
 func park() -> void:

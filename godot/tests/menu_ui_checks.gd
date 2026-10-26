@@ -44,6 +44,9 @@ func _run() -> void:
 	check(paused and game.menu.menu_open and not game.hud.visible and game.run.elapsed == elapsed, "Main menu freezes survival and vehicle while showing the world")
 	check(game.menu._continue_button.disabled, "Fresh install cannot continue an invented save")
 	game.menu.show_panel("settings")
+	await frames(2)
+	var reset := game.menu._panels.settings.get_node("ObnoviťPredvolené") as Button
+	check(game.menu._root.get_global_rect().encloses(reset.get_global_rect()), "Graphics and FPS settings leave the reset button fully on screen")
 	game._settings_changed("volume", 0.25)
 	game._settings_changed("camera", 1.15)
 	check(is_equal_approx(game._volume_preference, 0.25) and is_equal_approx(game._camera_preference, 1.15), "Settings apply without writing a player's preferences during tests")

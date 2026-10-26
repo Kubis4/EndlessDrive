@@ -6,6 +6,12 @@ static var materials: Dictionary = {}
 static var _trees: Dictionary = {}
 static var _reed_scene: PackedScene
 static var _primitives: Dictionary = {}
+static var _supplied: Dictionary = {}
+static var _supplied_materials: Dictionary = {}
+
+static func supplied(label: String) -> Node3D:
+	if not _supplied.has(label): _supplied[label] = load("res://assets/models/vegetation/" + label + ".tscn")
+	return (_supplied[label] as PackedScene).instantiate() as Node3D
 
 
 static func material(color: Color) -> StandardMaterial3D:
@@ -38,40 +44,34 @@ static func tree(parent: Node3D, pos: Vector3, size: float, snowy: bool, wetland
 	instance.add_to_group("vehicle_occluder", true)
 
 static func _tree_prototype(coverage: float, wetland: bool, variant: int) -> Node3D:
-	var tree_root := Node3D.new()
-	tree_root.name = "WetlandTree" if wetland else "MountainPine"
-	var broadleaf := wetland or variant == 2
-	var size := 1.0 + variant * 0.10
-	DesertModels.cylinder(tree_root, "Trunk", Vector3.UP * 3.4 * size, 0.29, 6.8 * size, DesertModels.mat("wood"), 7, 0.13)
-	if broadleaf:
-		for layer in 4:
-			var a := layer * 2.4
-			var crown := Vector3(cos(a) * 1.65, 7.1 + (layer % 2) * 1.8, sin(a) * 1.65) * size
-			DesertModels.beam(tree_root, "Branch", Vector3.UP * 4.8 * size, crown, 0.16, DesertModels.mat("wood"))
-			DesertModels.cylinder(tree_root, "LeafCrown", crown, (2.5 if wetland else 3.1) * size, 1.8 if wetland else 2.7, material(Color("56654b") if wetland else Color("435d47")), 8, 1.8 * size)
-		if wetland:
-			for root in 4:
-				var a := root * PI * 0.5
-				DesertModels.beam(tree_root, "ButtressRoot", Vector3(0, 1.2, 0), Vector3(cos(a) * 1.3, 0.0, sin(a) * 1.3), 0.22, DesertModels.mat("wood"))
+	var label := "wetland_tree" if wetland else (["mountain_pine", "juniper", "woodland_tree"][posmod(variant, 3)] as String)
+	if variant == 3: label = "dead_tree"
+	if coverage > 0.66 and not wetland: label = "alpine_pine"
+	var tree_root: Node3D
+	if variant == 4:
+		tree_root = supplied("calocedrus")
+	elif coverage < 0.66 and variant != 3:
+		tree_root = supplied(["broadleaf_a", "broadleaf_b", "broadleaf_c"][posmod(variant, 3)])
 	else:
-		for layer in 4:
-			var radius := (3.0 - layer * 0.55) * size
-			var height := (4.0 - layer * 0.35) * size
-			var y := (4.2 + layer * 1.75) * size
-			var color := Color("3b5846").lerp(Color("b2bcb5"), coverage * 0.85)
-			DesertModels.cylinder(tree_root, "Foliage", Vector3.UP * y, radius, height, material(color.lightened(layer * 0.025)), 8, 0.04)
-	DesertModels.collider(tree_root, Vector3.UP * 3.0, Vector3(0.55, 6.0, 0.55))
+		tree_root = preload("res://scripts/expedition_scenery.gd").instance(label)
+	tree_root.name = "WetlandTree" if wetland else "MountainPine"
+	for child in tree_root.get_children():
+		if child is MeshInstance3D and str(child.name) in ["Pine", "PineLight", "Leaf", "LeafLight", "Foliage"]:
+			if child.name == "Foliage":
+				if not _supplied_materials.has(coverage):
+					var shaded := child.material_override.duplicate() as ShaderMaterial
+					shaded.set_shader_parameter("snow_cover", coverage)
+					_supplied_materials[coverage] = shaded
+				child.material_override = _supplied_materials[coverage]
+				continue
+			var shaded := child.material_override.duplicate() as ShaderMaterial
+			shaded.set_shader_parameter("snow_cover", coverage)
+			child.material_override = shaded
 	return tree_root
 
 static func reeds(parent: Node3D, pos: Vector3, size: float, yaw: float) -> Node3D:
 	if _reed_scene == null:
-		var prototype := Node3D.new()
-		prototype.name = "MarshReeds"
-		for i in 7:
-			var a := i * 2.4
-			var p := Vector3(cos(a) * 0.65, 0.9, sin(a) * 0.65)
-			DesertModels.cylinder(prototype, "ReedStem", p, 0.045, 1.8 + (i % 3) * 0.2, material(Color("6a714d")), 4, 0.02)
-			DesertModels.cylinder(prototype, "ReedHead", p + Vector3.UP * 0.9, 0.085, 0.35, material(Color("62533f")), 5, 0.06)
+		var prototype := preload("res://scripts/expedition_scenery.gd").instance("marsh_reeds")
 		_share_meshes(prototype)
 		_own(prototype, prototype)
 		_reed_scene = PackedScene.new()
@@ -83,6 +83,14 @@ static func reeds(parent: Node3D, pos: Vector3, size: float, yaw: float) -> Node
 	instance.rotation.y = yaw
 	parent.add_child(instance, true)
 	return instance
+
+static func undergrowth(parent: Node3D, pos: Vector3, size: float, yaw: float, forest: bool) -> Node3D:
+	var node := supplied("bush" if forest else "grass")
+	node.position = pos
+	node.scale = Vector3.ONE * size
+	node.rotation.y = yaw
+	parent.add_child(node, true)
+	return node
 
 static func _share_meshes(node: Node) -> void:
 	# Unit cylinders let trunks, branches and differently sized crowns share

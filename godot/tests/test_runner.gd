@@ -240,7 +240,7 @@ func _test_survival() -> void:
 	cruise.engine_running = true
 	manual.advance(10.0, 15.0, 1.0, false)
 	cruise.advance(10.0, 15.0, 1.0, false, true)
-	check(cruise.fuel < manual.fuel, "Automatic cruise throttle has the original extra fuel cost")
+	check(is_equal_approx(cruise.fuel, manual.fuel), "Cruise and manual throttle have equal fuel cost at equal load")
 	var invalid := second.to_data()
 	invalid.parts = "broken"
 	check(DriveRun.from_data(invalid) == null, "Malformed nested save state is rejected")

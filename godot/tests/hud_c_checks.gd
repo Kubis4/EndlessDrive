@@ -39,8 +39,19 @@ func _run() -> void:
 	check(ui.scene_file_path == "res://scenes/ui/expedition_hud.tscn", "HUD uses the editor-visible saved scene")
 	check(not ui.equipment_open and not ui.get_node("drive_mode").visible, "Driving starts with equipment collapsed")
 	check(not hud._dial.is_visible_in_tree(), "Old oversized dashboard is hidden")
+	hud._update_equipment_controls()
+	check(not hud._root.get_node("EquipmentControls").visible, "HUD refresh keeps the duplicate equipment strip hidden")
+	hud.show_modal("")
+	check(not hud._root.get_node("EquipmentControls").visible, "Returning from menus also keeps the duplicate equipment strip hidden")
+	var camera_mode: int = game._camera_mode
+	await click(ui.get_node("camera").get_global_rect().get_center())
+	check(game._camera_mode == (camera_mode + 1) % 3, "Camera icon button still cycles the gameplay camera")
 	await click(ui.get_node("Tools").get_global_rect().get_center())
 	check(ui.equipment_open, "Real mouse routing opens the equipment fan")
+	for key: String in ["Tools", "service"]:
+		var button := ui.get_node(key) as Button
+		var glyph := button.get_node("Glyph") as TextureRect
+		check(glyph.get_rect().get_center().distance_to(button.size * 0.5) < 0.1 and glyph.mouse_filter == Control.MOUSE_FILTER_IGNORE, key + " wrench stays centered and does not consume clicks")
 	var previous: bool = game.run.four_wheel_drive
 	var fan: Button = ui.get_node("drive_mode")
 	var local_point := fan.size * 0.5 + Vector2.from_angle(deg_to_rad(215)) * 140
@@ -50,6 +61,7 @@ func _run() -> void:
 	await click(ui.get_node("engine").get_global_rect().get_center())
 	check(game.run.engine_running, "Engine can be started through the equipment controls")
 	ui.set_equipment_open(false)
+	check(ui.get_node("Tools/Glyph").visible, "Collapsed and expanded equipment retain the centered wrench")
 	var left: Vector2 = hud._pedals.left.get_global_rect().get_center()
 	var gas: Vector2 = hud._pedals.throttle.get_global_rect().get_center()
 	touch(hud, 11, left, true)

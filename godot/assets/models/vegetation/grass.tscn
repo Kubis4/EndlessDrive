@@ -1,0 +1,13 @@
+[gd_scene format=3]
+
+[ext_resource type="Material" path="res://assets/models/vegetation/plants.tres" id="1_flk0d"]
+[ext_resource type="ArrayMesh" path="res://assets/models/vegetation/grass.res" id="2_jlkco"]
+
+[node name="Grass" type="Node3D" unique_id=913705408]
+metadata/source_pack = "Shapespark low-poly plants"
+metadata/triangles = 10
+metadata/canopy_radius = 0.38015902
+
+[node name="Foliage" type="MeshInstance3D" parent="." unique_id=642790284]
+material_override = ExtResource("1_flk0d")
+mesh = ExtResource("2_jlkco")

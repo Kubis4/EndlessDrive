@@ -73,7 +73,9 @@ func _run() -> void:
 		no_stops.advance(50.0 / 15.0, 15.0, 1.0, false, true)
 		control_distance += 50
 	print("BALANCE CONTROL: no building stops, initial supplies only: %.2f km; fuel %.2f l; engine %.1f %%" % [control_distance / 1000.0, no_stops.fuel, float(no_stops.parts.engine) * 100])
-	quit(0 if failures == 0 and longest_gap < 1100.0 else 1)
+	# One service per district, with 28..100 m jitter. This remains a spacing
+	# bound, not evidence that a car physically drove the planned journey.
+	quit(0 if failures == 0 and longest_gap <= DriveStops.REGION_LENGTH + 72.0 else 1)
 
 
 func _visit(state: DriveRun, stop: Dictionary) -> void:

@@ -62,6 +62,7 @@ var searched: Dictionary = {}
 var loot_piles: Dictionary = {}
 var cargo_parts: Array[Dictionary] = []
 var wear_distance := 0.0
+var odometer := 0.0
 var mechanical_events := 0
 var last_mechanical_event := ""
 
@@ -112,9 +113,8 @@ func advance(dt: float, speed: float, throttle: float, offroad: bool, cruise_dri
 	if headlights:
 		battery = maxf(0.0, battery - dt * (0.00030 if high_beams else 0.00018))
 	if engine_running:
-		var cruise_cost := 1.5 if cruise_driving else 1.0
 		var engine_efficiency := 0.82 if variants.engine == "efficient" else (1.12 if variants.engine == "torque" else 1.0)
-		fuel = maxf(0.0, fuel - dt * (0.0004 + absf(speed) * 0.00011 * (1.0 + throttle * 0.6)) * cruise_cost * engine_efficiency * (1.08 if four_wheel_drive else 1.0) * (1.10 if differential_locked else 1.0) / maxf(0.5, float(fluid_quality.fuel)))
+		fuel = maxf(0.0, fuel - dt * (0.0004 + absf(speed) * 0.00011 * (1.0 + throttle * 0.6)) * engine_efficiency * (1.08 if four_wheel_drive else 1.0) * (1.10 if differential_locked else 1.0) / maxf(0.5, float(fluid_quality.fuel)))
 		oil = maxf(0.0, oil - dt * 0.000025 * (2.0 - float(parts.engine)))
 		coolant = maxf(0.0, coolant - dt * 0.00004 * (2.0 - float(parts.radiator)))
 		battery = minf(1.0, battery + dt * 0.0015 * float(parts.alternator) * (1.45 if variants.alternator == "highoutput" else 1.0))
@@ -186,6 +186,34 @@ func tyre_grip(surface: Dictionary) -> float:
 	if variants.tires == "allterrain": factor *= 1.20 if float(surface.paved) < 0.4 else 0.94
 	if variants.tires == "winter": factor *= 1.65 if float(surface.get("snow", 0.0)) > 0.4 or str(surface.label).begins_with("Sneh") else 0.90
 	return clampf(grip * factor, 0.08, 1.0)
+
+
+func compare_part(item: Dictionary) -> String:
+	if item.get("kind", "") != "part" or not parts.has(item.get("slot", "")): return ""
+	var slot: String = item.slot
+	var candidate := DriveRun.new()
+	candidate.parts = parts.duplicate()
+	candidate.variants = variants.duplicate()
+	candidate.parts[slot] = item.condition
+	candidate.variants[slot] = item.get("variant", variants[slot])
+	candidate.temperature = temperature
+	candidate.fluid_quality = fluid_quality
+	candidate.inventory = inventory
+	candidate.cargo_parts = cargo_parts
+	candidate.fuel = fuel
+	candidate.oil = oil
+	candidate.coolant = coolant
+	match slot:
+		"brakes":
+			var dry := {"grip": 0.9, "paved": 1.0, "label": "Asfalt", "snow": 0.0}
+			return "Brzdenie na suchu pri 72 km/h: %.1f → %.1f m/s²" % [brake_deceleration(tyre_grip(dry), 20), candidate.brake_deceleration(candidate.tyre_grip(dry), 20)]
+		"engine":
+			return "Dostupný ťah motora: %d %% → %d %%" % [roundi(power_factor() * 100), roundi(candidate.power_factor() * 100)]
+		"tires":
+			var asphalt := {"grip": 0.9, "paved": 1.0, "label": "Asfalt", "snow": 0.0}
+			var snow := {"grip": 0.4, "paved": 0.0, "label": "Sneh", "snow": 1.0}
+			return "Priľnavosť asfalt: %d → %d %% · sneh: %d → %d %%" % [roundi(tyre_grip(asphalt) * 100), roundi(candidate.tyre_grip(asphalt) * 100), roundi(tyre_grip(snow) * 100), roundi(candidate.tyre_grip(snow) * 100)]
+	return item_effect(item)
 
 
 func impact(speed_change: float) -> void:
@@ -487,7 +515,7 @@ func to_data(include_terrain: bool = true) -> Dictionary:
 		"route_choices": route_choices.duplicate(), "weather_state": weather_state.duplicate(),
 		"terrain_deformation": terrain_deformation.duplicate(true) if include_terrain else [],
 		"run_id": run_id, "found_scrap": found_scrap, "deposited_scrap": deposited_scrap,
-		"wear_distance": wear_distance, "mechanical_events": mechanical_events,
+		"wear_distance": wear_distance, "odometer": odometer, "mechanical_events": mechanical_events,
 	}
 
 
@@ -511,6 +539,7 @@ static func from_data(data: Dictionary) -> DriveRun:
 		"battery": [0.0, 1.0], "temperature": [-40.0, 180.0],
 		"elapsed": [0.0, 100000000.0], "day_time": [0.0, 1.0],
 		"wear_distance": [0.0, 100000000.0], "mechanical_events": [0.0, 1000000.0],
+		"odometer": [0.0, 100000000.0],
 	}
 	for key: String in limits:
 		var number: Variant = data.get(key, result.get(key))
@@ -518,6 +547,7 @@ static func from_data(data: Dictionary) -> DriveRun:
 			return null
 		result.set(key, clampf(float(number), limits[key][0], limits[key][1]))
 	if not data.has("wear_distance"): result.wear_distance = result.distance
+	if not data.has("odometer"): result.odometer = result.wear_distance
 	for group: String in ["parts", "inventory"]:
 		var source: Variant = data.get(group, {})
 		if not source is Dictionary:

@@ -2301,6 +2301,7 @@ cancel_button_text = "Ponechať pôvodný"
 metadata/layout_bindings = ["_install_confirmation"]
 
 [node name="EquipmentControls" type="HBoxContainer" parent="Root"]
+visible = false
 layout_mode = 0
 anchor_left = 0.5
 anchor_top = 1.0

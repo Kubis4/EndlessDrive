@@ -1,0 +1,72 @@
+[gd_scene format=4]
+
+[ext_resource type="Shader" path="res://shaders/expedition_surface.gdshader" id="1_d1k15"]
+[ext_resource type="Texture2DArray" path="res://assets/textures/expedition-materials-v1.res" id="2_kywsx"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_kywsx"]
+resource_name = "StoneLight"
+render_priority = 0
+shader = ExtResource("1_d1k15")
+shader_parameter/model_atlas = ExtResource("2_kywsx")
+shader_parameter/texture_enabled = true
+shader_parameter/material_layer = 5
+shader_parameter/texture_average = Color(0.6727091, 0.60754895, 0.5360725, 1)
+shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_scale = 0.32
+shader_parameter/texture_strength = 0.75
+shader_parameter/texture_roughness = 0.95
+shader_parameter/tint = Color(0.6392157, 0.60784316, 0.5019608, 1)
+shader_parameter/roughness_value = 0.94
+shader_parameter/metallic_value = 0.0
+shader_parameter/snow_cover = null
+
+[sub_resource type="ArrayMesh" id="ArrayMesh_kywsx"]
+_surfaces = [{
+"aabb": AABB(-6.69, 2.4, -0.14, 13.38, 4.89, 0.28),
+"format": 34359742471,
+"index_count": 288,
+"index_data": PackedByteArray("AAABAAIAAQADAAIAAAACAAQAAgAFAAQAAQAGAAMAAwAGAAcAAgADAAgAAwAJAAgAAgAIAAUACAAKAAUAAwAHAAkACQAHAAsACAAJAAwACQANAAwACAAMAAoADAAOAAoACQALAA0ADQALAA8ADAANABAADQARABAADAAQAA4AEAASAA4ADQAPABEAEQAPABMAEAARABQAEQAVABQAEAAUABIAFAAWABIAEQATABUAFQATABcAFAAVABgAFQAZABgAFAAYABYAGAAaABYAFQAXABkAGQAXABsAGAAZABwAGQAdABwAGAAcABoAHAAeABoAGQAbAB0AHQAbAB8AHAAdACAAHQAhACAAHAAgAB4AIAAiAB4AHQAfACEAIQAfACMAIAAhACQAIQAlACQAIAAkACIAJAAmACIAIQAjACUAJQAjACcAJAAlACgAJQApACgAJAAoACYAKAAqACYAJQAnACkAKQAnACsAKAApACwAKQAtACwAKAAsACoALAAuACoAKQArAC0ALQArAC8ALAAtADAALQAxADAALAAwAC4AMAAyAC4ALQAvADEAMQAvADMAMAAxADQAMQA1ADQAMAA0ADIANAA2ADIAMQAzADUANQAzADcANAA1ADgANQA5ADgANAA4ADYAOAA6ADYANQA3ADkAOQA3ADsAOAA5ADwAOQA9ADwAOAA8ADoAPAA+ADoAOQA7AD0APQA7AD8APAA9AEAAPQBBAEAAPABAAD4AQABCAD4APQA/AEEAQQA/AEMA"),
+"primitive": 3,
+"uv_scale": Vector4(0, 0, 0, 0),
+"vertex_count": 68,
+"vertex_data": PackedByteArray("ZmbOQJqZGUApXA++exTWQJqZGUApXA++IG/KQKyoU0ApXA++bffRQM2nVkApXA++ZmbOQJqZGUApXA8+IG/KQKyoU0ApXA8+exTWQJqZGUApXA8+bffRQM2nVkApXA8+UbC+QEm+hUApXA++vcjFQKuuiEApXA++UbC+QEm+hUApXA8+vcjFQKuuiEApXA8+hp2rQAd4n0ApXA++QgCyQFK8o0ApXA++hp2rQAd4n0ApXA8+QgCyQFK8o0ApXA8+ZPKRQHoEtkApXA++n2CXQLVyu0ApXA++ZPKRQHoEtkApXA8+n2CXQLVyu0ApXA8+4lZlQM6FyEApXA++et9tQIvozkApXA++4lZlQM6FyEApXA8+et9tQIvozkApXA8+w/gdQPVF1kApXA++iNkjQGFe3UApXA++w/gdQPVF1kApXA8+iNkjQGFe3UApXA8+CxGhP6i93kApXA++Sw+nP/ZF5kApXA++CxGhP6i93kApXA8+Sw+nP/ZF5kApXA8+M6rjJZqZ4UApXA++1yLsJa5H6UApXA++M6rjJZqZ4UApXA8+1yLsJa5H6UApXA8+CxGhv6i93kApXA++Sw+nv/ZF5kApXA++CxGhv6i93kApXA8+Sw+nv/ZF5kApXA8+w/gdwPVF1kApXA++iNkjwGFe3UApXA++w/gdwPVF1kApXA8+iNkjwGFe3UApXA8+4lZlwM6FyEApXA++et9twIvozkApXA++4lZlwM6FyEApXA8+et9twIvozkApXA8+ZPKRwHoEtkApXA++n2CXwLVyu0ApXA++ZPKRwHoEtkApXA8+n2CXwLVyu0ApXA8+hp2rwAd4n0ApXA++QgCywFK8o0ApXA++hp2rwAd4n0ApXA8+QgCywFK8o0ApXA8+UbC+wEm+hUApXA++vcjFwKuuiEApXA++UbC+wEm+hUApXA8+vcjFwKuuiEApXA8+IG/KwKyoU0ApXA++bffRwM2nVkApXA++IG/KwKyoU0ApXA8+bffRwM2nVkApXA8+ZmbOwJqZGUApXA++exTWwJqZGUApXA++ZmbOwJqZGUApXA8+exTWwJqZGUApXA8+JQilO9RUea2G+mXXZ6YxmtgMojgPVPeuTPNEx3uwN6tiD5xw7H2QxyEf3GC2dm/OzPAyj/t9ecct4dGe6nZQzgIZRDA5UO2yOeeJzw+2K6gzMcpON2fV0zLPzLClZ8HTfSI9KDdMvLTE3YLXGLkLmJ4/YEDWVVTVz8Avv2lWU9UOKo0g4EmPtCzWL99BuAmAPkzBMyxETdQrtNLLx0Re1E8wExnESQiz38+r5hcwy4w/WMAnlDJu0R+o3tchM4vRtTWdEbJLvLBsyi3uLSpzkZVkahv2IPLMtZtJ5F4hEc2SOuIJVU8Jrn/F/PVEKb+TVHKqDRwPvsbVjSnyTw/Txis/fgFxVB2r1sB6/m8qG5X1gvUCBgOEvv98//wRA3++4MMvB/5aCqgRPLf40CwLlnuSexIWFfq2TG1L7V4V37agyBYPK2PNpEA3uvAqMNOWnp+dH9gmX7ENYAzgTyc/sdDNmRZhbVmhAjIo6Zo0o5e9q70rbzhsrd1T3NMEOVGtvdMKHlp6mJ0JLLLheTq7mNi32DcPSh+ruUe4x6xKE6vO2qIlmIkpn+8kHNqDQpSa7MTtRLdb1aqkOqO6Q1zcqo/jhy1OloijLhxA0glMgJ5Q1E9UxGxvrUsrS6shbYqtte7INbWgTqcYERXKgFLPo1ToVWjYeqO0aBdol/Z6wbTY96U7nKZ6qYUK6bG3W3yynPCccO59bbgxDzKP+32EuA==")
+}]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_hiau5"]
+resource_name = "Stone"
+render_priority = 0
+shader = ExtResource("1_d1k15")
+shader_parameter/model_atlas = ExtResource("2_kywsx")
+shader_parameter/texture_enabled = true
+shader_parameter/material_layer = 0
+shader_parameter/texture_average = Color(0.82242, 0.6790669, 0.5315522, 1)
+shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_scale = 0.0625
+shader_parameter/texture_strength = 0.75
+shader_parameter/texture_roughness = 0.98
+shader_parameter/tint = Color(0.5058824, 0.4862745, 0.4117647, 1)
+shader_parameter/roughness_value = 0.94
+shader_parameter/metallic_value = 0.0
+shader_parameter/snow_cover = null
+
+[sub_resource type="ArrayMesh" id="ArrayMesh_hiau5"]
+_surfaces = [{
+"aabb": AABB(-6.69, 0, -0.14, 13.38, 2.4, 0.28),
+"format": 34359742471,
+"index_count": 72,
+"index_data": PackedByteArray("AAABAAIAAQADAAIABAAFAAYABQAHAAYACAAJAAoACQALAAoADAANAA4ADQAPAA4AEAARABIAEQATABIAFAAVABYAFQAXABYAGAAZABoAGQAbABoAHAAdAB4AHQAfAB4AIAAhACIAIQAjACIAJAAlACYAJQAnACYAKAApACoAKQArACoALAAtAC4ALQAvAC4A"),
+"primitive": 3,
+"uv_scale": Vector4(0, 0, 0, 0),
+"vertex_count": 48,
+"vertex_data": PackedByteArray("exTWwJqZGUApXA8+Z2bOwJqZGUApXA8+exTWwAAAAAApXA8+Z2bOwAAAAAApXA8+Z2bOwJqZGUApXA++exTWwJqZGUApXA++Z2bOwAAAAAApXA++exTWwAAAAAApXA++Z2bOwJqZGUApXA8+Z2bOwJqZGUApXA++Z2bOwAAAAAApXA8+Z2bOwAAAAAApXA++exTWwJqZGUApXA++exTWwJqZGUApXA8+exTWwAAAAAApXA++exTWwAAAAAApXA8+Z2bOwJqZGUApXA8+exTWwJqZGUApXA8+Z2bOwJqZGUApXA++exTWwJqZGUApXA++exTWwAAAAAApXA8+Z2bOwAAAAAApXA8+exTWwAAAAAApXA++Z2bOwAAAAAApXA++Z2bOQJqZGUApXA8+exTWQJqZGUApXA8+Z2bOQAAAAAApXA8+exTWQAAAAAApXA8+exTWQJqZGUApXA++Z2bOQJqZGUApXA++exTWQAAAAAApXA++Z2bOQAAAAAApXA++exTWQJqZGUApXA8+exTWQJqZGUApXA++exTWQAAAAAApXA8+exTWQAAAAAApXA++Z2bOQJqZGUApXA++Z2bOQJqZGUApXA8+Z2bOQAAAAAApXA++Z2bOQAAAAAApXA8+exTWQJqZGUApXA8+Z2bOQJqZGUApXA8+exTWQJqZGUApXA++Z2bOQJqZGUApXA++Z2bOQAAAAAApXA8+exTWQAAAAAApXA8+Z2bOQAAAAAApXA++exTWQAAAAAApXA++/3//fwCAAID/f/9/AIAAgP9//38AgACA/3//fwCAAID//////38AgP//////fwCA//////9/AID//////38AgP//AIAAgP+///8AgACA/7///wCAAID/v///AIAAgP+/AAAAgP9//78AAACA/3//vwAAAID/f/+/AAAAgP9//78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCAAAAAAP+/AIAAAAAA/78AgAAAAAD/vwCAAAAAAP+//3//fwCAAID/f/9/AIAAgP9//38AgACA/3//fwCAAID//////38AgP//////fwCA//////9/AID//////38AgP//AIAAgP+///8AgACA/7///wCAAID/v///AIAAgP+/AAAAgP9//78AAACA/3//vwAAAID/f/+/AAAAgP9//78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCAAAAAAP+/AIAAAAAA/78AgAAAAAD/vwCAAAAAAP+/")
+}]
+
+[node name="TunnelRib" type="Node3D" unique_id=1778998635]
+
+[node name="StoneLight" type="MeshInstance3D" parent="." unique_id=2052454422]
+material_override = SubResource("ShaderMaterial_kywsx")
+mesh = SubResource("ArrayMesh_kywsx")
+
+[node name="Stone" type="MeshInstance3D" parent="." unique_id=748685778]
+material_override = SubResource("ShaderMaterial_hiau5")
+mesh = SubResource("ArrayMesh_hiau5")

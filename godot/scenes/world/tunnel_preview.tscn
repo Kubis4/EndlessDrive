@@ -3,10 +3,10 @@
 [ext_resource type="Script" path="res://scripts/editor_preview.gd" id="1_qyxt1"]
 [ext_resource type="PackedScene" path="res://scenes/world/generated/tunnel.scn" id="2_o3g5m"]
 
-[node name="TunnelPreview" type="Node3D" unique_id=1233848936]
+[node name="TunnelPreview" type="Node3D" unique_id=1813786084]
 script = ExtResource("1_qyxt1")
 preview_seed = 24601
 preview_distance = 1704.0
 geometry_path = "res://scenes/world/generated/tunnel.scn"
 
-[node name="GeneratedTerrain" type="Node3D" parent="." unique_id=334016123 instance=ExtResource("2_o3g5m")]
+[node name="GeneratedTerrain" type="Node3D" parent="." unique_id=1770708853 instance=ExtResource("2_o3g5m")]

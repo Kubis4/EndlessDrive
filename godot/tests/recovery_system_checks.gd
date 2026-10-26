@@ -87,12 +87,19 @@ func _run() -> void:
 	check(game.run.parts.radiator == health, "The warning period does not damage an exposed car")
 	if not refuge.is_empty():
 		car.position = refuge.position + Vector3.UP * 0.6
+		game.weather._refresh_shelter()
 		game.weather.storm_warning = 0
-		game.weather.storm_edge = car.position.x + 20
+		# The current front is two-dimensional; storm_edge is legacy telemetry.
+		game.weather.storm_center = Vector2(car.position.x, car.position.z)
+		game.weather._storm_left = game.weather._storm_duration - 20.0
+		game.weather.storm_visibility = 1.0
 		game.weather._process(1.0)
 		check(game.weather.sheltered and game.run.parts.radiator == health, "Entering the real roof footprint protects the radiator from dust")
 		car.position.z = world.center_at(car.position.x)
+		car.position.y = world.height_at(car.position.x, car.position.z) + 0.6
 		game.weather._process(1.0)
+		if game.run.parts.radiator >= health:
+			print("STORM EXPOSURE active=%s warning=%.2f visibility=%.2f sheltered=%s target=%s" % [game.weather.storm_active, game.weather.storm_warning, game.weather.storm_visibility, game.weather.sheltered, game.weather.shelter_target])
 		check(not game.weather.sheltered and game.run.parts.radiator < health, "Leaving cover exposes the car to the same storm")
 	var restored := DriveRun.from_data(game.run.to_data())
 	check(restored != null and restored.weather_state == game.run.weather_state, "Warning and shelter target persist with the weather front")

@@ -150,7 +150,9 @@ func _clean_driving_labels() -> void:
 func _update_equipment_controls() -> void:
 	if _equipment_buttons.is_empty(): return
 	var equipment: Control = _equipment_buttons.drive_mode.get_parent()
-	equipment.visible = not modal_open
+	# The saved expedition HUD owns the equipment fan. Keep the old strip
+	# only for the fallback HUD; refresh must never resurrect duplicate controls.
+	equipment.visible = expedition_ui == null and not modal_open
 	_equipment_buttons.drive_mode.text = "V  4×4" if run.four_wheel_drive else "V  4×2"
 	_equipment_buttons.drive_mode.set_pressed_no_signal(run.four_wheel_drive)
 	_equipment_buttons.differential.set_pressed_no_signal(run.differential_locked)
@@ -659,7 +661,7 @@ func show_modal(kind: String) -> void:
 	if expedition_ui != null:
 		expedition_ui.visible = not modal_open
 		if modal_open: expedition_ui.set_equipment_open(false)
-	if not _equipment_buttons.is_empty(): _equipment_buttons.drive_mode.get_parent().visible = not modal_open
+	if not _equipment_buttons.is_empty(): _equipment_buttons.drive_mode.get_parent().visible = expedition_ui == null and not modal_open
 	_release_pedals()
 	for pedal: Button in _pedals.values():
 		if pedal.is_inside_tree(): pedal.release_focus()
@@ -755,6 +757,7 @@ func _inspect_loot(item: Dictionary) -> void:
 	if item.kind == "part":
 		_selected_part = str(item.slot)
 		detail += tr("\nNález %d %% → v aute %d %%. Výmena je samostatný krok v kufri.") % [roundi(float(item.condition) * 100), roundi(float(run.parts[item.slot]) * 100)]
+		detail += "\n" + Locale.translate(run.compare_part(item))
 	elif item.kind in DriveRun.FLUIDS:
 		detail += tr("\nV kufri: %d %% · nález: %d %%.") % [roundi(float(run.inventory_quality[item.kind]) * 100), roundi(float(item.get("quality", 1.0)) * 100)]
 	_loot_detail.text = detail
@@ -876,6 +879,9 @@ func refresh_service() -> void:
 		row.add_child(description)
 		description.add_child(_label(DriveRun.item_name(item), 19))
 		description.add_child(_label(tr("Stav %d %% · v aute %d %% · %.1f kg") % [roundi(float(item.condition) * 100), roundi(float(run.parts[item.slot]) * 100), DriveRun.item_weight(item)], 14, MUTED))
+		var comparison := _label(Locale.translate(run.compare_part(item)), 13, MUTED)
+		comparison.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		description.add_child(comparison)
 		var use := Button.new()
 		use.text = tr("VYMENIŤ ") + str(tr(DriveRun.PART_NAMES[item.slot])).to_upper()
 		use.custom_minimum_size.y = 42

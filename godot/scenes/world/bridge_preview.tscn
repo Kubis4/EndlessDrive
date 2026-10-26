@@ -3,10 +3,10 @@
 [ext_resource type="Script" path="res://scripts/editor_preview.gd" id="1_bemgx"]
 [ext_resource type="PackedScene" path="res://scenes/world/generated/bridge.scn" id="2_vljq4"]
 
-[node name="BridgePreview" type="Node3D" unique_id=1848597211]
+[node name="BridgePreview" type="Node3D" unique_id=2052874211]
 script = ExtResource("1_bemgx")
 preview_seed = 24601
 preview_distance = 2664.0
 geometry_path = "res://scenes/world/generated/bridge.scn"
 
-[node name="GeneratedTerrain" type="Node3D" parent="." unique_id=1996210064 instance=ExtResource("2_vljq4")]
+[node name="GeneratedTerrain" type="Node3D" parent="." unique_id=1083461569 instance=ExtResource("2_vljq4")]

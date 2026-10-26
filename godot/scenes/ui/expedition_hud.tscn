@@ -1380,9 +1380,23 @@ theme_override_styles/pressed = SubResource("StyleBoxTexture_8302t")
 theme_override_styles/hover = SubResource("StyleBoxTexture_2hwoa")
 theme_override_styles/disabled = SubResource("StyleBoxTexture_hourg")
 theme_override_styles/focus = SubResource("StyleBoxTexture_ikoma")
-icon = ExtResource("30_k1s6e")
 icon_alignment = 1
 expand_icon = true
+
+[node name="Glyph" type="TextureRect" parent="Tools"]
+layout_mode = 0
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -22.0
+offset_top = -22.0
+offset_right = 22.0
+offset_bottom = 22.0
+mouse_filter = 2
+texture = ExtResource("30_k1s6e")
+expand_mode = 1
+stretch_mode = 5
 
 [node name="winch_pull" type="Button" parent="." unique_id=107916263]
 layout_mode = 0
@@ -1423,9 +1437,23 @@ theme_override_styles/pressed = SubResource("StyleBoxTexture_vi0g4")
 theme_override_styles/hover = SubResource("StyleBoxTexture_6mj6o")
 theme_override_styles/disabled = SubResource("StyleBoxTexture_gk5gu")
 theme_override_styles/focus = SubResource("StyleBoxTexture_cq462")
-icon = ExtResource("30_k1s6e")
 icon_alignment = 1
 expand_icon = true
+
+[node name="Glyph" type="TextureRect" parent="service"]
+layout_mode = 0
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -14.0
+offset_top = -14.0
+offset_right = 14.0
+offset_bottom = 14.0
+mouse_filter = 2
+texture = ExtResource("30_k1s6e")
+expand_mode = 1
+stretch_mode = 5
 
 [node name="engine" type="Button" parent="." unique_id=1113962824]
 visible = false

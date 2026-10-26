@@ -2,7 +2,7 @@ shader_type spatial;
 render_mode diffuse_burley, cull_disabled;
 uniform sampler2DArray surface_atlas : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
 uniform sampler2D micro_height : filter_linear_mipmap_anisotropic, repeat_enable;
-uniform vec4 tint : source_color = vec4(0.47, 0.48, 0.42, 1.0);
+uniform vec4 tint : source_color = vec4(0.59, 0.55, 0.46, 1.0);
 varying vec3 position_world;
 varying vec3 normal_world;
 void vertex() {
@@ -17,9 +17,10 @@ void fragment() {
 	stone = OUTPUT_IS_SRGB ? stone : pow(max(stone, vec3(0.001)), vec3(0.454545));
 	float height = texture(micro_height, p * 0.125).g;
 	float detail_fade = 1.0 - smoothstep(0.025, 0.16, length(fwidth(position_world)));
-	vec3 color = tint.rgb * mix(vec3(1.0), clamp(stone / vec3(0.472, 0.418, 0.359), vec3(0.65), vec3(1.35)), 0.55 * detail_fade);
+	vec3 base = OUTPUT_IS_SRGB ? tint.rgb : pow(max(tint.rgb, vec3(0.001)), vec3(0.454545));
+	vec3 color = base * mix(vec3(1.0), clamp(stone / vec3(0.472, 0.418, 0.359), vec3(0.8), vec3(1.2)), 0.12 * detail_fade);
 	color = mix(vec3(dot(color, vec3(0.2126, 0.7152, 0.0722))), color, 0.75);
 	ALBEDO = pow(max(color, vec3(0.001)), vec3(2.2));
-	ROUGHNESS = 0.82 + height * 0.16;
+	ROUGHNESS = 0.92 + height * 0.035;
 	SPECULAR = 0.17;
 }

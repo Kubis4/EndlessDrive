@@ -57,7 +57,7 @@ func _run() -> void:
 		printerr("DriveRun failed to compile; driving regression cannot start")
 		quit(2)
 		return
-	for action: String in ["throttle", "brake", "left", "right"]:
+	for action: String in ["throttle", "brake", "handbrake", "left", "right"]:
 		if not InputMap.has_action(action): InputMap.add_action(action)
 	var folder := ProjectSettings.globalize_path("res://../build/godot-tests")
 	DirAccess.make_dir_recursive_absolute(folder)
@@ -85,6 +85,15 @@ func _run() -> void:
 	root.add_child(car)
 	var args := OS.get_cmdline_user_args()
 	check(car._lights.all(func(light: SpotLight3D) -> bool: return not light.visible), "Headlights are off immediately on creation, before the first physics tick")
+	if "--ford-only" in args:
+		await _ford()
+		telemetry.close()
+		car.queue_free()
+		world.queue_free()
+		await process_frame
+		print("FORD RESULT %d checks, %d failures" % [checks, failures])
+		quit(1 if failures else 0)
+		return
 	if not "--brakes-only" in args: await _route()
 	if not baseline:
 		if not "--brakes-only" in args:
@@ -110,6 +119,15 @@ func lane(x: float) -> float:
 
 
 func _route() -> void:
+	# Follow the authored polyline through switchbacks: X decreases on two
+	# stretches. Always looking toward x+5 drove the old test into the hillside.
+	var ridge := world.terrain.mountain_path(3)
+	var mountain_points := PackedVector3Array([ridge[0]])
+	for i in ridge.size() - 1:
+		var steps := maxi(1, ceili(ridge[i].distance_to(ridge[i + 1]) / 2.0))
+		for j in steps: mountain_points.append(ridge[i].lerp(ridge[i + 1], float(j + 1) / steps))
+	var mountain_target := -1
+	var mountain_complete := false
 	var travelled := 0.0
 	var previous := car.position
 	var stuck := 0
@@ -127,7 +145,7 @@ func _route() -> void:
 	var released_pedal_ticks := 0
 	var max_height := -INF
 	var min_height := INF
-	for iteration in 45000:
+	for iteration in 70000:
 		var x := car.position.x
 		if x >= ROUTE_END: break
 		var chunk := int(floor(x / 96.0))
@@ -137,12 +155,28 @@ func _route() -> void:
 		var lookahead := 4.0 + absf(car.speed) * 0.12
 		var target_x := x + lookahead
 		var desired := atan2(lane(target_x) - car.position.z, lookahead)
+		if mountain_target < 0 and not mountain_complete and x >= mountain_points[0].x - 3.0: mountain_target = 1
+		var in_mountain := mountain_target >= 0 and not mountain_complete
+		if in_mountain:
+			var point := Vector2(car.position.x, car.position.z)
+			while mountain_target < mountain_points.size() - 1 and point.distance_to(Vector2(mountain_points[mountain_target].x, mountain_points[mountain_target].z)) < 4.0: mountain_target += 1
+			var goal := mountain_points[mountain_target]
+			desired = atan2(goal.z - car.position.z, goal.x - car.position.x)
+			if mountain_target >= mountain_points.size() - 2:
+				mountain_complete = true
 		var error := wrapf(desired - car.heading, -PI, PI)
-		Input.action_press("right", clampf(error * 5.0, 0.0, 1.0))
-		Input.action_press("left", clampf(-error * 5.0, 0.0, 1.0))
+		Input.action_press("right", clampf(error * (3.2 if in_mountain else 5.0), 0.0, 1.0))
+		Input.action_press("left", clampf(-error * (3.2 if in_mountain else 5.0), 0.0, 1.0))
 		# A route governor exercises real pedals and steering; cruise remains engaged
 		# under analogue throttle overrides, with its captured setting restored downhill.
-		if car.speed < 0.6 or not car.cruise_enabled:
+		if not in_mountain: Input.action_release("brake")
+		if in_mountain:
+			# This section intentionally uses the brake pedal, which correctly
+			# releases cruise. Resume/capture it as a new session after the pass.
+			cruise_started = false
+			Input.action_press("throttle", 0.75 if car.speed < 5.0 else 0.08)
+			Input.action_press("brake", clampf((car.speed - 5.5) * 0.35, 0, 1))
+		elif car.speed < 0.6 or not car.cruise_enabled:
 			if cruise_started and not car.cruise_enabled: cruise_losses += 1
 			Input.action_press("throttle", 1.0)
 			if car.speed > 1.0:
@@ -191,6 +225,7 @@ func _route() -> void:
 	for action: String in ["throttle", "brake", "left", "right"]: Input.action_release(action)
 	check(car.position.x >= ROUTE_END and travelled >= ROUTE_END, "Physically follows curves, potholes, water and >=47 streamed seams over 4.6 km")
 	check(resets == 0 and car.boundary_recoveries == 0, "Route requires no unsticking or boundary recovery")
+	check(mountain_complete, "The physical route follows both backward-X hairpins rather than skipping the mountain")
 	check(max_water > 0.30, "Route physically enters water")
 	# Roads are now graded through the hills; surrounding ridges keep their
 	# relief. A 15 m road-height requirement forced the former steep saddle.
@@ -246,27 +281,43 @@ func _obstacles() -> void:
 
 
 func _ford() -> void:
-	world.update_stream(430)
+	# Only Y layouts contain a fork ford. X/roundabout layouts can be dry;
+	# fall back to the actual introductory ford instead of inventing water.
+	var pools := world.terrain.pools_near(480)
+	if pools.is_empty(): pools = world.terrain.pools_near(207)
+	check(not pools.is_empty(), "Ford fixture selects an actual generated water basin")
+	if pools.is_empty(): return
+	var basin: Dictionary = pools[0]
+	var start := float(basin.x) - 36.0
+	var finish := float(basin.x) + 36.0
+	var ford_lane := func(x: float) -> float:
+		var centres := world.terrain.road_centers(x)
+		var best := centres[0]
+		for centre: float in centres:
+			if absf(centre - float(basin.z)) < absf(best - float(basin.z)): best = centre
+		return best
+	world.update_stream(start)
 	await frame()
-	var z := world.terrain.road_centers(430)[1]
-	var heading := atan((world.terrain.road_centers(431)[1] - world.terrain.road_centers(429)[1]) * 0.5)
-	await _place(430, z, heading)
+	var z: float = ford_lane.call(start)
+	var heading := atan((float(ford_lane.call(start + 1)) - float(ford_lane.call(start - 1))) * 0.5)
+	await _place(start, z, heading)
 	state.engine_running = true
 	state.parts.engine = 1.0
 	state.parts.tires = 1.0
 	var max_water := 0.0
 	var recoveries := car.boundary_recoveries
 	for i in 2400:
-		if car.position.x > 550.0: break
-		var target_x := minf(599.0, car.position.x + 5.0)
-		var target_z := world.terrain.road_centers(target_x)[1]
+		if car.position.x > finish: break
+		var target_x := minf(finish + 5.0, car.position.x + 5.0)
+		var target_z: float = ford_lane.call(target_x)
 		var error := wrapf(atan2(target_z - car.position.z, target_x - car.position.x) - car.heading, -PI, PI)
 		Input.action_press("right", clampf(error * 5.0, 0.0, 1.0))
 		Input.action_press("left", clampf(-error * 5.0, 0.0, 1.0))
 		Input.action_press("throttle", 1.0 if car.speed < 9.0 else 0.12)
 		await frame()
 		max_water = maxf(max_water, float(car.surface_info.get("water", 0)))
-	check(car.position.x > 550.0 and max_water > 0.35 and car.boundary_recoveries == recoveries, "Real lower-fork ford is crossed through deep water without recovery")
+	print("FORD x=%.2f z=%.2f depth=%.2f ingress=%.2f engine=%s reason=%s recoveries=%d" % [car.position.x, car.position.z, max_water, state.water_ingress, state.engine_running, car.stop_reason, car.boundary_recoveries - recoveries])
+	check(car.position.x > finish and max_water > 0.35 and car.boundary_recoveries == recoveries, "The generated ford is crossed through real water without recovery")
 
 
 func _braking() -> void:

@@ -1,0 +1,11 @@
+[gd_resource type="ShaderMaterial" format=3]
+
+[ext_resource type="Shader" path="res://shaders/supplied_vegetation.gdshader" id="1_ueqe2"]
+[ext_resource type="Texture2D" path="res://assets/models/vegetation/plants-atlas.png" id="2_cfgnd"]
+
+[resource]
+resource_name = "SuppliedPlants"
+render_priority = 0
+shader = ExtResource("1_ueqe2")
+shader_parameter/plants_atlas = ExtResource("2_cfgnd")
+shader_parameter/snow_cover = 0.0

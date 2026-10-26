@@ -6,7 +6,17 @@ func _initialize() -> void: call_deferred("_run")
 func _run() -> void:
 	var game := load("res://scenes/main.tscn").instantiate() as Node3D
 	game._ephemeral = true
+	game._focus_pause_enabled = false
 	root.add_child(game)
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--quality="): game._settings_changed("quality", arg.trim_prefix("--quality=").to_float())
+	game.vehicle.set_physics_process(false)
+	var warmup := load("res://scripts/render_warmup.gd").new() as SubViewport
+	warmup.environment_template = game.environment
+	warmup.vehicle_template = game.vehicle._visual
+	root.add_child(warmup)
+	while is_instance_valid(warmup): await process_frame
+	game.vehicle.set_physics_process(true)
 	game.world.async_streaming = true
 	game.run.engine_running = true
 	game.run.fuel = 40

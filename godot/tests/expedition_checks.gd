@@ -98,7 +98,7 @@ func _run() -> void:
 			var bridge_x := 744.0
 			for region in 12:
 				bridge_x = 744.0 + region * DriveTerrain.REGION
-				if world.terrain.feature_at(bridge_x).kind == "bridge": break
+				if world.terrain.feature_at(bridge_x).get("kind", "") == "bridge": break
 			world.async_streaming = false
 			world.update_stream(bridge_x)
 			game.vehicle.park()

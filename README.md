@@ -1,6 +1,17 @@
 # Endless Drive
 
-## Godot migration
+## Active project: Godot 3D
+
+**V4** contains the current Godot game, audit fixes, textured scenery and
+vegetation, graphics settings and revised driving UI. APK generation is
+temporarily paused: the user reports that the existing APKs do not work.
+Use the Godot editor to run this version; Android runtime issues remain open.
+
+The maintained game is `godot/project.godot`. The root Android Studio/Gradle
+project is the archived 2D implementation kept for reference; it does not build
+the current 3D game. Use the Godot project and `tools/godot.ps1` for current work.
+The stabilisation changes, verification and remaining release work are tracked
+in `godot/AUDIT_CHANGES.md`.
 
 The first playable Godot 4.7.2 migration slice is in [`godot/`](godot/README.md).
 Open [`godot/project.godot`](godot/project.godot) in Godot and press **F5**, or
@@ -17,7 +28,7 @@ For visual editing of the Godot scenes and UI, see the Slovak
 [editor guide](godot/EDITOR.md).
 The Jeep by Renafox is CC BY-NC-SA 4.0 (non-commercial); see its
 [asset attribution](godot/assets/models/jeep/ATTRIBUTION.md) before distributing the game.
-The Android Studio project below remains available during the transition.
+The Android Studio material below describes the older implementation.
 
 Endless Drive is a 3D mobile survival-driving game about keeping an old car
 alive on a road that never seems to end.

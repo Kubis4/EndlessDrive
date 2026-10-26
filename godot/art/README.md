@@ -1,5 +1,47 @@
 # Original desert art set
 
+## Expedition scenery update — 26 October 2026
+
+Twenty new editable native scenes in `assets/models/expedition/` now supply
+the actual streamed game, not only concept art:
+
+- mountain/alpine ridge sections plus full rocky/snowy peak silhouettes;
+- swept-road tunnel portals/ribs and a smaller railway masonry portal;
+- detailed diesel locomotive, tank, covered freight and timber wagons, with
+  independent wheels and fitted moving collision boxes;
+- mountain/alpine pines, juniper, woodland/wetland trees, dead tree,
+  marsh reeds, fern patch and meadow shrub.
+
+These models now also include actual image-based textures, not just colour
+materials: `assets/textures/expedition-materials-v1.png` and its eight-layer
+`expedition-materials-v1.res`. They cover sandstone/granite, bark, foliage,
+timber, masonry, painted metal and snow. Each saved model directly binds its
+texture layers, with local-space triplanar mapping and separate mipmaps.
+The image was created with the built-in image generation tool. The exact
+prompt, provenance, mapping and rebuild instructions are in
+`assets/textures/EXPEDITION_TEXTURES.md`.
+
+`scenes/world/expedition_art_gallery.tscn` displays all twenty source models
+with a camera and lighting; open it in Godot and press F6. Every model is a
+linked `.tscn` scene and can be moved, recoloured or edited independently.
+Geometry is grouped by material to limit draw calls; vegetation keeps the
+game's existing MultiMesh batching and trunk collision/anchors. The generator
+does not run while driving. Tunnel shell/anti-bypass collision and rail gates
+retain their existing gameplay logic. All 32 train wheels now turn in motion.
+
+The sand passage is the material reference: ground, props, canyon and tunnel
+rock have subdued atlas contrast, much less micro-bump and lower-amplitude
+fine noise. Forest colour patches blend softly; snow uses muted blue-grey
+rather than near-white. Original texture sources and physical surface types
+remain intact. `expedition_surface.gdshader` supplies calm, image-textured
+opaque local materials without alpha-card dithering, screen-space noise or
+harsh bump.
+
+Source: `art/expedition_models.gd`. Explicit rebuild:
+`./tools/godot.ps1 BuildExpeditionArt`. This overwrites the twenty generated
+model files and gallery; do not run it after manual model edits unless intended.
+The Jeep asset/license and unrelated V3 content are unchanged.
+
 Art direction: high, fixed oblique camera over a dusty low-poly desert road,
 sparse vegetation, a sandstone ridge, wire fences, utility poles and an outpost.
 The supplied video frame is a composition/mood reference only; no pixels,

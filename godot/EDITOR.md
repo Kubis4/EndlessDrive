@@ -411,3 +411,25 @@ každého konára.
 skutočné meshe auta a kolies. Aktivuje sa pri zakrytí a hĺbkový shader potom
 zvýrazní len skryté pixely; viditeľné časti auta nemení. Farbu upravuj v
 `shaders/vehicle_outline.gdshader`. Nepridáva svetlá, tiene ani ďalší viewport.
+# Nové modely hôr, tunelov, vlaku a vegetácie
+
+Otvor `res://scenes/world/expedition_art_gallery.tscn` a stlač **F6**.
+Galéria obsahuje všetkých 20 nových modelov s kamerou a osvetlením.
+Jednotlivé zdroje sú v `res://assets/models/expedition/` — dvojklikom na
+príslušnú scénu môžeš meniť jej časti, materiály a polohy. Zmeny sa používajú
+aj v generovanom svete. Statické časti sú zoskupené podľa materiálu; kolesá
+vlaku zostali samostatné kvôli animácii. Horské hrebene majú hmotu smerom od
+cesty, preto pri ich presúvaní zachovaj priechodný koridor.
+
+Po väčších úpravách spusti `./tools/godot.ps1 RefreshPreview` pre obnovu
+generovaných náhľadov. `BuildExpeditionArt` je zámerná regenerácia modelov
+zo zdroja a prepíše ručné úpravy; pri bežnom hraní ani otvorení editora sa
+nespúšťa. Nové pokojnejšie materiály sú v `res://shaders/`.
+
+Modely už majú aj skutočné obrázkové textúry. Zdrojový atlas je
+`res://assets/textures/expedition-materials-v1.png`, herná verzia s ôsmimi
+oddelenými vrstvami je `expedition-materials-v1.res`. V materiáli modelu
+môžeš meniť `material_layer`, `texture_scale`, `texture_strength` a farebný
+`tint`. Textúry sledujú povrch bez potreby ručne vytvárať UV súradnice.
+Príkaz `./tools/godot.ps1 TextureExpeditionArt` nanesie textúry bez
+regenerovania geometrie; zachová ručné posuny častí modelov a kolízie.

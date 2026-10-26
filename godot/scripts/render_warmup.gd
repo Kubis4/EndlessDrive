@@ -10,6 +10,7 @@ var _tunnel_lights: Array[OmniLight3D] = []
 var vehicle_template: Node3D
 var _headlights: Array[SpotLight3D] = []
 var _warm_environment: Environment
+var _world: DriveWorld
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	size = Vector2i(32, 32)
@@ -22,10 +23,13 @@ func _ready() -> void:
 	camera.size = 10
 	camera.far = 260
 	add_child(camera)
-	msaa_3d = Viewport.MSAA_2X
+	msaa_3d = get_parent().get_viewport().msaa_3d
+	scaling_3d_scale = get_parent().get_viewport().scaling_3d_scale
 	if environment_template != null:
 		var environment_node := WorldEnvironment.new()
-		_warm_environment = environment_template.duplicate() as Environment
+		# Sky/radiance state belongs to this private world too; its lights must
+		# not invalidate the live world's shared sky during shader preparation.
+		_warm_environment = environment_template.duplicate(true) as Environment
 		environment_node.environment = _warm_environment
 		add_child(environment_node)
 	for i in 3:
@@ -36,9 +40,10 @@ func _ready() -> void:
 		add_child(light)
 	var directional := DirectionalLight3D.new()
 	directional.rotation_degrees = Vector3(-35, -25, 0)
-	directional.shadow_enabled = true
+	var tier: int = get_parent().get_viewport().get_meta("terrain_detail_tier", 2)
+	directional.shadow_enabled = tier > 0
 	directional.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
-	directional.directional_shadow_max_distance = 120
+	directional.directional_shadow_max_distance = [55.0, 85.0, 120.0][tier]
 	add_child(directional)
 	var plain := BiomeModels.material(Color("77786c"))
 	var double_sided := plain.duplicate() as StandardMaterial3D
@@ -72,6 +77,7 @@ func _ready() -> void:
 	# The tunnel's ArrayMesh vertex layout and three-light shell select extra
 	# programs beyond primitive boxes. Submit the real generator once as well.
 	var world := DriveWorld.new()
+	_world = world
 	add_child(world)
 	world.configure(24601)
 	var tunnel := RouteHazard.new()
@@ -161,7 +167,7 @@ func _warm_terrain_patch(parent: Node3D) -> void:
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, Mesh.ARRAY_FLAG_USE_DYNAMIC_UPDATE | DriveTerrainBake.MATERIAL_FORMAT)
 	var material := ShaderMaterial.new()
-	material.shader = load("res://shaders/desert_surface.gdshader")
+	material.shader = DriveWorld.GROUND_SHADERS[int(get_parent().get_viewport().get_meta("terrain_detail_tier", 2))]
 	material.set_shader_parameter("surface_data_enabled", true)
 	material.set_shader_parameter("surface_atlas", load("res://assets/textures/surface-albedo-atlas.png"))
 	material.set_shader_parameter("micro_height", load("res://assets/textures/surface-microheight-2k.png"))
@@ -193,4 +199,17 @@ func _process(_dt: float) -> void:
 	if _frames == 60 and _warm_environment != null:
 		_warm_environment.fog_enabled = true
 		_warm_environment.fog_density = 0.008
-	if _frames >= 70: queue_free()
+	# Entering/leaving the portal selects different light/shadow combinations
+	# than a camera sitting in the middle of the tunnel. Prime those views too,
+	# at the selected rendering scale, while the player is still in the menu.
+	if _frames == 72:
+		for light in _headlights: light.visible = false
+		for light in _tunnel_lights: light.visible = true
+		if _warm_environment != null: _warm_environment.fog_enabled = false
+	if _frames >= 72 and _frames < 120 and _frames % 6 == 0:
+		var x: float = [1580, 1616, 1648, 1664, 1699, 1728, 1760, 1810][(_frames - 72) / 6]
+		var z := _world.center_at(x)
+		var focus := Vector3(x, _world.height_at(x, z), z)
+		_camera.position = focus + Vector3(-36, 52, 44)
+		_camera.look_at(focus)
+	if _frames >= 122: queue_free()

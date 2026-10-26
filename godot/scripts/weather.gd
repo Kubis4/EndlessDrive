@@ -142,8 +142,10 @@ func _ready() -> void:
 		storm_velocity = Vector2(float(run.weather_state.get("storm_vx", 2.0)), float(run.weather_state.get("storm_vz", 0)))
 		_storm_duration = clampf(float(run.weather_state.get("storm_duration", 90)), 50, 110)
 		_storm_left = minf(_storm_left, _storm_duration)
-		storm_warning = minf(storm_warning, 18.0)
+		storm_warning = minf(storm_warning, 120.0)
 		storm_visibility = clampf(float(run.weather_state.get("storm_visibility", 0)), 0, 1)
+		if storm_active:
+			_refresh_shelter(not run.weather_state.has("storm_x"))
 
 
 
@@ -183,11 +185,11 @@ func reset_weather() -> void:
 
 
 func start_sandstorm(variant: int = -1) -> void:
+	if not _refresh_shelter(true): return
 	var rng := RandomNumberGenerator.new()
 	rng.seed = run.world_seed * 31337 + _storm_serial * 104729
 	_storm_serial += 1
 	storm_variant = rng.randi_range(0, 2) if variant < 0 else clampi(variant, 0, 2)
-	storm_warning = rng.randf_range(8, 16)
 	_storm_duration = rng.randf_range(65, 100)
 	_storm_left = _storm_duration
 	storm_active = true
@@ -204,9 +206,55 @@ func start_sandstorm(variant: int = -1) -> void:
 		2:
 			storm_center = origin - forward * 135
 			storm_velocity = forward * 2.2
-	var refuge := world.find_shelter(vehicle.position, 360.0, false)
-	has_shelter_target = not refuge.is_empty()
-	if has_shelter_target: shelter_target = refuge.position
+
+
+func _refresh_shelter(renew_warning: bool = false) -> bool:
+	var serviceable := run.fuel > 0.1 and float(run.parts.engine) > 0.05 and (run.engine_running or run.battery >= 0.08)
+	var refuge := {}
+	# Keep a still-valid target. Choosing whichever roof is nearest every second
+	# repeatedly restarted the warning when the player passed between shelters.
+	if serviceable and has_shelter_target and not renew_warning:
+		refuge = world.find_shelter(shelter_target, 2.0, false)
+		if vehicle.position.distance_to(shelter_target) > 360.0: refuge = {}
+	if serviceable and refuge.is_empty(): refuge = world.find_shelter(vehicle.position, 360.0, false)
+	if not refuge.is_empty():
+		# Sample the approach for impassable fords and steep access. A loaded
+		# roof alone is insufficient if this car cannot reach it.
+		var last := vehicle.position
+		var travel := 0.0
+		for step in range(1, 17):
+			var p := vehicle.position.lerp(refuge.position, float(step) / 16.0)
+			p.y = world.height_at(p.x, p.z)
+			var horizontal := Vector2(p.x - last.x, p.z - last.z).length()
+			if world.terrain.water_depth(p.x, p.z) > (1.7 if run.snorkel_installed else 0.65) or absf(p.y - last.y) > horizontal * 0.65 + 0.8:
+				refuge = {}
+				break
+			travel += p.distance_to(last)
+			last = p
+		if not refuge.is_empty():
+			var changed := not has_shelter_target or shelter_target.distance_to(refuge.position) > 2.0
+			shelter_target = refuge.position
+			has_shelter_target = true
+			if renew_warning or changed:
+				var crawl := clampf(run.power_factor() * 8.0, 2.0, 7.0)
+				if travel / crawl * 1.6 + 12.0 > 120.0:
+					_defer_storm()
+					return false
+				storm_warning = maxf(travel / crawl * 1.6 + 12.0, 30.0)
+				storm_center = Vector2(vehicle.position.x - 150.0, vehicle.position.z)
+				storm_edge = storm_center.x - 110.0
+			_shelter_check = 1.0
+			return true
+	_defer_storm()
+	return false
+
+
+func _defer_storm() -> void:
+	# Defer a chase, rather than damage a player with no reachable escape.
+	storm_active = false
+	has_shelter_target = false
+	storm_warning = 0.0
+	_next_storm = run.elapsed + 30.0
 
 
 func _advance_front(biome: int) -> void:
@@ -229,8 +277,10 @@ func _process(dt: float) -> void:
 	sheltered = world.is_sheltered(vehicle.position)
 	if run.elapsed >= _next_storm and not storm_active and biome in [0, 1]: start_sandstorm()
 	if storm_active:
-		_storm_left = maxf(0, _storm_left - dt)
+		_shelter_check -= dt
+		if _shelter_check <= 0.0: _refresh_shelter()
 		var moving_time := maxf(0.0, dt - storm_warning)
+		_storm_left = maxf(0, _storm_left - moving_time)
 		storm_warning = maxf(0.0, storm_warning - dt)
 		storm_center += storm_velocity * moving_time
 		storm_edge = storm_center.x - 110.0
@@ -242,7 +292,7 @@ func _process(dt: float) -> void:
 	var life_fade := smoothstep(0, 8, _storm_duration - _storm_left) * smoothstep(0, 14, _storm_left)
 	var dust_target := (1.0 - smoothstep(0.35, 1.0, radius)) * life_fade if storm_active and storm_warning <= 0 and not sheltered else 0.0
 	storm_visibility = move_toward(storm_visibility, dust_target, dt * 0.35)
-	var exposed := storm_visibility > 0.25
+	var exposed := storm_active and storm_warning <= 0.0 and not sheltered and storm_visibility > 0.25
 	if storm_active and storm_warning <= 0: mode = "Piesočná búrka"
 	var target := maxf(storm_visibility, 0.6 if mode in ["Dážď", "Zamračené", "Sneženie", "Prachový vietor"] else (0.22 if mode == "Oblačno" else 0.0))
 	intensity = move_toward(intensity, target, dt * 0.18)

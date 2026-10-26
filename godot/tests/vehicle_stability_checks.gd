@@ -8,6 +8,8 @@ class BankTerrain extends DriveTerrain:
 	func pools_near(_x: float) -> Array[Dictionary]: return []
 	func feature_at(_x: float) -> Dictionary: return {}
 	func fork_at(_x: float) -> Dictionary: return {}
+	func sample(_x: float, z: float, _include_water: bool = true) -> Dictionary:
+		return {"color": Color("777777"), "material": SurfaceKind.ASPHALT, "road": 1.0, "grip": 1.0, "drag": 0.0, "roughness": 0.0, "paved": 1.0, "lateral": z, "label": "Asfalt", "water": 0.0, "snow": 0.0, "soil_softness": 0.0, "soil_depth": 0.0, "deformable": false}
 func _initialize() -> void: call_deferred("_run")
 func frames(n: int) -> void:
 	for tick in n:
@@ -63,6 +65,9 @@ func _run() -> void:
 	game.position = Vector3.ZERO
 	game.origin_rebasing_enabled = true
 	world.update_stream(2500)
+	for chunk: Node3D in world.chunks.values():
+		for node: Node in chunk.get_children():
+			if node.name != "SandAndTracks": node.queue_free()
 	var debris := RigidBody3D.new()
 	debris.position = Vector3(2570, 0.6, 12)
 	debris.mass = 22
