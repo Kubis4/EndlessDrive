@@ -1,17 +1,17 @@
 [gd_scene format=4]
 
 [ext_resource type="Shader" path="res://shaders/expedition_surface.gdshader" id="1_14eqh"]
-[ext_resource type="Texture2DArray" path="res://assets/textures/expedition-materials-v1.res" id="2_koh6b"]
+[ext_resource type="Texture2DArray" path="res://assets/textures/expedition-materials-v2.res" id="2_koh6b"]
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_koh6b"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_dj0f7"]
 resource_name = "StoneLight"
 render_priority = 0
 shader = ExtResource("1_14eqh")
 shader_parameter/model_atlas = ExtResource("2_koh6b")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 5
-shader_parameter/texture_average = Color(0.6727091, 0.60754895, 0.5360725, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_average = Color(0.6009291, 0.55774385, 0.5143835, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
 shader_parameter/texture_scale = 0.32
 shader_parameter/texture_strength = 0.75
 shader_parameter/texture_roughness = 0.95
@@ -32,16 +32,16 @@ _surfaces = [{
 "vertex_data": PackedByteArray("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TzpPuqxc46qv47Ytdpafo/AcztJrSyyeQtNDU8JrKq22LbatzmrsrLPr1jNXnoKm1RSLzN1QLqKW4JdgiXZ0sTQgNKAEdiaxZ/SHOZakv6jxC6/GFFQfpgTwBXDBfSW4cxBykJ597bfK+kg9Lqj5qREHe6/dW/Sz+vX7dSZ/BbtVClWKGH/euv9//38AgACA/3//fwCAAID/f/9/AIAAgP9//38AgACA//////9/AID//////38AgP//////fwCA//////9/AID//wCAAID/v///AIAAgP+///8AgACA/7///wCAAID/vwAAAID/f/+/AAAAgP9//78AAACA/3//vwAAAID/f/+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgAAAAAD/vwCAAAAAAP+/AIAAAAAA/78AgAAAAAD/v/9//38AgACA/3//fwCAAID/f/9/AIAAgP9//38AgACA//////9/AID//////38AgP//////fwCA//////9/AID//wCAAID/v///AIAAgP+///8AgACA/7///wCAAID/vwAAAID/f/+/AAAAgP9//78AAACA/3//vwAAAID/f/+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgAAAAAD/vwCAAAAAAP+/AIAAAAAA/78AgAAAAAD/vw==")
 }]
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_dj0f7"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_m8c5y"]
 resource_name = "Stone"
 render_priority = 0
 shader = ExtResource("1_14eqh")
 shader_parameter/model_atlas = ExtResource("2_koh6b")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 0
-shader_parameter/texture_average = Color(0.82242, 0.6790669, 0.5315522, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
-shader_parameter/texture_scale = 0.0625
+shader_parameter/texture_average = Color(0.595678, 0.5252385, 0.44855374, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
+shader_parameter/texture_scale = 0.125
 shader_parameter/texture_strength = 0.75
 shader_parameter/texture_roughness = 0.98
 shader_parameter/tint = Color(0.5058824, 0.4862745, 0.4117647, 1)
@@ -61,15 +61,15 @@ _surfaces = [{
 "vertex_data": PackedByteArray("NDNTwM3MTEDNzEw/AAAgwM3MTEDNzEw/NDNTwAAAAADNzEw/AAAgwAAAAADNzEw/AAAgwM3MTEDNzEy/NDNTwM3MTEDNzEy/AAAgwAAAAADNzEy/NDNTwAAAAADNzEy/AAAgwM3MTEDNzEw/AAAgwM3MTEDNzEy/AAAgwAAAAADNzEw/AAAgwAAAAADNzEy/NDNTwM3MTEDNzEy/NDNTwM3MTEDNzEw/NDNTwAAAAADNzEy/NDNTwAAAAADNzEw/AAAgwM3MTEDNzEw/NDNTwM3MTEDNzEw/AAAgwM3MTEDNzEy/NDNTwM3MTEDNzEy/NDNTwAAAAADNzEw/AAAgwAAAAADNzEw/NDNTwAAAAADNzEy/AAAgwAAAAADNzEy/AAAgQM3MTEDNzEw/NDNTQM3MTEDNzEw/AAAgQAAAAADNzEw/NDNTQAAAAADNzEw/NDNTQM3MTEDNzEy/AAAgQM3MTEDNzEy/NDNTQAAAAADNzEy/AAAgQAAAAADNzEy/NDNTQM3MTEDNzEw/NDNTQM3MTEDNzEy/NDNTQAAAAADNzEw/NDNTQAAAAADNzEy/AAAgQM3MTEDNzEy/AAAgQM3MTEDNzEw/AAAgQAAAAADNzEy/AAAgQAAAAADNzEw/NDNTQM3MTEDNzEw/AAAgQM3MTEDNzEw/NDNTQM3MTEDNzEy/AAAgQM3MTEDNzEy/AAAgQAAAAADNzEw/NDNTQAAAAADNzEw/AAAgQAAAAADNzEy/NDNTQAAAAADNzEy//3//fwCAAID/f/9/AIAAgP9//38AgACA/3//fwCAAID//////38AgP//////fwCA//////9/AID//////38AgP//AIAAgP+///8AgACA/7///wCAAID/v///AIAAgP+/AAAAgP9//78AAACA/3//vwAAAID/f/+/AAAAgP9//78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCAAAAAAP+/AIAAAAAA/78AgAAAAAD/vwCAAAAAAP+//3//fwCAAID/f/9/AIAAgP9//38AgACA/3//fwCAAID//////38AgP//////fwCA//////9/AID//////38AgP//AIAAgP+///8AgACA/7///wCAAID/v///AIAAgP+/AAAAgP9//78AAACA/3//vwAAAID/f/+/AAAAgP9//78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCAAAAAAP+/AIAAAAAA/78AgAAAAAD/vwCAAAAAAP+/")
 }]
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_m8c5y"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_bewh7"]
 resource_name = "StoneDark"
 render_priority = 0
 shader = ExtResource("1_14eqh")
 shader_parameter/model_atlas = ExtResource("2_koh6b")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 5
-shader_parameter/texture_average = Color(0.6727091, 0.60754895, 0.5360725, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_average = Color(0.6009291, 0.55774385, 0.5143835, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
 shader_parameter/texture_scale = 0.32
 shader_parameter/texture_strength = 0.75
 shader_parameter/texture_roughness = 0.95
@@ -90,15 +90,15 @@ _surfaces = [{
 "vertex_data": PackedByteArray("ZmaWwGZmhkAAAABAMzNTwGZmhkAAAABAZmaWwAAAAAAAAABAMzNTwAAAAAAAAABAMzNTwGZmhkDMzEy/ZmaWwGZmhkDMzEy/MzNTwAAAAADMzEy/ZmaWwAAAAADMzEy/MzNTwGZmhkAAAABAMzNTwGZmhkDMzEy/MzNTwAAAAAAAAABAMzNTwAAAAADMzEy/ZmaWwGZmhkDMzEy/ZmaWwGZmhkAAAABAZmaWwAAAAADMzEy/ZmaWwAAAAAAAAABAMzNTwGZmhkAAAABAZmaWwGZmhkAAAABAMzNTwGZmhkDMzEy/ZmaWwGZmhkDMzEy/ZmaWwAAAAAAAAABAMzNTwAAAAAAAAABAZmaWwAAAAADMzEy/MzNTwAAAAADMzEy/MzNTQGZmhkAAAABAZmaWQGZmhkAAAABAMzNTQAAAAAAAAABAZmaWQAAAAAAAAABAZmaWQGZmhkDMzEy/MzNTQGZmhkDMzEy/ZmaWQAAAAADMzEy/MzNTQAAAAADMzEy/ZmaWQGZmhkAAAABAZmaWQGZmhkDMzEy/ZmaWQAAAAAAAAABAZmaWQAAAAADMzEy/MzNTQGZmhkDMzEy/MzNTQGZmhkAAAABAMzNTQAAAAADMzEy/MzNTQAAAAAAAAABAZmaWQGZmhkAAAABAMzNTQGZmhkAAAABAZmaWQGZmhkDMzEy/MzNTQGZmhkDMzEy/MzNTQAAAAAAAAABAZmaWQAAAAAAAAABAMzNTQAAAAADMzEy/ZmaWQAAAAADMzEy//3//fwCAAID/f/9/AIAAgP9//38AgACA/3//fwCAAID//////38AgP//////fwCA//////9/AID//////38AgP//AIAAgP+///8AgACA/7///wCAAID/v///AIAAgP+/AAAAgP9//78AAACA/3//vwAAAID/f/+/AAAAgP9//78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCAAAAAAP+/AIAAAAAA/78AgAAAAAD/vwCAAAAAAP+//3//fwCAAID/f/9/AIAAgP9//38AgACA/3//fwCAAID//////38AgP//////fwCA//////9/AID//////38AgP//AIAAgP+///8AgACA/7///wCAAID/v///AIAAgP+/AAAAgP9//78AAACA/3//vwAAAID/f/+/AAAAgP9//78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCAAAAAAP+/AIAAAAAA/78AgAAAAAD/vwCAAAAAAP+/")
 }]
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_bewh7"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_d2r0q"]
 resource_name = "Ivory"
 render_priority = 0
 shader = ExtResource("1_14eqh")
 shader_parameter/model_atlas = ExtResource("2_koh6b")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 6
-shader_parameter/texture_average = Color(0.4961296, 0.47956285, 0.466106, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_average = Color(0.46818328, 0.4588491, 0.45494014, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
 shader_parameter/texture_scale = 0.25
 shader_parameter/texture_strength = 0.6
 shader_parameter/texture_roughness = 0.64
@@ -122,17 +122,17 @@ _surfaces = [{
 [node name="RailPortal" type="Node3D" unique_id=1460254890]
 
 [node name="StoneLight" type="MeshInstance3D" parent="." unique_id=314006209]
-material_override = SubResource("ShaderMaterial_koh6b")
+material_override = SubResource("ShaderMaterial_dj0f7")
 mesh = SubResource("ArrayMesh_koh6b")
 
 [node name="Stone" type="MeshInstance3D" parent="." unique_id=1910200656]
-material_override = SubResource("ShaderMaterial_dj0f7")
+material_override = SubResource("ShaderMaterial_m8c5y")
 mesh = SubResource("ArrayMesh_dj0f7")
 
 [node name="StoneDark" type="MeshInstance3D" parent="." unique_id=2113036668]
-material_override = SubResource("ShaderMaterial_m8c5y")
+material_override = SubResource("ShaderMaterial_bewh7")
 mesh = SubResource("ArrayMesh_m8c5y")
 
 [node name="Ivory" type="MeshInstance3D" parent="." unique_id=704662749]
-material_override = SubResource("ShaderMaterial_bewh7")
+material_override = SubResource("ShaderMaterial_d2r0q")
 mesh = SubResource("ArrayMesh_bewh7")

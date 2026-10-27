@@ -4,7 +4,16 @@ This is a playable migration slice, targeting Godot **4.7.2**, with a new
 desert art set and a high, fixed oblique overview camera.
 The original Android Studio application remains at the repository root.
 
-## V4 — current Godot version
+## V5 — current Godot version
+
+V5 adds photographic-style material textures, restrained surface relief,
+rounded boulders and broad mountain crowns. Physical ruts still share their
+geometry with collision; their compressed soil is easier to read. Generated
+editor previews now reload changed geometry and external meshes instead of
+retaining old pointed silhouettes. All nine terrain showcases are refreshed.
+See [materials, provenance and validation](assets/textures/NATURAL_MATERIALS_V2.md).
+
+## V4
 
 V4 includes the audit stabilisation changes, textured expedition models,
 the supplied low-poly vegetation with sparse placement, graphics settings,
@@ -13,7 +22,7 @@ and [the vegetation notes](assets/models/vegetation/README.md) for details.
 
 **APK generation is temporarily paused.** The user reports that the existing
 APKs do not work. Successful packaging/signing checks below do not establish
-that the game runs on Android. Run V4 in the Godot editor; fixing Android
+that the game runs on Android. Run V5 in the Godot editor; fixing Android
 runtime/export issues is still pending.
 
 ## V3 — terrain, visibility and frame pacing

@@ -15,7 +15,7 @@ func _run() -> void:
 		quit(1)
 		return
 	# Dummy rendering has no GPU readback; inspect the original image instead.
-	var texture_source := Image.load_from_file("res://assets/textures/expedition-materials-v1.png")
+	var texture_source := Image.load_from_file(str(atlas.get_meta("source_png")))
 	var detailed_layers := true
 	for layer in 8:
 		var start := Vector2i(roundi((layer % 4) * texture_source.get_width() / 4.0), roundi((layer / 4) * texture_source.get_height() / 2.0))
@@ -55,6 +55,21 @@ func _run() -> void:
 			var mesh := meshes[0] as MeshInstance3D
 			check(mesh.mesh.get_aabb().position.z >= 0.0 and mesh.mesh.get_aabb().size.y > 14, "Mountain mass stays outside the road-facing boundary and has a real high ridge")
 			check(mesh.material_override.get_shader_parameter("material_layer") == 1, "Alpine rock uses granite, not the sandstone or foliage texture")
+		if label in ["rocky_peak", "snowy_peak"]:
+			var mesh := meshes[0] as MeshInstance3D
+			var bounds := mesh.mesh.get_aabb()
+			var vertices: PackedVector3Array = mesh.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+			var crown := AABB()
+			var crown_started := false
+			var valid_faces := true
+			for point: Vector3 in vertices:
+				if point.y > bounds.end.y - 2.5:
+					crown = crown.expand(point) if crown_started else AABB(point, Vector3.ZERO)
+					crown_started = true
+			for i in range(0, vertices.size(), 3):
+				valid_faces = valid_faces and (vertices[i + 1] - vertices[i]).cross(vertices[i + 2] - vertices[i]).length_squared() > 0.000001
+			check(crown.size.x > 8.0 and crown.size.z > 6.0 and bounds.position.z >= 0.0, "%s has a broad eroded crown outside the driveable boundary" % label)
+			check(valid_faces and vertices.size() < 2500, "%s has non-degenerate triangles with a bounded mesh budget" % label)
 		if label == "tunnel_portal":
 			var masonry := model.get_node("StoneLight") as MeshInstance3D
 			check(masonry.mesh.get_aabb().end.y > 7.8, "Merged portal retains the full high arch alongside its primitive buttress caps")

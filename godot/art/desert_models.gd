@@ -194,19 +194,28 @@ static func rock() -> Node3D:
 	root.name = "WeatheredMesaRock"
 	var tool := SurfaceTool.new()
 	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var bottom: Array[Vector3] = []
-	var top: Array[Vector3] = []
-	for corner in 7:
-		var angle := corner * TAU / 7.0
-		var radius := 1.0 + sin(corner * 17.3) * 0.15
-		bottom.append(Vector3(cos(angle) * radius, 0, sin(angle) * radius))
-		top.append(Vector3(cos(angle) * radius * 0.72 + 0.1, 1.25 + sin(corner * 2.1) * 0.12, sin(angle) * radius * 0.72))
-	for corner in 7:
-		var next := (corner + 1) % 7
-		_triangle(tool, bottom[corner], bottom[next], top[corner])
-		_triangle(tool, bottom[next], top[next], top[corner])
-		_triangle(tool, Vector3(0.1, 1.25, 0), top[corner], top[next])
-	piece(root, "FacetedSandstone", tool.commit(), Vector3.ZERO, mat("rock"))
+	var rings: Array[PackedVector3Array] = []
+	for row in 6:
+		var ring := PackedVector3Array()
+		for corner in 20:
+			var angle := corner * TAU / 20.0
+			var radius: float = [0.85, 1.0, 0.97, 0.80, 0.48, 0.0][row] * (1.0 + sin(angle * 3.0 + 0.4) * 0.09 + cos(angle * 5.0) * 0.04)
+			var height: float = [-0.12, 0.18, 0.55, 0.95, 1.19, 1.27][row]
+			ring.append(Vector3(cos(angle) * radius + row * 0.02, height + sin(angle * 2.0) * radius * 0.06, sin(angle) * radius))
+		rings.append(ring)
+	for row in 5:
+		for corner in 20:
+			var next := (corner + 1) % 20
+			for p: Vector3 in [rings[row][corner], rings[row][next], rings[row + 1][corner]]: tool.add_vertex(p)
+			if row < 4:
+				for p: Vector3 in [rings[row][next], rings[row + 1][next], rings[row + 1][corner]]: tool.add_vertex(p)
+	tool.generate_normals()
+	var material := ShaderMaterial.new()
+	material.shader = load("res://shaders/expedition_surface.gdshader")
+	material.resource_name = "Stone"
+	material.set_shader_parameter("tint", Color("9b927f"))
+	preload("res://art/expedition_materials.gd").configure(material, "stone", "mesa_rock")
+	piece(root, "WeatheredSandstone", tool.commit(), Vector3.ZERO, material)
 	collider(root, Vector3(0, 0.55, 0), Vector3(1.5, 1.1, 1.5))
 	return root
 

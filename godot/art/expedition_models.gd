@@ -162,9 +162,9 @@ static func mountain(alpine := false) -> Node3D:
 	for i in 9:
 		var x := -6.0 + i * 1.5
 		var ridge := 8.5 + sin(i * 1.27) * 1.4 + (3.8 if alpine else 0.0)
-		rows.append(PackedVector3Array([Vector3(x, -4, 0), Vector3(x, 1.5, 0.4), Vector3(x, ridge * 0.58, 3.0), Vector3(x + sin(i) * 0.7, ridge, 7.0), Vector3(x, ridge * 0.65, 12), Vector3(x, -4, 18)]))
+		rows.append(PackedVector3Array([Vector3(x, -4, 0), Vector3(x, 1.5, 0.4), Vector3(x, ridge * 0.58, 3.0), Vector3(x + sin(i) * 0.4, ridge * 0.92, 6.0), Vector3(x, ridge, 8.0), Vector3(x, ridge * 0.90, 10.0), Vector3(x, ridge * 0.65, 12), Vector3(x, -4, 18)]))
 	for i in 8:
-		for j in 5:
+		for j in 7:
 			for p: Vector3 in [rows[i][j], rows[i + 1][j], rows[i][j + 1], rows[i + 1][j], rows[i + 1][j + 1], rows[i][j + 1]]: st.add_vertex(p)
 	st.generate_normals()
 	var material := mat("stone").duplicate() as ShaderMaterial
@@ -195,23 +195,26 @@ static func peak(snowy := false) -> Node3D:
 	var root := Node3D.new()
 	root.name = "SnowyPeak" if snowy else "RockyPeak"
 	var rings: Array[PackedVector3Array] = []
-	for row in 5:
+	# Broad eroded shoulders and a rounded crown, without a needle apex.
+	# Keep the frontmost edge outside the existing playable/collision boundary.
+	var radii := [14.0, 13.7, 12.8, 10.8, 8.0, 5.6, 3.0, 0.0]
+	var heights := [-3.0, 0.5, 5.0, 10.0, 14.5, 17.5, 19.0, 19.5]
+	for row in radii.size():
 		var points := PackedVector3Array()
-		for i in 15:
-			var a := TAU * i / 14.0
-			# Offset shoulders and broken ridge lines give each face a different
-			# silhouette instead of a nearly circular cone. The foreground edge
-			# stays beyond the playable boundary, with the same vertex budget.
+		for i in 29:
+			var a := TAU * (i % 28) / 28.0
 			var phase := 1.7 if snowy else 0.2
-			var radius: float = [14.0, 12.5, 9.0, 4.4, 0.15][row] * (1.0 + 0.20 * sin(a * 3.0 + phase) + 0.12 * cos(a * 5.0 - row * 0.7))
-			var shoulder: float = sin(a * 2.0 + phase) * [0.0, 0.8, 2.6, 2.1, 0.0][row]
-			points.append(Vector3(cos(a) * radius + [0.0, -1.0, -2.5, 0.5, 2.8][row], float([-3, 1, 8, 16, 25][row]) + shoulder, 20 + sin(a) * radius * 0.85 + row * 0.45))
+			var radius: float = radii[row] * (1.0 + 0.13 * sin(a * 3.0 + phase) + 0.06 * cos(a * 5.0 - row * 0.4))
+			var shoulder: float = sin(a * 2.0 + phase) * [0.0, 0.3, 0.9, 1.2, 1.0, 0.6, 0.2, 0.0][row]
+			points.append(Vector3(cos(a) * radius + sin(row * 0.5) * 1.4, heights[row] + shoulder, 20 + sin(a) * radius * 0.85 + row * 0.25))
 		rings.append(points)
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for row in 4:
-		for i in 14:
-			for p: Vector3 in [rings[row][i], rings[row][i + 1], rings[row + 1][i], rings[row][i + 1], rings[row + 1][i + 1], rings[row + 1][i]]: st.add_vertex(p)
+	for row in radii.size() - 1:
+		for i in 28:
+			for p: Vector3 in [rings[row][i], rings[row][i + 1], rings[row + 1][i]]: st.add_vertex(p)
+			if row < radii.size() - 2:
+				for p: Vector3 in [rings[row][i + 1], rings[row + 1][i + 1], rings[row + 1][i]]: st.add_vertex(p)
 	st.generate_normals()
 	var material := mat("stone").duplicate() as ShaderMaterial
 	material.set_shader_parameter("tint", Color("7c8b87") if snowy else Color("998a6e"))

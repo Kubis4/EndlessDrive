@@ -1,17 +1,17 @@
 [gd_scene format=4]
 
 [ext_resource type="Shader" path="res://shaders/expedition_surface.gdshader" id="1_eakmw"]
-[ext_resource type="Texture2DArray" path="res://assets/textures/expedition-materials-v1.res" id="2_1hsvl"]
+[ext_resource type="Texture2DArray" path="res://assets/textures/expedition-materials-v2.res" id="2_1hsvl"]
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_1hsvl"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_2y1vs"]
 resource_name = "Leaf"
 render_priority = 0
 shader = ExtResource("1_eakmw")
 shader_parameter/model_atlas = ExtResource("2_1hsvl")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 3
-shader_parameter/texture_average = Color(0.38355666, 0.38061255, 0.2644126, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_average = Color(0.23561737, 0.25879303, 0.15164466, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
 shader_parameter/texture_scale = 0.2
 shader_parameter/texture_strength = 0.75
 shader_parameter/texture_roughness = 0.94
@@ -35,5 +35,5 @@ _surfaces = [{
 [node name="FernPatch" type="Node3D" unique_id=1336382774]
 
 [node name="Leaf" type="MeshInstance3D" parent="." unique_id=758631602]
-material_override = SubResource("ShaderMaterial_1hsvl")
+material_override = SubResource("ShaderMaterial_2y1vs")
 mesh = SubResource("ArrayMesh_2y1vs")

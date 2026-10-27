@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Play', 'SandLab', 'SandBench', 'Editor', 'Import', 'Test', 'Balance', 'Capture', 'Android', 'BuildArt', 'BuildExpeditionArt', 'BuildPeaks', 'BuildPlants', 'TextureExpeditionArt', 'RefreshPreview')]
+    [ValidateSet('Play', 'SandLab', 'SandBench', 'Editor', 'Import', 'Test', 'Balance', 'Capture', 'Android', 'BuildArt', 'BuildExpeditionArt', 'BuildPeaks', 'BuildRocks', 'BuildPlants', 'TextureExpeditionArt', 'RefreshPreview')]
     [string]$Action = 'Play',
     [string]$GodotPath = '',
     [string[]]$Suites = @(),
@@ -88,6 +88,9 @@ switch ($Action) {
     'BuildPeaks' {
         Invoke-GodotChecked -Arguments @('--headless', '--script', 'res://tests/build_expedition_art.gd', '--', '--only-peaks') -LogName 'godot-build-peaks.log'
     }
+    'BuildRocks' {
+        Invoke-GodotChecked -Arguments @('--headless', '--script', 'res://tests/build_expedition_art.gd', '--', '--only-rocks') -LogName 'godot-build-rocks.log'
+    }
     'TextureExpeditionArt' {
         # Real renderer is required to serialize Texture2DArray pixel data.
         Invoke-GodotChecked -Arguments @('--audio-driver', 'Dummy', '--script', 'res://tests/build_expedition_textures.gd') -LogName 'godot-build-expedition-textures.log'
@@ -106,6 +109,7 @@ switch ($Action) {
                 $Suites = @('audit_regression_checks', 'expedition_art_checks', 'sand_lab_checks', 'test_runner', 'equipment_checks', 'menu_ui_checks', 'hud_c_checks', 'ui_localization_checks', 'editor_scene_checks', 'streaming_visual_checks', 'visual_polish_checks', 'route_commit_checks', 'jeep_rig_checks', 'terrain_rework_checks', 'terrain_reference_checks', 'displaced_soil_checks', 'surface_balance_checks', 'vehicle_stability_checks', 'drivetrain_checks', 'recovery_system_checks', 'winch_anchor_checks', 'expedition_world_checks', 'road_handling_checks', 'route_structure_checks', 'long_expedition_checks', 'soft_soil_checks', 'soft_soil_field_checks', 'stop_placement_checks', 'driving_regression', 'journey_balance', 'expedition_checks', 'frame_pacing_checks', 'menu_save_exit_checks')
             }
             if ('vegetation_checks' -notin $Suites -and -not $PSBoundParameters.ContainsKey('Suites')) { $Suites = @('vegetation_checks') + $Suites }
+            if (-not $PSBoundParameters.ContainsKey('Suites')) { $Suites += 'preview_geometry_checks' }
             foreach ($suite in $Suites) {
                 if ($suite -notmatch '^[a-z_]+$') { throw "Invalid suite: $suite" }
                 $env:APPDATA = Join-Path $buildPath $(if ($suite -eq 'menu_save_exit_checks') { 'menu-flow-user' } else { 'godot-tests-profile' })

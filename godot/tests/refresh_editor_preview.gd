@@ -28,6 +28,9 @@ func _run() -> void:
 			_wrapper(entry[0], 24601, entry[1])
 		_build(1000005, 180.0, GENERATED + "alpine.scn")
 		_wrapper("alpine", 1000005, 180.0)
+		# Every saved showcase embeds geometry, including these older views.
+		for entry: Array in [["canyon", 1000002, 180.0], ["forest", 1000004, 180.0], ["swamp", 1000006, 120.0], ["mountain", 24601, 3200.0]]:
+			_build(int(entry[1]), float(entry[2]), GENERATED + entry[0] + ".scn")
 	quit(1 if failed else 0)
 
 func _build(seed: int, distance: float, path: String) -> void:

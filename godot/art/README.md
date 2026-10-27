@@ -1,5 +1,10 @@
 # Original desert art set
 
+The current materials use the photographic-style V2 atlas and rounded rock
+geometry. See [Natural materials V2](../assets/textures/NATURAL_MATERIALS_V2.md)
+for provenance, deformation compatibility and rebuild steps. The V1 description
+below records the previous art pass.
+
 ## Expedition scenery update — 26 October 2026
 
 Twenty new editable native scenes in `assets/models/expedition/` now supply

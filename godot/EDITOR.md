@@ -8,6 +8,11 @@ Ak už máš Godot otvorený, potvrď **Reload / znovunačítanie zmenených sc�
 Ak sa nezobrazí výzva, zatvor kartu `main` a otvor ju znova zo súborového stromu.
 Prípadné vlastné neuložené úpravy si najprv ulož zvlášť.
 
+Od V5 sa generovaný terén po zmene uloženého `.scn` automaticky obnovuje
+vrátane modelov v pamäti. Tlačidlo **Obnoviť terén zo skriptov** na uzle
+`EditorTerrainPreview` náhľad znovu vygeneruje; `RefreshPreview` obnovuje všetkých
+deväť prostredí. Poloha a mierka rodičovského uzla sa pri obnove zachovajú.
+
 ## 3D scéna, kamera a auto
 
 Rozhranie variantu C nájdeš v `scenes/ui/expedition_hud.tscn` a v hlavnej

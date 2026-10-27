@@ -1,17 +1,17 @@
 [gd_scene format=4]
 
 [ext_resource type="Shader" path="res://shaders/expedition_surface.gdshader" id="1_v1l31"]
-[ext_resource type="Texture2DArray" path="res://assets/textures/expedition-materials-v1.res" id="2_ait3i"]
+[ext_resource type="Texture2DArray" path="res://assets/textures/expedition-materials-v2.res" id="2_ait3i"]
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_ait3i"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_6px86"]
 resource_name = "Steel"
 render_priority = 0
 shader = ExtResource("1_v1l31")
 shader_parameter/model_atlas = ExtResource("2_ait3i")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 6
-shader_parameter/texture_average = Color(0.4961296, 0.47956285, 0.466106, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_average = Color(0.46818328, 0.4588491, 0.45494014, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
 shader_parameter/texture_scale = 0.25
 shader_parameter/texture_strength = 0.6
 shader_parameter/texture_roughness = 0.64
@@ -26,15 +26,15 @@ bottom_radius = 0.43
 height = 0.18
 radial_segments = 12
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_6px86"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_8o4y7"]
 resource_name = "Dark"
 render_priority = 0
 shader = ExtResource("1_v1l31")
 shader_parameter/model_atlas = ExtResource("2_ait3i")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 6
-shader_parameter/texture_average = Color(0.4961296, 0.47956285, 0.466106, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_average = Color(0.46818328, 0.4588491, 0.45494014, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
 shader_parameter/texture_scale = 0.25
 shader_parameter/texture_strength = 0.6
 shader_parameter/texture_roughness = 0.64
@@ -49,15 +49,15 @@ bottom_radius = 0.18
 height = 0.06
 radial_segments = 10
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_8o4y7"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_mitp6"]
 resource_name = "Steel"
 render_priority = 0
 shader = ExtResource("1_v1l31")
 shader_parameter/model_atlas = ExtResource("2_ait3i")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 6
-shader_parameter/texture_average = Color(0.4961296, 0.47956285, 0.466106, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_average = Color(0.46818328, 0.4588491, 0.45494014, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
 shader_parameter/texture_scale = 0.25
 shader_parameter/texture_strength = 0.6
 shader_parameter/texture_roughness = 0.64
@@ -72,15 +72,15 @@ bottom_radius = 0.43
 height = 0.18
 radial_segments = 12
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_mitp6"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_blkk4"]
 resource_name = "Dark"
 render_priority = 0
 shader = ExtResource("1_v1l31")
 shader_parameter/model_atlas = ExtResource("2_ait3i")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 6
-shader_parameter/texture_average = Color(0.4961296, 0.47956285, 0.466106, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_average = Color(0.46818328, 0.4588491, 0.45494014, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
 shader_parameter/texture_scale = 0.25
 shader_parameter/texture_strength = 0.6
 shader_parameter/texture_roughness = 0.64
@@ -95,15 +95,15 @@ bottom_radius = 0.18
 height = 0.06
 radial_segments = 10
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_blkk4"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_xnaas"]
 resource_name = "Steel"
 render_priority = 0
 shader = ExtResource("1_v1l31")
 shader_parameter/model_atlas = ExtResource("2_ait3i")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 6
-shader_parameter/texture_average = Color(0.4961296, 0.47956285, 0.466106, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_average = Color(0.46818328, 0.4588491, 0.45494014, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
 shader_parameter/texture_scale = 0.25
 shader_parameter/texture_strength = 0.6
 shader_parameter/texture_roughness = 0.64
@@ -118,15 +118,15 @@ bottom_radius = 0.43
 height = 0.18
 radial_segments = 12
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_xnaas"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_1c1g0"]
 resource_name = "Dark"
 render_priority = 0
 shader = ExtResource("1_v1l31")
 shader_parameter/model_atlas = ExtResource("2_ait3i")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 6
-shader_parameter/texture_average = Color(0.4961296, 0.47956285, 0.466106, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_average = Color(0.46818328, 0.4588491, 0.45494014, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
 shader_parameter/texture_scale = 0.25
 shader_parameter/texture_strength = 0.6
 shader_parameter/texture_roughness = 0.64
@@ -141,15 +141,15 @@ bottom_radius = 0.18
 height = 0.06
 radial_segments = 10
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_1c1g0"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_0e7on"]
 resource_name = "Steel"
 render_priority = 0
 shader = ExtResource("1_v1l31")
 shader_parameter/model_atlas = ExtResource("2_ait3i")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 6
-shader_parameter/texture_average = Color(0.4961296, 0.47956285, 0.466106, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_average = Color(0.46818328, 0.4588491, 0.45494014, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
 shader_parameter/texture_scale = 0.25
 shader_parameter/texture_strength = 0.6
 shader_parameter/texture_roughness = 0.64
@@ -164,15 +164,15 @@ bottom_radius = 0.43
 height = 0.18
 radial_segments = 12
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_0e7on"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_b51wc"]
 resource_name = "Dark"
 render_priority = 0
 shader = ExtResource("1_v1l31")
 shader_parameter/model_atlas = ExtResource("2_ait3i")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 6
-shader_parameter/texture_average = Color(0.4961296, 0.47956285, 0.466106, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_average = Color(0.46818328, 0.4588491, 0.45494014, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
 shader_parameter/texture_scale = 0.25
 shader_parameter/texture_strength = 0.6
 shader_parameter/texture_roughness = 0.64
@@ -187,15 +187,15 @@ bottom_radius = 0.18
 height = 0.06
 radial_segments = 10
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_b51wc"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_xq437"]
 resource_name = "Steel"
 render_priority = 0
 shader = ExtResource("1_v1l31")
 shader_parameter/model_atlas = ExtResource("2_ait3i")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 6
-shader_parameter/texture_average = Color(0.4961296, 0.47956285, 0.466106, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_average = Color(0.46818328, 0.4588491, 0.45494014, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
 shader_parameter/texture_scale = 0.25
 shader_parameter/texture_strength = 0.6
 shader_parameter/texture_roughness = 0.64
@@ -210,15 +210,15 @@ bottom_radius = 0.43
 height = 0.18
 radial_segments = 12
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_xq437"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ej6sp"]
 resource_name = "Dark"
 render_priority = 0
 shader = ExtResource("1_v1l31")
 shader_parameter/model_atlas = ExtResource("2_ait3i")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 6
-shader_parameter/texture_average = Color(0.4961296, 0.47956285, 0.466106, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_average = Color(0.46818328, 0.4588491, 0.45494014, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
 shader_parameter/texture_scale = 0.25
 shader_parameter/texture_strength = 0.6
 shader_parameter/texture_roughness = 0.64
@@ -233,15 +233,15 @@ bottom_radius = 0.18
 height = 0.06
 radial_segments = 10
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_ej6sp"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_uqkn1"]
 resource_name = "Steel"
 render_priority = 0
 shader = ExtResource("1_v1l31")
 shader_parameter/model_atlas = ExtResource("2_ait3i")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 6
-shader_parameter/texture_average = Color(0.4961296, 0.47956285, 0.466106, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_average = Color(0.46818328, 0.4588491, 0.45494014, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
 shader_parameter/texture_scale = 0.25
 shader_parameter/texture_strength = 0.6
 shader_parameter/texture_roughness = 0.64
@@ -256,15 +256,15 @@ bottom_radius = 0.43
 height = 0.18
 radial_segments = 12
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_uqkn1"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ni2fn"]
 resource_name = "Dark"
 render_priority = 0
 shader = ExtResource("1_v1l31")
 shader_parameter/model_atlas = ExtResource("2_ait3i")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 6
-shader_parameter/texture_average = Color(0.4961296, 0.47956285, 0.466106, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_average = Color(0.46818328, 0.4588491, 0.45494014, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
 shader_parameter/texture_scale = 0.25
 shader_parameter/texture_strength = 0.6
 shader_parameter/texture_roughness = 0.64
@@ -279,15 +279,15 @@ bottom_radius = 0.18
 height = 0.06
 radial_segments = 10
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_ni2fn"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_3sfbj"]
 resource_name = "Steel"
 render_priority = 0
 shader = ExtResource("1_v1l31")
 shader_parameter/model_atlas = ExtResource("2_ait3i")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 6
-shader_parameter/texture_average = Color(0.4961296, 0.47956285, 0.466106, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_average = Color(0.46818328, 0.4588491, 0.45494014, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
 shader_parameter/texture_scale = 0.25
 shader_parameter/texture_strength = 0.6
 shader_parameter/texture_roughness = 0.64
@@ -302,15 +302,15 @@ bottom_radius = 0.43
 height = 0.18
 radial_segments = 12
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_3sfbj"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_3j0tp"]
 resource_name = "Dark"
 render_priority = 0
 shader = ExtResource("1_v1l31")
 shader_parameter/model_atlas = ExtResource("2_ait3i")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 6
-shader_parameter/texture_average = Color(0.4961296, 0.47956285, 0.466106, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_average = Color(0.46818328, 0.4588491, 0.45494014, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
 shader_parameter/texture_scale = 0.25
 shader_parameter/texture_strength = 0.6
 shader_parameter/texture_roughness = 0.64
@@ -325,15 +325,15 @@ bottom_radius = 0.18
 height = 0.06
 radial_segments = 10
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_3j0tp"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_6f8rv"]
 resource_name = "Steel"
 render_priority = 0
 shader = ExtResource("1_v1l31")
 shader_parameter/model_atlas = ExtResource("2_ait3i")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 6
-shader_parameter/texture_average = Color(0.4961296, 0.47956285, 0.466106, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_average = Color(0.46818328, 0.4588491, 0.45494014, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
 shader_parameter/texture_scale = 0.25
 shader_parameter/texture_strength = 0.6
 shader_parameter/texture_roughness = 0.64
@@ -348,15 +348,15 @@ bottom_radius = 0.43
 height = 0.18
 radial_segments = 12
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_6f8rv"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_a3u2v"]
 resource_name = "Dark"
 render_priority = 0
 shader = ExtResource("1_v1l31")
 shader_parameter/model_atlas = ExtResource("2_ait3i")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 6
-shader_parameter/texture_average = Color(0.4961296, 0.47956285, 0.466106, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_average = Color(0.46818328, 0.4588491, 0.45494014, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
 shader_parameter/texture_scale = 0.25
 shader_parameter/texture_strength = 0.6
 shader_parameter/texture_roughness = 0.64
@@ -371,15 +371,15 @@ bottom_radius = 0.18
 height = 0.06
 radial_segments = 10
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_a3u2v"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_wn3my"]
 resource_name = "Steel"
 render_priority = 0
 shader = ExtResource("1_v1l31")
 shader_parameter/model_atlas = ExtResource("2_ait3i")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 6
-shader_parameter/texture_average = Color(0.4961296, 0.47956285, 0.466106, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_average = Color(0.46818328, 0.4588491, 0.45494014, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
 shader_parameter/texture_scale = 0.25
 shader_parameter/texture_strength = 0.6
 shader_parameter/texture_roughness = 0.64
@@ -400,15 +400,15 @@ _surfaces = [{
 "vertex_data": PackedByteArray("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AABAP2MPHkAqXI+8AABAPwAAIEApXA+9AABAP53wIUAnXI+8AABAP53wIUAnXI88AACgPzMzM0A9Ctc8AACgP72+MUA8Clc8MzOTPzMzM0BBYOU8MzOTP+mlMUBAYGU8AACgP72+MUA/Cle8MzOTP+mlMUBDYGW8AACgPzMzM0A9Cte8MzOTPzMzM0BBYOW8AACgP6mnNEA6Cle8MzOTP33ANEA9YGW8AACgP6mnNEA6Clc8MzOTP33ANEA9YGU8ZmaGPzMzM0BFtvM8ZmaGPxSNMUBEtnM8ZmaGPxSNMUBHtnO8ZmaGPzMzM0BFtvO8ZmaGP1LZNEBBtnO8ZmaGP1LZNEBBtnM8MzNzPzMzM0AlBgE9MzNzPz90MUAkBoE8MzNzPz90MUAmBoG8MzNzPzMzM0AlBgG9MzNzPyfyNEAjBoG8MzNzPyfyNEAjBoE8mplZPzMzM0AnMQg9mplZP2tbMUAmMYg8mplZP2tbMUAoMYi8mplZPzMzM0AnMQi9mplZP/sKNUAlMYi8mplZP/sKNUAlMYg8AABAPzMzM0ApXA89AABAP5ZCMUAoXI88AABAP5ZCMUAqXI+8AABAPzMzM0ApXA+9AABAP9AjNUAnXI+8AABAP9AjNUAnXI88AACgPzMzM0AAAAAAAACgP72+MUA8Clc8AACgPzMzM0A9Ctc8AACgP72+MUA/Cle8AACgPzMzM0A9Cte8AACgP6mnNEA6Cle8AACgP6mnNEA6Clc8AABAPzMzM0AAAAAAAABAPzMzM0ApXA89AABAP5ZCMUAoXI88AABAP5ZCMUAqXI+8AABAPzMzM0ApXA+9AABAP9AjNUAnXI+8AABAP9AjNUAnXI88/3//fwCAAID/f/9/AIAAgP9//38AgACA/3//fwCAAID//////38AgP//////fwCA//////9/AID//////38AgP//AIAAgP+///8AgACA/7///wCAAID/v///AIAAgP+/AAAAgP9//78AAACA/3//vwAAAID/f/+/AAAAgP9//78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCAAAAAAP+/AIAAAAAA/78AgAAAAAD/vwCAAAAAAP+//3//fwCAAID/f/9/AIAAgP9//38AgACA/3//fwCAAID//////38AgP//////fwCA//////9/AID//////38AgP//AIAAgP+///8AgACA/7///wCAAID/v///AIAAgP+/AAAAgP9//78AAACA/3//vwAAAID/f/+/AAAAgP9//78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCAAAAAAP+/AIAAAAAA/78AgAAAAAD/vwCAAAAAAP+//3//fwCAAID/f/9/AIAAgP9//38AgACA/3//fwCAAID//////38AgP//////fwCA//////9/AID//////38AgP//AIAAgP+///8AgACA/7///wCAAID/v///AIAAgP+/AAAAgP9//78AAACA/3//vwAAAID/f/+/AAAAgP9//78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCAAAAAAP+/AIAAAAAA/78AgAAAAAD/vwCAAAAAAP+//3//fwCAAIDctf9/v1abo/9//38AgACA3LX/f79Wm6Oa4P9/7GJFu5rg/3/sYkW7//9jnxKdRrv//2OfEp1Gu///Iso/qZuj//8iyj+pm6P//////38AgP//////fwCAAAAiyr9Wm6MAACLKv1abowAAY5/sYka7AABjn+xiRrtjH/9/EZ1Gu2Mf/38RnUa7Ikr/f0CpnKMiSv9/QKmco/9//38AgACA3LX/f79Wm6Oa4P9/7GJFu///Y58SnUa7//8iyj+pm6P//////38AgAAAIsq/VpujAABjn+xiRrtjH/9/EZ1GuyJK/39AqZyj/3//fwCAAIDctf9/v1abo5rg/3/sYkW7//9jnxKdRrv//yLKP6mbo///////fwCAAAAiyr9Wm6MAAGOf7GJGu2Mf/38RnUa7Ikr/f0CpnKP/f/9/AIAAgNy1/3+/VpujmuD/f+xiRbv//2OfEp1Gu///Iso/qZuj//////9/AIAAACLKv1abowAAY5/sYka7Yx//fxGdRrsiSv9/QKmco/9//38AgACA3LX/f79Wm6Oa4P9/7GJFu///Y58SnUa7//8iyj+pm6P//////38AgAAAIsq/VpujAABjn+xiRrtjH/9/EZ1GuyJK/39AqZyjAID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCAAAAAAP+/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///L/TOCHoHgr2H+VhWroZ2BH9DwO3a1M4IAgMx9HoGdgeEvTRdVoeCvnwEYPjW0///L/TOCHoHgr2H+VhWroZ2BH9DwO3a1M4IAgMx9HoGdgeEvTRdVoeCvnwEYPjW0///L/TOCHoHgr2H+VhWroZ2BH9DwO3a1M4IAgMx9HoGdgeEvTRdVoeCvnwEYPjW0///L/TOCHoHgr2H+VhWroZ2BH9DwO3a1//8AgACA/7///wCAAID/v///AIAAgP+///8AgACA/7///wCAAID/v///AIAAgP+///8AgACA/78AAACA/3//vwAAAID/f/+/AAAAgP9//78AAACA/3//vwAAAID/f/+/AAAAgP9//78AAACA/3//vzOCAIDMfR6BnYHhL00XVaEzggCAzH0egZ2B4S9NF1Wh4K+fARg+NbTgr58BGD41tP//y/0zgh6B///L/TOCHoHgr2H+VhWroeCvYf5WFauhnYEf0PA7drWdgR/Q8Dt2tTOCAIDMfR6BnYHhL00XVaHgr58BGD41tP//y/0zgh6B4K9h/lYVq6GdgR/Q8Dt2tTOCAIDMfR6BnYHhL00XVaHgr58BGD41tP//y/0zgh6B4K9h/lYVq6GdgR/Q8Dt2tTOCAIDMfR6BnYHhL00XVaHgr58BGD41tP//y/0zgh6B4K9h/lYVq6GdgR/Q8Dt2tTOCAIDMfR6BnYHhL00XVaHgr58BGD41tP//y/0zgh6B4K9h/lYVq6GdgR/Q8Dt2tf//AIAAgP+///8AgACA/7///wCAAID/v///AIAAgP+///8AgACA/7///wCAAID/v///AIAAgP+/AAAAgP9//78AAACA/3//vwAAAID/f/+/AAAAgP9//78AAACA/3//vwAAAID/f/+/AAAAgP9//78zggCAzH0egZ2B4S9NF1WhM4IAgMx9HoGdgeEvTRdVoeCvnwEYPjW04K+fARg+NbT//8v9M4Iegf//y/0zgh6B4K9h/lYVq6Hgr2H+VhWroZ2BH9DwO3a1nYEf0PA7drUzggCAzH0egZ2B4S9NF1Wh4K+fARg+NbT//8v9M4IegeCvYf5WFauhnYEf0PA7drUzggCAzH0egZ2B4S9NF1Wh4K+fARg+NbT//8v9M4IegeCvYf5WFauhnYEf0PA7drUzggCAzH0egZ2B4S9NF1Wh4K+fARg+NbT//8v9M4IegeCvYf5WFauhnYEf0PA7drUzggCAzH0egZ2B4S9NF1Wh4K+fARg+NbT//8v9M4IegeCvYf5WFauhnYEf0PA7drX//wCAAID/v///AIAAgP+///8AgACA/7///wCAAID/v///AIAAgP+///8AgACA/7///wCAAID/vwAAAID/f/+/AAAAgP9//78AAACA/3//vwAAAID/f/+/AAAAgP9//78AAACA/3//vwAAAID/f/+/")
 }]
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_wn3my"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_aw7cs"]
 resource_name = "Dark"
 render_priority = 0
 shader = ExtResource("1_v1l31")
 shader_parameter/model_atlas = ExtResource("2_ait3i")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 6
-shader_parameter/texture_average = Color(0.4961296, 0.47956285, 0.466106, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_average = Color(0.46818328, 0.4588491, 0.45494014, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
 shader_parameter/texture_scale = 0.25
 shader_parameter/texture_strength = 0.6
 shader_parameter/texture_roughness = 0.64
@@ -429,15 +429,15 @@ _surfaces = [{
 "vertex_data": PackedByteArray("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Yx9jn412dbFiH5xgjXaIzmIfnGCNdojOIUrdNTlHn9QhSt01OUef1P5/AAAAAP+/3LXcNThHX6ub4JtgjXZ1sZvgY5+NdojO3LUiyjhHn9T/f///AAD/vyJKIso4R1+rYx9jn412dbFiH5xgjXaIziFK3TU5R5/U/n8AAAAA/7/ctdw1OEdfq5vgm2CNdnWxm+Bjn412iM7ctSLKOEef1P9///8AAP+/IkoiyjhHX6tjH2OfjXZ1sWIfnGCNdojOIUrdNTlHn9T+fwAAAAD/v9y13DU4R1+rm+CbYI12dbGb4GOfjXaIzty1Iso4R5/U/3///wAA/78iSiLKOEdfq2MfY5+NdnWxYh+cYI12iM4hSt01OUef1P5/AAAAAP+/3LXcNThHX6ub4JtgjXZ1sZvgY5+NdojO3LUiyjhHn9T/f///AAD/vyJKIso4R1+rYx9jn412dbFiH5xgjXaIziFK3TU5R5/U/38AgP9/AID/fwCA/38AgP9/AID/fwCA/38AgP9/AID/fwCA/38AgP9/AID/fwCA/38AgP9/AID/fwCA/38AgP9/AID/fwCA/38AgP9/AID/fwCA/38AgP7/////fwCA/v////9/AID+/////38AgP7/////fwCA/v////9/AID+/////38AgP7/////fwCA/v////9/AID+/////38AgP7/////fwCA/v////9/AID+fwAAAAD/v9y13DU4R1+r/n8AAAAA/7/ctdw1OEdfq5vgm2CNdnWxm+CbYI12dbGb4GOfjXaIzpvgY5+NdojO3LUiyjhHn9TctSLKOEef1P9///8AAP+//3///wAA/78iSiLKOEdfqyJKIso4R1+rYx9jn412dbFjH2OfjXZ1sWIfnGCNdojOYh+cYI12iM4hSt01OUef1CFK3TU5R5/U/n8AAAAA/7/ctdw1OEdfq5vgm2CNdnWxm+Bjn412iM7ctSLKOEef1P9///8AAP+/IkoiyjhHX6tjH2OfjXZ1sWIfnGCNdojOIUrdNTlHn9T+fwAAAAD/v9y13DU4R1+rm+CbYI12dbGb4GOfjXaIzty1Iso4R5/U/3///wAA/78iSiLKOEdfq2MfY5+NdnWxYh+cYI12iM4hSt01OUef1P5/AAAAAP+/3LXcNThHX6ub4JtgjXZ1sZvgY5+NdojO3LUiyjhHn9T/f///AAD/vyJKIso4R1+rYx9jn412dbFiH5xgjXaIziFK3TU5R5/U/n8AAAAA/7/ctdw1OEdfq5vgm2CNdnWxm+Bjn412iM7ctSLKOEef1P9///8AAP+/IkoiyjhHX6tjH2OfjXZ1sWIfnGCNdojOIUrdNTlHn9T/fwCA/38AgP9/AID/fwCA/38AgP9/AID/fwCA/38AgP9/AID/fwCA/38AgP9/AID/fwCA/38AgP9/AID/fwCA/38AgP9/AID/fwCA/38AgP9/AID/fwCA/v////9/AID+/////38AgP7/////fwCA/v////9/AID+/////38AgP7/////fwCA/v////9/AID+/////38AgP7/////fwCA/v////9/AID+/////38AgP9//38AgACA/3//fwCAAID/f/9/AIAAgP9//38AgACA//////9/AID//////38AgP//////fwCA//////9/AID//wCAAID/v///AIAAgP+///8AgACA/7///wCAAID/vwAAAID/f/+/AAAAgP9//78AAACA/3//vwAAAID/f/+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgAAAAAD/vwCAAAAAAP+/AIAAAAAA/78AgAAAAAD/v/5/AAAAAP+/3LXcNThHX6v+fwAAAAD/v9y13DU4R1+rm+CbYI12dbGb4JtgjXZ1sZvgY5+NdojOm+Bjn412iM7ctSLKOEef1Ny1Iso4R5/U/3///wAA/7//f///AAD/vyJKIso4R1+rIkoiyjhHX6tjH2OfjXZ1sWMfY5+NdnWxYh+cYI12iM5iH5xgjXaIziFK3TU5R5/UIUrdNTlHn9T+fwAAAAD/v9y13DU4R1+rm+CbYI12dbGb4GOfjXaIzty1Iso4R5/U/3///wAA/78iSiLKOEdfq2MfY5+NdnWxYh+cYI12iM4hSt01OUef1P5/AAAAAP+/3LXcNThHX6ub4JtgjXZ1sZvgY5+NdojO3LUiyjhHn9T/f///AAD/vyJKIso4R1+rYx9jn412dbFiH5xgjXaIziFK3TU5R5/U/n8AAAAA/7/ctdw1OEdfq5vgm2CNdnWxm+Bjn412iM7ctSLKOEef1P9///8AAP+/IkoiyjhHX6tjH2OfjXZ1sWIfnGCNdojOIUrdNTlHn9T+fwAAAAD/v9y13DU4R1+rm+CbYI12dbGb4GOfjXaIzty1Iso4R5/U/3///wAA/78iSiLKOEdfq2MfY5+NdnWxYh+cYI12iM4hSt01OUef1P9/AID/fwCA/38AgP9/AID/fwCA/38AgP9/AID/fwCA/38AgP9/AID/fwCA/38AgP9/AID/fwCA/38AgP9/AID/fwCA/38AgP9/AID/fwCA/38AgP9/AID+/////38AgP7/////fwCA/v////9/AID+/////38AgP7/////fwCA/v////9/AID+/////38AgP7/////fwCA/v////9/AID+/////38AgP7/////fwCA/n8AAAAA/7/ctdw1OEdfq/5/AAAAAP+/3LXcNThHX6ub4JtgjXZ1sZvgm2CNdnWxm+Bjn412iM6b4GOfjXaIzty1Iso4R5/U3LUiyjhHn9T/f///AAD/v/9///8AAP+/IkoiyjhHX6siSiLKOEdfq2MfY5+NdnWxYx9jn412dbFiH5xgjXaIzmIfnGCNdojOIUrdNTlHn9QhSt01OUef1P5/AAAAAP+/3LXcNThHX6ub4JtgjXZ1sZvgY5+NdojO3LUiyjhHn9T/f///AAD/vyJKIso4R1+rYx9jn412dbFiH5xgjXaIziFK3TU5R5/U/n8AAAAA/7/ctdw1OEdfq5vgm2CNdnWxm+Bjn412iM7ctSLKOEef1P9///8AAP+/IkoiyjhHX6tjH2OfjXZ1sWIfnGCNdojOIUrdNTlHn9T+fwAAAAD/v9y13DU4R1+rm+CbYI12dbGb4GOfjXaIzty1Iso4R5/U/3///wAA/78iSiLKOEdfq2MfY5+NdnWxYh+cYI12iM4hSt01OUef1P5/AAAAAP+/3LXcNThHX6ub4JtgjXZ1sZvgY5+NdojO3LUiyjhHn9T/f///AAD/vyJKIso4R1+rYx9jn412dbFiH5xgjXaIziFK3TU5R5/U/38AgP9/AID/fwCA/38AgP9/AID/fwCA/38AgP9/AID/fwCA/38AgP9/AID/fwCA/38AgP9/AID/fwCA/38AgP9/AID/fwCA/38AgP9/AID/fwCA/38AgP7/////fwCA/v////9/AID+/////38AgP7/////fwCA/v////9/AID+/////38AgP7/////fwCA/v////9/AID+/////38AgP7/////fwCA/v////9/AID/f/9/AIAAgP9//38AgACA/3//fwCAAID/f/9/AIAAgP//////fwCA//////9/AID//////38AgP//////fwCA//8AgACA/7///wCAAID/v///AIAAgP+///8AgACA/78AAACA/3//vwAAAID/f/+/AAAAgP9//78AAACA/3//vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AIAAAAAA/78AgAAAAAD/vwCAAAAAAP+/AIAAAAAA/7//f/9/AIAAgP9//38AgACA/3//fwCAAID/f/9/AIAAgP//////fwCA//////9/AID//////38AgP//////fwCA//8AgACA/7///wCAAID/v///AIAAgP+///8AgACA/78AAACA/3//vwAAAID/f/+/AAAAgP9//78AAACA/3//vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCA//8AAP+/AIAAAAAA/78AgAAAAAD/vwCAAAAAAP+/AIAAAAAA/78=")
 }]
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_aw7cs"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_dhrtd"]
 resource_name = "Ochre"
 render_priority = 0
 shader = ExtResource("1_v1l31")
 shader_parameter/model_atlas = ExtResource("2_ait3i")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 6
-shader_parameter/texture_average = Color(0.4961296, 0.47956285, 0.466106, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_average = Color(0.46818328, 0.4588491, 0.45494014, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
 shader_parameter/texture_scale = 0.25
 shader_parameter/texture_strength = 0.6
 shader_parameter/texture_roughness = 0.64
@@ -458,15 +458,15 @@ _surfaces = [{
 "vertex_data": PackedByteArray("MzOzvzMzkz8+ClfAMzOzPzMzkz8+ClfAMzOzv5qZWT8+ClfAMzOzP5qZWT8+ClfAMzOzPzMzkz9cj2LAMzOzvzMzkz9cj2LAMzOzP5qZWT9cj2LAMzOzv5qZWT9cj2LAMzOzPzMzkz8+ClfAMzOzPzMzkz9cj2LAMzOzP5qZWT8+ClfAMzOzP5qZWT9cj2LAMzOzvzMzkz9cj2LAMzOzvzMzkz8+ClfAMzOzv5qZWT9cj2LAMzOzv5qZWT8+ClfAMzOzPzMzkz8+ClfAMzOzvzMzkz8+ClfAMzOzPzMzkz9cj2LAMzOzvzMzkz9cj2LAMzOzv5qZWT8+ClfAMzOzP5qZWT8+ClfAMzOzv5qZWT9cj2LAMzOzP5qZWT9cj2LAMzOzvzMzkz9cj2JAMzOzPzMzkz9cj2JAMzOzv5qZWT9cj2JAMzOzP5qZWT9cj2JAMzOzPzMzkz8+CldAMzOzvzMzkz8+CldAMzOzP5qZWT8+CldAMzOzv5qZWT8+CldAMzOzPzMzkz9cj2JAMzOzPzMzkz8+CldAMzOzP5qZWT9cj2JAMzOzP5qZWT8+CldAMzOzvzMzkz8+CldAMzOzvzMzkz9cj2JAMzOzv5qZWT8+CldAMzOzv5qZWT9cj2JAMzOzPzMzkz9cj2JAMzOzvzMzkz9cj2JAMzOzPzMzkz8+CldAMzOzvzMzkz8+CldAMzOzv5qZWT9cj2JAMzOzP5qZWT9cj2JAMzOzv5qZWT8+CldAMzOzP5qZWT8+CldA/3//fwCAAID/f/9/AIAAgP9//38AgACA/3//fwCAAID//////38AgP//////fwCA//////9/AID//////38AgP//AIAAgP+///8AgACA/7///wCAAID/v///AIAAgP+/AAAAgP9//78AAACA/3//vwAAAID/f/+/AAAAgP9//78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCAAAAAAP+/AIAAAAAA/78AgAAAAAD/vwCAAAAAAP+//3//fwCAAID/f/9/AIAAgP9//38AgACA/3//fwCAAID//////38AgP//////fwCA//////9/AID//////38AgP//AIAAgP+///8AgACA/7///wCAAID/v///AIAAgP+/AAAAgP9//78AAACA/3//vwAAAID/f/+/AAAAgP9//78AgP//AAD/vwCA//8AAP+/AID//wAA/78AgP//AAD/vwCAAAAAAP+/AIAAAAAA/78AgAAAAAD/vwCAAAAAAP+/")
 }]
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_dhrtd"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_hhu73"]
 resource_name = "Ivory"
 render_priority = 0
 shader = ExtResource("1_v1l31")
 shader_parameter/model_atlas = ExtResource("2_ait3i")
 shader_parameter/texture_enabled = true
 shader_parameter/material_layer = 6
-shader_parameter/texture_average = Color(0.4961296, 0.47956285, 0.466106, 1)
-shader_parameter/snow_average = Color(0.75129884, 0.76942265, 0.8085315, 1)
+shader_parameter/texture_average = Color(0.46818328, 0.4588491, 0.45494014, 1)
+shader_parameter/snow_average = Color(0.7692058, 0.79777867, 0.84984684, 1)
 shader_parameter/texture_scale = 0.25
 shader_parameter/texture_strength = 0.6
 shader_parameter/texture_roughness = 0.64
@@ -491,96 +491,96 @@ _surfaces = [{
 
 [node name="TrainWheel" type="MeshInstance3D" parent="." unique_id=1817457177 groups=["train_wheel"]]
 transform = Transform3D(-4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0, 1, -1.17, 0.43, -2.8)
-material_override = SubResource("ShaderMaterial_ait3i")
+material_override = SubResource("ShaderMaterial_6px86")
 mesh = SubResource("CylinderMesh_ait3i")
 
 [node name="WheelHub" type="MeshInstance3D" parent="TrainWheel" unique_id=2114148379]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0)
-material_override = SubResource("ShaderMaterial_6px86")
+material_override = SubResource("ShaderMaterial_8o4y7")
 mesh = SubResource("CylinderMesh_6px86")
 
 [node name="TrainWheel2" type="MeshInstance3D" parent="." unique_id=773441535 groups=["train_wheel"]]
 transform = Transform3D(-4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0, 1, 1.17, 0.43, -2.8)
-material_override = SubResource("ShaderMaterial_8o4y7")
+material_override = SubResource("ShaderMaterial_mitp6")
 mesh = SubResource("CylinderMesh_8o4y7")
 
 [node name="WheelHub" type="MeshInstance3D" parent="TrainWheel2" unique_id=1587444687]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.12, 0)
-material_override = SubResource("ShaderMaterial_mitp6")
+material_override = SubResource("ShaderMaterial_blkk4")
 mesh = SubResource("CylinderMesh_mitp6")
 
 [node name="TrainWheel3" type="MeshInstance3D" parent="." unique_id=1747625486 groups=["train_wheel"]]
 transform = Transform3D(-4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0, 1, -1.17, 0.43, -1.8)
-material_override = SubResource("ShaderMaterial_blkk4")
+material_override = SubResource("ShaderMaterial_xnaas")
 mesh = SubResource("CylinderMesh_blkk4")
 
 [node name="WheelHub" type="MeshInstance3D" parent="TrainWheel3" unique_id=893114038]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0)
-material_override = SubResource("ShaderMaterial_xnaas")
+material_override = SubResource("ShaderMaterial_1c1g0")
 mesh = SubResource("CylinderMesh_xnaas")
 
 [node name="TrainWheel4" type="MeshInstance3D" parent="." unique_id=1407711499 groups=["train_wheel"]]
 transform = Transform3D(-4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0, 1, 1.17, 0.43, -1.8)
-material_override = SubResource("ShaderMaterial_1c1g0")
+material_override = SubResource("ShaderMaterial_0e7on")
 mesh = SubResource("CylinderMesh_1c1g0")
 
 [node name="WheelHub" type="MeshInstance3D" parent="TrainWheel4" unique_id=1572681208]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.12, 0)
-material_override = SubResource("ShaderMaterial_0e7on")
+material_override = SubResource("ShaderMaterial_b51wc")
 mesh = SubResource("CylinderMesh_0e7on")
 
 [node name="TrainWheel5" type="MeshInstance3D" parent="." unique_id=1050993024 groups=["train_wheel"]]
 transform = Transform3D(-4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0, 1, -1.17, 0.43, 1.8)
-material_override = SubResource("ShaderMaterial_b51wc")
+material_override = SubResource("ShaderMaterial_xq437")
 mesh = SubResource("CylinderMesh_b51wc")
 
 [node name="WheelHub" type="MeshInstance3D" parent="TrainWheel5" unique_id=777016161]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0)
-material_override = SubResource("ShaderMaterial_xq437")
+material_override = SubResource("ShaderMaterial_ej6sp")
 mesh = SubResource("CylinderMesh_xq437")
 
 [node name="TrainWheel6" type="MeshInstance3D" parent="." unique_id=1254537300 groups=["train_wheel"]]
 transform = Transform3D(-4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0, 1, 1.17, 0.43, 1.8)
-material_override = SubResource("ShaderMaterial_ej6sp")
+material_override = SubResource("ShaderMaterial_uqkn1")
 mesh = SubResource("CylinderMesh_ej6sp")
 
 [node name="WheelHub" type="MeshInstance3D" parent="TrainWheel6" unique_id=1636201835]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.12, 0)
-material_override = SubResource("ShaderMaterial_uqkn1")
+material_override = SubResource("ShaderMaterial_ni2fn")
 mesh = SubResource("CylinderMesh_uqkn1")
 
 [node name="TrainWheel7" type="MeshInstance3D" parent="." unique_id=1246006068 groups=["train_wheel"]]
 transform = Transform3D(-4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0, 1, -1.17, 0.43, 2.8)
-material_override = SubResource("ShaderMaterial_ni2fn")
+material_override = SubResource("ShaderMaterial_3sfbj")
 mesh = SubResource("CylinderMesh_ni2fn")
 
 [node name="WheelHub" type="MeshInstance3D" parent="TrainWheel7" unique_id=1332648175]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0)
-material_override = SubResource("ShaderMaterial_3sfbj")
+material_override = SubResource("ShaderMaterial_3j0tp")
 mesh = SubResource("CylinderMesh_3sfbj")
 
 [node name="TrainWheel8" type="MeshInstance3D" parent="." unique_id=2033425034 groups=["train_wheel"]]
 transform = Transform3D(-4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0, 1, 1.17, 0.43, 2.8)
-material_override = SubResource("ShaderMaterial_3j0tp")
+material_override = SubResource("ShaderMaterial_6f8rv")
 mesh = SubResource("CylinderMesh_3j0tp")
 
 [node name="WheelHub" type="MeshInstance3D" parent="TrainWheel8" unique_id=2092144915]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.12, 0)
-material_override = SubResource("ShaderMaterial_6f8rv")
+material_override = SubResource("ShaderMaterial_a3u2v")
 mesh = SubResource("CylinderMesh_6f8rv")
 
 [node name="Steel" type="MeshInstance3D" parent="." unique_id=1712530995]
-material_override = SubResource("ShaderMaterial_a3u2v")
+material_override = SubResource("ShaderMaterial_wn3my")
 mesh = SubResource("ArrayMesh_a3u2v")
 
 [node name="Dark" type="MeshInstance3D" parent="." unique_id=21557678]
-material_override = SubResource("ShaderMaterial_wn3my")
+material_override = SubResource("ShaderMaterial_aw7cs")
 mesh = SubResource("ArrayMesh_wn3my")
 
 [node name="Ochre" type="MeshInstance3D" parent="." unique_id=1618845859]
-material_override = SubResource("ShaderMaterial_aw7cs")
+material_override = SubResource("ShaderMaterial_dhrtd")
 mesh = SubResource("ArrayMesh_aw7cs")
 
 [node name="Ivory" type="MeshInstance3D" parent="." unique_id=950450277]
-material_override = SubResource("ShaderMaterial_dhrtd")
+material_override = SubResource("ShaderMaterial_hhu73")
 mesh = SubResource("ArrayMesh_dhrtd")

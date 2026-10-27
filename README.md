@@ -2,8 +2,9 @@
 
 ## Active project: Godot 3D
 
-**V4** contains the current Godot game, audit fixes, textured scenery and
-vegetation, graphics settings and revised driving UI. APK generation is
+**V5** adds natural surface materials, rounded rocks and mountains, clearer
+physical tyre channels, and refreshed editor geometry. See the
+[V5 material notes](godot/assets/textures/NATURAL_MATERIALS_V2.md). APK generation is
 temporarily paused: the user reports that the existing APKs do not work.
 Use the Godot editor to run this version; Android runtime issues remain open.
 

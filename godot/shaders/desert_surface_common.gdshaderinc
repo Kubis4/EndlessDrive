@@ -3,7 +3,7 @@ uniform bool surface_data_enabled = false;
 uniform vec2 route_origin = vec2(0.0);
 uniform sampler2DArray surface_atlas : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
 uniform sampler2D micro_height : filter_linear_mipmap_anisotropic, repeat_enable;
-uniform float detail_strength : hint_range(0.0, 1.0) = 0.22;
+uniform float detail_strength : hint_range(0.0, 1.0) = 0.85;
 varying vec3 world_position;
 varying vec4 materials_a;
 varying vec4 materials_b;
@@ -27,7 +27,7 @@ vec3 surface_tile(vec2 p, vec2 tile, vec3 average) {
 	uv = mix(vec2(0.004), vec2(0.996), uv);
 	vec3 sampled = max(texture(surface_atlas, vec3(uv, tile.x + tile.y * 2.0)).rgb, vec3(0.001));
 	vec3 texel = OUTPUT_IS_SRGB ? sampled : pow(sampled, vec3(0.454545));
-	return clamp(texel / average, vec3(0.65), vec3(1.35));
+	return clamp(texel / average, vec3(0.55), vec3(1.45));
 }
 void vertex() {
 	world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
@@ -92,7 +92,9 @@ void fragment() {
 	photographic = mix(vec3(detail_luma), photographic, 0.55);
 	float height_detail = 0.5;
 	if (TERRAIN_DETAIL_TIER == 2) height_detail = dot(texture(micro_height, p * 0.125), detail_weights);
-	float detail_fade = 1.0 - smoothstep(0.025, 0.16, pixel);
+	// Mipmaps retain material structure at the driving camera distance.
+	// Fade only sub-pixel relief, not the entire photographic surface.
+	float detail_fade = 1.0 - smoothstep(0.12, 0.65, pixel);
 	float fine_fade = 1.0 - smoothstep(0.02, 0.10, pixel);
 	float broad = noise(p * 0.12);
 	float medium = broad;
@@ -105,9 +107,12 @@ void fragment() {
 	vec3 color = mix(COLOR.rgb, vec3(0.50, 0.44, 0.36), bare_earth);
 	// Distant sand reads as a continuous dune, not a repeated crumpled sheet.
 	// Keep the high-resolution source for close-up grains and other materials.
-	// Sand is the style reference for every biome: quiet photographic
-	// contrast and broad colour masses rather than shimmering grit.
-	float sand_detail = dot(detail_weights, vec4(0.18, 0.28, 0.30, 0.22));
+	// Smooth asphalt/ice and snow must not inherit gravel sparkle or sand
+	// ripples merely because they share a packed source texture channel.
+	float sand_detail = sand * 0.42 + snow * 0.10 + salt * 0.24
+		+ gravel * 0.64 + rock * 0.62 + dirt * 0.64 + mud * 0.50
+		+ grass * 0.46 + asphalt * 0.15 + concrete * 0.24
+		+ clay * 0.50 + leaves * 0.50 + ice * 0.06;
 	color *= mix(vec3(1.0), photographic, detail_strength * detail_fade * sand_detail);
 	color *= 1.0 + (height_detail - 0.5) * 0.06 * detail_fade * sand_detail;
 	// Small wind ripples belong only to sand; dirt, grass and rock use their
@@ -142,7 +147,8 @@ void fragment() {
 	float edge_line = 1.0 - smoothstep(0.06, 0.15, abs(lateral - 3.65));
 	color = mix(color, vec3(0.77, 0.72, 0.54), max(center_line, edge_line) * asphalt * 0.65);
 	color *= texture_value;
-	color *= 1.0 - smoothstep(0.01, 0.24, max(soil_delta, 0.0)) * 0.10;
+	// Darken actual compressed channels, never an independent painted track.
+	color *= 1.0 - smoothstep(0.01, 0.24, max(soil_delta, 0.0)) * 0.22;
 	color *= 1.0 - wet * (0.12 * dirt + 0.15 * clay + 0.20 * asphalt + 0.13 * rock + 0.08 * sand + 0.18 * leaves + 0.15 * grass);
 	float bump = (medium - 0.5) * (gravel * 0.008 + rock * 0.01 + mud * 0.008 + leaves * 0.006);
 	vec3 relief = vec3(bump, 0.0, -bump * 0.7);
@@ -155,11 +161,18 @@ void fragment() {
 		vec3 r2 = cross(NORMAL, dFdx(VERTEX));
 		float determinant = dot(dFdx(VERTEX), r1);
 		vec3 gradient = (r1 * dFdx(height_detail) + r2 * dFdy(height_detail)) * sign(determinant) / max(abs(determinant), 0.00001);
-		float relief_depth = dot(detail_weights, vec4(0.0005, 0.0006, 0.0004, 0.0002));
-		NORMAL = normalize(NORMAL - gradient * relief_depth * detail_fade);
+		float relief_depth = sand * 0.003 + snow * 0.001 + salt * 0.002
+			+ gravel * 0.006 + rock * 0.006 + dirt * 0.004 + mud * 0.004
+			+ grass * 0.002 + asphalt * 0.0005 + concrete * 0.001
+			+ clay * 0.003 + leaves * 0.003;
+		// Cosmetic millimetre detail is applied AFTER the physical rut normal.
+		// Never displace vertices here: render and collision share one soil mesh.
+		vec3 micro_relief = gradient * relief_depth * (1.0 - smoothstep(0.025, 0.12, pixel));
+		micro_relief /= max(1.0, length(micro_relief) / 0.28);
+		NORMAL = normalize(NORMAL - micro_relief);
 	}
 	color = mix(vec3(dot(color, vec3(0.2126, 0.7152, 0.0722))), color, 0.68);
 	ALBEDO = pow(max(color, vec3(0.0)), vec3(2.2));
-	ROUGHNESS = clamp(0.96 - wet * (mud * 0.35 + asphalt * 0.42 + rock * 0.22 + leaves * 0.20 + grass * 0.15) - ice * 0.46, 0.35, 1.0);
+	ROUGHNESS = clamp(0.94 + (height_detail - 0.5) * 0.12 - wet * (mud * 0.35 + asphalt * 0.42 + rock * 0.22 + leaves * 0.20 + grass * 0.15) - ice * 0.46, 0.35, 1.0);
 	SPECULAR = 0.18 + ice * 0.20 + wet * 0.12;
 }

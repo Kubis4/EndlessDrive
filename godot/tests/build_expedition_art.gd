@@ -15,7 +15,12 @@ func _run() -> void:
 	assets["tunnel_portal"] = Art.tunnel()
 	assets["tunnel_rib"] = Art.tunnel(false)
 	assets["rail_portal"] = Art.rail_portal()
+	var rocks_only := OS.get_cmdline_user_args().has("--only-rocks")
+	if rocks_only: assets["mesa_rock"] = DesertModels.rock()
 	for key: String in assets:
+		if rocks_only and key not in ["mountain_ridge", "alpine_peak", "rocky_peak", "snowy_peak", "mesa_rock"]:
+			assets[key].free()
+			continue
 		if OS.get_cmdline_user_args().has("--only-peaks") and key not in ["rocky_peak", "snowy_peak"]:
 			assets[key].free()
 			continue
@@ -23,14 +28,14 @@ func _run() -> void:
 		_own(node, node)
 		var scene := PackedScene.new()
 		var error := scene.pack(node)
-		if error == OK: error = ResourceSaver.save(scene, OUTPUT + key + ".tscn")
+		if error == OK: error = ResourceSaver.save(scene, ("res://assets/models/" if key == "mesa_rock" else OUTPUT) + key + ".tscn")
 		node.free()
 		if error != OK:
 			push_error("Cannot save expedition model: " + key)
 			quit(1)
 			return
 		print("BUILT expedition model: ", key)
-	if not OS.get_cmdline_user_args().has("--only-peaks"): _gallery()
+	if not OS.get_cmdline_user_args().has("--only-peaks") and not rocks_only: _gallery()
 	quit()
 func _own(node: Node, scene_root: Node) -> void:
 	for child in node.get_children():

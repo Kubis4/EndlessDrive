@@ -18,6 +18,11 @@ func _run() -> void:
 			var p := Vector3(x + side.x * wheel * 0.96, 0, z + side.y * wheel * 0.96)
 			for pass_index in 8: world.terrain.deformation.compact(p, world.terrain.sample(p.x, p.z), 1, forward, 0.25)
 	world._create_chunk(4)
+	# Streaming schedules restored soil refinement for later frames. This
+	# offline builder must commit it before detaching/saving the terrain,
+	# otherwise the preview contains coarse slivers instead of tyre channels.
+	for band in DriveTerrainBake.BAND_COUNT:
+		world._update_rut_band(world.chunks[4], band)
 	var source: Node3D = world.chunks[4].get_node("SandAndTracks")
 	var scene := Node3D.new()
 	scene.name = "DeformationReferencePreview"

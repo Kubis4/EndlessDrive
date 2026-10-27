@@ -1,8 +1,8 @@
 extends SceneTree
 ## Packs the original generated PNG into independent, mipmapped texture layers.
 ## Odd-sized image-generation output is cropped per cell, never upscaled.
-const SOURCE := "res://assets/textures/expedition-materials-v1.png"
-const OUTPUT := "res://assets/textures/expedition-materials-v1.res"
+const SOURCE := "res://assets/textures/expedition-materials-v2.png"
+const OUTPUT := "res://assets/textures/expedition-materials-v2.res"
 func _initialize() -> void:
 	# Dummy/headless rendering cannot read back Texture2DArray image data
 	# during ResourceSaver serialization. Never silently save an empty atlas.
@@ -35,7 +35,7 @@ func _initialize() -> void:
 	var atlas := Texture2DArray.new()
 	var error := atlas.create_from_images(layers)
 	if error == OK:
-		atlas.resource_name = "Expedition_Painted_Materials_v1"
+		atlas.resource_name = "Expedition_Natural_Materials_v2"
 		atlas.set_meta("layer_means", means)
 		atlas.set_meta("source_png", SOURCE)
 		atlas.set_meta("layer_names", ["sandstone", "granite", "bark", "foliage", "timber", "masonry", "painted_metal", "snow"])

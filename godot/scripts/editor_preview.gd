@@ -9,6 +9,7 @@ extends Node3D
 @export_tool_button("Obnoviť terén zo skriptov", "Reload") var refresh_preview: Callable = _refresh_preview
 var _builder_pid := -1
 var _previous_modified := 0
+var _watch_elapsed := 0.0
 
 func _refresh_preview() -> void:
 	if not Engine.is_editor_hint() or geometry_path.is_empty() or _builder_pid > 0: return
@@ -21,32 +22,45 @@ func _refresh_preview() -> void:
 		"--output=" + geometry_path]), false)
 	set_process(_builder_pid > 0)
 
-func _process(_dt: float) -> void:
-	if not Engine.is_editor_hint() or _builder_pid <= 0: return
+func _process(dt: float) -> void:
+	if not Engine.is_editor_hint() or geometry_path.is_empty(): return
+	if _builder_pid <= 0:
+		# A rebuilt .scn does not replace meshes already instantiated in the
+		# editor. Reload generated geometry as well as the hot-reloaded shader.
+		_watch_elapsed += dt
+		if _watch_elapsed < 1.0: return
+		_watch_elapsed = 0.0
+		if FileAccess.get_modified_time(geometry_path) != _previous_modified:
+			_reload_geometry()
+		return
 	if OS.is_process_running(_builder_pid): return
 	_builder_pid = -1
-	set_process(false)
 	if FileAccess.get_modified_time(geometry_path) <= _previous_modified:
 		push_error("Generovanie náhľadu zlyhalo. Skontroluj Output; pôvodný náhľad zostal zachovaný.")
 		return
-	var packed := ResourceLoader.load(geometry_path, "PackedScene", ResourceLoader.CACHE_MODE_REPLACE) as PackedScene
+	_reload_geometry()
+
+func _reload_geometry() -> void:
+	# Include external mesh/model dependencies: a cached source scene can
+	# otherwise put old pointed peaks back into an updated snapshot.
+	var packed := ResourceLoader.load(geometry_path, "PackedScene", ResourceLoader.CACHE_MODE_IGNORE_DEEP) as PackedScene
 	if packed == null:
 		push_error("Náhľad sa nepodarilo obnoviť: " + geometry_path)
 		return
+	var geometry := packed.instantiate()
 	var previous := get_node_or_null("GeneratedTerrain")
 	if previous != null:
 		remove_child(previous)
 		previous.queue_free()
-	var geometry := packed.instantiate()
 	add_child(geometry)
 	geometry.owner = get_tree().edited_scene_root
 	_preview_shadows(geometry)
-	var editor := Engine.get_singleton("EditorInterface")
-	if editor != null: editor.get_resource_filesystem().scan()
+	_previous_modified = FileAccess.get_modified_time(geometry_path)
 
 func _ready() -> void:
 	if Engine.is_editor_hint():
-		set_process(false)
+		set_process(not geometry_path.is_empty())
+		if not geometry_path.is_empty(): _reload_geometry.call_deferred()
 		_preview_shadows(self)
 		return
 	hide()

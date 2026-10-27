@@ -1,6 +1,6 @@
 extends RefCounted
 ## Real image textures for the expedition set; no mesh rebuilding is required.
-const ATLAS := "res://assets/textures/expedition-materials-v1.res"
+const ATLAS := "res://assets/textures/expedition-materials-v2.res"
 const SHADER := "res://shaders/expedition_surface.gdshader"
 const LAYERS := {
 	"stone": 0, "stone_light": 5, "stone_dark": 5, "snow": 7,
@@ -19,7 +19,7 @@ static func configure(material: ShaderMaterial, key: String, model_name := "") -
 	var layer := int(LAYERS.get(key, 6))
 	if key == "stone" and model_name in ["alpine_peak", "snowy_peak"]: layer = 1
 	if key == "stone_light" and model_name == "freight_wagon": layer = 6
-	var scales := [0.0625, 0.0625, 0.28, 0.20, 0.24, 0.32, 0.25, 0.13]
+	var scales := [0.125, 0.125, 0.28, 0.20, 0.24, 0.32, 0.25, 0.13]
 	var means: Array = atlas.get_meta("layer_means")
 	material.set_shader_parameter("model_atlas", atlas)
 	material.set_shader_parameter("texture_enabled", key != "glass")

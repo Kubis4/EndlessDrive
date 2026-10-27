@@ -1,5 +1,9 @@
 # Expedition model textures
 
+The active set is now [Natural materials V2](NATURAL_MATERIALS_V2.md), with
+photographic-style surfaces and rounded rocks. The V1 assets below are retained
+as historical sources; the texture builder now packs V2.
+
 Generated on 26 October 2026 with the built-in image generation tool (imagegen
 skill), then copied into this project. No API key or generation service is
 needed to open, edit or play the saved project.

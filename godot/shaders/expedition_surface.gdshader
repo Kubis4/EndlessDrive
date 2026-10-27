@@ -36,8 +36,8 @@ void fragment() {
 	weights /= max(dot(weights, vec3(1.0)), 0.001);
 	// Leaves remain readable close up but their many small silhouettes must
 	// not become one-pixel grain at the normal driving-camera distance.
-	float fade_start = material_layer == 3 ? 0.018 : 0.06;
-	float fade_end = material_layer == 3 ? 0.12 : 0.25;
+	float fade_start = material_layer == 3 ? 0.04 : 0.18;
+	float fade_end = material_layer == 3 ? 0.25 : 0.9;
 	float texture_fade = 1.0 - smoothstep(fade_start, fade_end, length(fwidth(local_position)));
 	vec3 snow_detail = vec3(1.0);
 	float wear = 0.5;
@@ -53,8 +53,18 @@ void fragment() {
 	}
 	float cap = smoothstep(0.32, 0.78, local_normal.y) * snow_cover;
 	color = mix(color, vec3(0.60, 0.66, 0.65) * snow_detail, cap * 0.9);
+	// Small material relief on the actual surface; no parallax or silhouette
+	// displacement that could separate the visible rock from its collision.
+	vec3 r1 = cross(dFdy(VERTEX), NORMAL);
+	vec3 r2 = cross(NORMAL, dFdx(VERTEX));
+	float det = dot(dFdx(VERTEX), r1);
+	vec3 gradient = (r1 * dFdx(wear) + r2 * dFdy(wear)) * sign(det) / max(abs(det), 0.00001);
+	float depth = material_layer == 3 || material_layer == 6 ? 0.006 : 0.045;
+	vec3 relief = gradient * depth * texture_fade * (1.0 - cap * 0.7);
+	relief /= max(1.0, length(relief) / 0.3);
+	NORMAL = normalize(NORMAL - relief);
 	ALBEDO = color;
-	ROUGHNESS = texture_enabled ? clamp(mix(roughness_value, texture_roughness, 0.45) + (wear - 0.5) * 0.035, 0.3, 1.0) : roughness_value;
+	ROUGHNESS = texture_enabled ? clamp(mix(roughness_value, texture_roughness, 0.7) + (wear - 0.5) * 0.16, 0.3, 1.0) : roughness_value;
 	METALLIC = metallic_value;
 	SPECULAR = 0.18;
 }
