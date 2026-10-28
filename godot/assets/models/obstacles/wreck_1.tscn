@@ -1,0 +1,32 @@
+[gd_scene format=3]
+
+[ext_resource type="ArrayMesh" path="res://assets/models/wrecks/wreck_1_sm_asset_03.res" id="1_4u1ms"]
+[ext_resource type="ArrayMesh" path="res://assets/models/wrecks/wreck_1_sm_ivy_10.res" id="2_fjsvc"]
+[ext_resource type="ArrayMesh" path="res://assets/models/wrecks/wreck_1_sm_ivy_11.res" id="3_rx4oy"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_8uwnn"]
+size = Vector3(4.3, 1.1, 1.9)
+
+[node name="Wreck" type="Node3D" unique_id=1629804250]
+metadata/obstacle_kind = "wreck"
+
+[node name="SuppliedWreck1" type="Node3D" parent="." unique_id=1282677854]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
+
+[node name="SM_asset_03" type="MeshInstance3D" parent="SuppliedWreck1" unique_id=2143872455]
+transform = Transform3D(100, 0, 0, 0, -1.1920929e-05, 99.99999, 0, -99.99999, -1.1920929e-05, 9.536743e-07, 1.2257533e-07, 2.9243529e-06)
+mesh = ExtResource("1_4u1ms")
+
+[node name="SM_ivy_10" type="MeshInstance3D" parent="SuppliedWreck1" unique_id=858799697]
+transform = Transform3D(100, 0, 0, 0, -1.1920929e-05, 99.99999, 0, -99.99999, -1.1920929e-05, -0.80098295, 3.0138926e-07, 1.4207253)
+mesh = ExtResource("2_fjsvc")
+
+[node name="SM_ivy_11" type="MeshInstance3D" parent="SuppliedWreck1" unique_id=1888860281]
+transform = Transform3D(100, 0, 0, 0, -1.1920929e-05, 99.99999, 0, -99.99999, -1.1920929e-05, -0.80098295, 3.0138926e-07, 1.4207253)
+mesh = ExtResource("3_rx4oy")
+
+[node name="Collision" type="StaticBody3D" parent="." unique_id=1303614145]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, 0)
+
+[node name="@CollisionShape3D@3" type="CollisionShape3D" parent="Collision" unique_id=1420609016]
+shape = SubResource("BoxShape3D_8uwnn")

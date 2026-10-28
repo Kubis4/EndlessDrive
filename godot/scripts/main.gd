@@ -26,6 +26,7 @@ var _ephemeral := false
 var _focus_pause_enabled := true
 var _camera_focus := Vector3.ZERO
 var _camera_grade_offset := 0.0
+var _terrain_camera_lift := 0.0
 var active_building_id := -1
 var menu: DriveMenu
 var _in_menu := false
@@ -336,7 +337,6 @@ func _action(action: String) -> void:
 			_session_started = true
 			menu.hide_menu()
 			hud.visible = true
-			get_tree().paused = false
 			var previous_seed: int = run.world_seed
 			profile.best_distance = maxf(profile.best_distance, run.distance)
 			if not _ephemeral: profile.store()
@@ -358,12 +358,13 @@ func _action(action: String) -> void:
 					menu.show_menu(false, 0)
 					menu.set_loading(0.08)
 					await get_tree().process_frame
+					# Reset the previous floating origin before rebuilding at the start.
+					route_origin = Vector3.ZERO
+					position = Vector3.ZERO
+					world.set_route_origin(Vector3.ZERO)
 					world.configure(run.world_seed)
+					world.clock = 0.0
 					await _prepare_starting_terrain(0)
-					menu.set_loading(1.0)
-					menu.hide_menu()
-					hud.visible = true
-					get_tree().paused = false
 			world.async_streaming = not _ephemeral
 			vehicle.run = run
 			vehicle.configure_vehicle(run.vehicle_id)
@@ -384,6 +385,10 @@ func _action(action: String) -> void:
 			hud.show_modal("")
 			_rebase_world(true)
 			_update_camera(1.0, true)
+			menu.set_loading(1.0)
+			menu.hide_menu()
+			hud.visible = true
+			get_tree().paused = false
 			_save(false)
 			startup_ready = true
 			startup_finished.emit()
@@ -509,6 +514,7 @@ func _open_menu(save_before: bool = true) -> void:
 	hud.visible = false
 	_in_menu = true
 	menu.set_parts(run.parts)
+	menu.set_menu_vehicle(run.vehicle_id if _had_save or _session_started else profile.selected_vehicle, Color(run.paint_color), run.body_damage if _had_save or _session_started else 0.0)
 	menu.best_distance = maxf(profile.best_distance, run.distance)
 	menu.show_menu(_had_save or _session_started, run.distance)
 	get_tree().paused = true
@@ -523,6 +529,7 @@ func _menu_action(action: String) -> void:
 		var previous := profile.selected_vehicle
 		profile.selected_vehicle = id
 		if not _ephemeral and profile.store() != OK: profile.selected_vehicle = previous
+		if not _had_save and not _session_started: menu.set_menu_vehicle(profile.selected_vehicle, Color(run.paint_color))
 		_show_upgrades()
 		return
 	if action == "deposit":
@@ -763,6 +770,13 @@ func _update_camera(dt: float, instant: bool = false) -> void:
 	var wanted_grade := clampf((ahead - behind) * 0.8, -4.0, 4.0)
 	_camera_grade_offset = wanted_grade if instant else lerpf(_camera_grade_offset, wanted_grade, 1.0 - exp(-3.0 * dt))
 	camera.position.y += _camera_grade_offset
+	world.probe_terrain_visibility(to_global(camera.position), vehicle)
+	var lift_target := 1.0 if world._terrain_blocks_road else 0.0
+	_terrain_camera_lift = lift_target if instant else lerpf(_terrain_camera_lift, lift_target, 1.0 - exp(-(4.0 if lift_target > 0.0 else 1.5) * dt))
+	var horizontal_scale := 1.0 - _terrain_camera_lift * 0.8
+	camera.position.x = _camera_focus.x + overview_offset.x * horizontal_scale
+	camera.position.z = _camera_focus.z + overview_offset.z * horizontal_scale
+	camera.position.y += 50.0 * _terrain_camera_lift
 	camera.look_at(to_global(_camera_focus), Vector3.UP)
 	var zoom: float = overview_size * _camera_preference * [1.0, 0.76, 1.3][_camera_mode]
 	camera.size = zoom if instant else lerpf(camera.size, zoom, 1.0 - exp(-5.0 * dt))

@@ -1,0 +1,39 @@
+[gd_scene format=3]
+
+[ext_resource type="ArrayMesh" path="res://assets/models/wrecks/wreck_0_sm_asset_04.res" id="1_x1dvo"]
+[ext_resource type="ArrayMesh" path="res://assets/models/wrecks/wreck_0_sm_ivy_00.res" id="2_00d81"]
+[ext_resource type="ArrayMesh" path="res://assets/models/wrecks/wreck_0_sm_ivy_05.res" id="3_ba6um"]
+[ext_resource type="ArrayMesh" path="res://assets/models/wrecks/wreck_0_sm_ivy_06.res" id="4_73qro"]
+[ext_resource type="ArrayMesh" path="res://assets/models/wrecks/wreck_0_sm_ivy_07.res" id="5_norrd"]
+[ext_resource type="ArrayMesh" path="res://assets/models/wrecks/wreck_0_sm_ivy_08.res" id="6_x0jbe"]
+[ext_resource type="ArrayMesh" path="res://assets/models/wrecks/wreck_0_sm_ivy_09.res" id="7_44eju"]
+
+[node name="SuppliedWreck0" type="Node3D" unique_id=1528658252]
+
+[node name="SM_asset_04" type="MeshInstance3D" parent="." unique_id=703105933]
+transform = Transform3D(100, 0, 0, 0, -1.1920929e-05, 99.99999, 0, -99.99999, -1.1920929e-05, -0.012034625, -0.00739517, 0.12526539)
+mesh = ExtResource("1_x1dvo")
+
+[node name="SM_ivy_00" type="MeshInstance3D" parent="." unique_id=1137746678]
+transform = Transform3D(100, 0, 0, 0, -1.1920929e-05, 99.99999, 0, -99.99999, -1.1920929e-05, -0.8036044, -0.0073952894, -1.1639044)
+mesh = ExtResource("2_00d81")
+
+[node name="SM_ivy_05" type="MeshInstance3D" parent="." unique_id=1533596944]
+transform = Transform3D(100, 0, 0, 0, -1.1920929e-05, 99.99999, 0, -99.99999, -1.1920929e-05, -0.8036044, -0.0073952894, -1.1639044)
+mesh = ExtResource("3_ba6um")
+
+[node name="SM_ivy_06" type="MeshInstance3D" parent="." unique_id=1149160549]
+transform = Transform3D(100, 0, 0, 0, -1.1920929e-05, 99.99999, 0, -99.99999, -1.1920929e-05, 0.8412588, -0.0073949913, 1.4553432)
+mesh = ExtResource("4_73qro")
+
+[node name="SM_ivy_07" type="MeshInstance3D" parent="." unique_id=1521202090]
+transform = Transform3D(100, 0, 0, 0, -1.1920929e-05, 99.99999, 0, -99.99999, -1.1920929e-05, 0.8412588, -0.0073949913, 1.4553432)
+mesh = ExtResource("5_norrd")
+
+[node name="SM_ivy_08" type="MeshInstance3D" parent="." unique_id=844421357]
+transform = Transform3D(100, 0, 0, 0, -1.1920929e-05, 99.99999, 0, -99.99999, -1.1920929e-05, -0.7218636, -0.0073949913, 1.619513)
+mesh = ExtResource("6_x0jbe")
+
+[node name="SM_ivy_09" type="MeshInstance3D" parent="." unique_id=1273208477]
+transform = Transform3D(100, 0, 0, 0, -1.1920929e-05, 99.99999, 0, -99.99999, -1.1920929e-05, -0.7218636, -0.0073949913, 1.619513)
+mesh = ExtResource("7_44eju")

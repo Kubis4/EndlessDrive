@@ -66,6 +66,7 @@ var cargo_parts: Array[Dictionary] = []
 var wear_distance := 0.0
 var odometer := 0.0
 var mechanical_events := 0
+var body_damage := 0.0
 var last_mechanical_event := ""
 
 
@@ -220,6 +221,7 @@ func compare_part(item: Dictionary) -> String:
 
 func impact(speed_change: float) -> void:
 	var damage := clampf((speed_change - 3.0) * 0.008, 0.0, 0.25)
+	body_damage = clampf(body_damage + maxf(speed_change - 3.0, 0.0) * 0.025, 0.0, 1.0)
 	if variants.suspension == "reinforced": damage *= 0.75
 	elif variants.suspension == "comfort": damage *= 0.88
 	parts.engine = maxf(0.0, float(parts.engine) - damage * 0.5)
@@ -303,6 +305,7 @@ func open_loot(building_id: int) -> Array:
 			part_pool = ["tires", "brakes"]
 			part_count = 1
 	for kind: String in supplies:
+		if building_id != 0 and rng.randf() < 0.30: continue
 		var amount: float
 		match kind:
 			"fuel": amount = rng.randf_range(9.0, 16.0) if stop_kind == "gas" else rng.randf_range(1.5, 5.0)
@@ -311,6 +314,11 @@ func open_loot(building_id: int) -> Array:
 			"scrap": amount = rng.randi_range(4, 9) if stop_kind == "repair" else rng.randi_range(2, 6)
 			_: amount = rng.randi_range(1, 2)
 		if stop_kind in ["wreck", "cache"] and kind in FLUIDS: amount *= 0.45
+		# The small cabin and the larger station/repair building have different
+		# storage capacity; keep special caches and the tutorial unchanged.
+		if building_id > 0:
+			amount *= float({"home": 0.55, "paint": 0.7, "workshop": 0.9, "repair": 1.0, "gas": 1.1}.get(stop_kind, 1.0))
+		if building_id != 0: amount *= 0.75
 		if stop_kind == "cache" and kind == "repairkit": amount = 1
 		var quality := 1.0
 		if kind in FLUIDS:
@@ -319,6 +327,7 @@ func open_loot(building_id: int) -> Array:
 		contents.append({"uid": key + "/" + kind, "kind": kind, "amount": snappedf(amount, 0.1), "quality": quality})
 	var first := rng.randi_range(0, part_pool.size() - 1)
 	for index in part_count:
+		if building_id != 0 and rng.randf() < 0.30: continue
 		var slot: String = part_pool[(first + index) % part_pool.size()]
 		if building_id == 0:
 			slot = "engine" if index == 0 else "radiator"
@@ -518,6 +527,7 @@ func to_data(include_terrain: bool = true) -> Dictionary:
 		"terrain_deformation": terrain_deformation.duplicate(true) if include_terrain else [],
 		"run_id": run_id, "found_scrap": found_scrap, "deposited_scrap": deposited_scrap,
 		"wear_distance": wear_distance, "odometer": odometer, "mechanical_events": mechanical_events,
+		"body_damage": body_damage,
 	}
 
 
@@ -545,6 +555,7 @@ static func from_data(data: Dictionary) -> DriveRun:
 		"elapsed": [0.0, 100000000.0], "day_time": [0.0, 1.0],
 		"wear_distance": [0.0, 100000000.0], "mechanical_events": [0.0, 1000000.0],
 		"odometer": [0.0, 100000000.0],
+		"body_damage": [0.0, 1.0],
 	}
 	for key: String in limits:
 		var number: Variant = data.get(key, result.get(key))

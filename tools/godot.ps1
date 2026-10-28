@@ -73,8 +73,11 @@ switch ($Action) {
             Invoke-GodotChecked -Arguments @('--headless', '--script', 'res://tests/build_deformation_preview.gd') -LogName 'godot-refresh-deformation.log'
             Invoke-GodotChecked -Arguments @('--headless', '--script', 'res://tests/junction_gallery.gd') -LogName 'godot-refresh-junctions.log'
         } else {
-            Invoke-GodotChecked -Arguments @('--headless', '--script', 'res://tests/refresh_editor_preview.gd', '--', '--showcases') -LogName 'godot-refresh-preview.log'
+            Invoke-GodotChecked -Arguments @('--headless', '--script', 'res://tests/refresh_editor_preview.gd', '--', '--showcases', '--geometry-only') -LogName 'godot-refresh-preview.log'
+            Invoke-GodotChecked -Arguments @('--headless', '--script', 'res://tests/build_deformation_preview.gd') -LogName 'godot-refresh-deformation.log'
+            Invoke-GodotChecked -Arguments @('--headless', '--script', 'res://tests/junction_gallery.gd') -LogName 'godot-refresh-junctions.log'
         }
+        Invoke-GodotChecked -Arguments @('--headless', '--fixed-fps', '60', '--script', 'res://tests/sand_lab_checks.gd', '--', '--test-session', '--save-preview') -LogName 'godot-refresh-sand-lab.log'
     }
     'BuildArt' {
         Invoke-GodotChecked -Arguments @('--headless', '--script', 'res://tests/build_art.gd') -LogName 'godot-build-art.log'
@@ -135,6 +138,8 @@ switch ($Action) {
             if ('vehicle_outline_checks' -notin $Suites -and -not $PSBoundParameters.ContainsKey('Suites')) { $Suites = @('vehicle_outline_checks') + $Suites }
             if (-not $PSBoundParameters.ContainsKey('Suites')) { $Suites += 'road_surface_checks' }
             if (-not $PSBoundParameters.ContainsKey('Suites')) { $Suites += 'ground_surface_checks' }
+            if (-not $PSBoundParameters.ContainsKey('Suites')) { $Suites += 'sand_lab_drift_checks' }
+            if (-not $PSBoundParameters.ContainsKey('Suites')) { $Suites += 'sand_lab_physics_checks' }
             if (-not $PSBoundParameters.ContainsKey('Suites')) { $Suites += 'track_edge_checks', 'vehicle_selection_checks', 'save_checks' }
             foreach ($suite in $Suites) {
                 # Suite identifiers may include version digits (e.g. v3_world_checks).

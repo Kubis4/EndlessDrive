@@ -1,7 +1,7 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://scripts/menu.gd" id="1_fe2o3"]
-[ext_resource type="Texture2D" path="res://assets/ui/menu/paper-road.png" id="4_paper_road"]
+[ext_resource type="Texture2D" path="res://assets/ui/menu/paper-road-empty.png" id="4_paper_road"]
 [ext_resource type="Script" path="res://scripts/car_diagram.gd" id="2_1g8jr"]
 
 [ext_resource type="PackedScene" path="res://scenes/ui/vehicle_choices.tscn" id="3_vehicles"]

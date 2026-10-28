@@ -13,6 +13,12 @@ vrátane modelov v pamäti. Tlačidlo **Obnoviť terén zo skriptov** na uzle
 `EditorTerrainPreview` náhľad znovu vygeneruje; `RefreshPreview` obnovuje všetkých
 deväť prostredí. Poloha a mierka rodičovského uzla sa pri obnove zachovajú.
 
+Cestné vraky v oboch variantoch otvor v `scenes/world/wrecks_preview.tscn`;
+ich upraviteľné samostatné scény sú `assets/models/obstacles/wreck.tscn` a
+`wreck_1.tscn`. Príkaz `tools/godot.ps1 RefreshPreview` aktualizuje aj galériu
+križovatiek, referenciu deformácie a pieskové laboratórium, bez prepisovania
+ručne upravených hlavných, používateľských a obalových scén.
+
 ## 3D scéna, kamera a auto
 
 Rozhranie variantu C nájdeš v `scenes/ui/expedition_hud.tscn` a v hlavnej
@@ -53,16 +59,23 @@ náhľade nemení generátor nekonečnej mapy.
 ## Piesková testovacia scéna
 
 Otvor `scenes/sand_lab.tscn` a stlač **F6**. Je to samostatná plocha čistého
-piesku s reálnym autom 4×4. Nemení uloženú expedíciu. V editore vidíš uložený
+piesku s Jeepom 4×4 a kamerou sledujúcou auto. Nemení uloženú expedíciu. V editore vidíš uložený
 náhľad koľají z automatického jazdného testu; po F6 začínaš na čistom piesku.
 
 - **WASD / šípky**: jazda.
 - **R** alebo tlačidlo Vrátiť auto: návrat na štart so zachovaním koľají.
 - **C**: vyčistiť piesok a vrátiť auto.
 - **P**: zapnúť/vypnúť spray piesku.
+- **O**: obnoviť polohu testovacích debien, sudov a nájazdu.
 
 Kreslené stopy sú odstránené z ovládania a vypnuté aj v hlavnej hre; ich
-zásobník sa nealokuje. Spray je v laboratóriu predvolene vypnutý. Ryhy tvorí
+zásobník sa nealokuje. Spray je v laboratóriu predvolene zapnutý. Na sypkom
+piesku má laboratórne auto pri vyššej rýchlosti menšiu bočnú priľnavosť a môže
+prejsť do kontrolovateľného šmyku. Toto nastavenie nemení jazdu v expedícii.
+Laboratórium používa priestorové zrná namiesto plošného prachového oblaku;
+jemné častice sú balistické a obmedzený fond 40 väčších kúskov má fyzikálnu
+kolíziu s terénom. Debny a sudy sú dynamické telesá, nájazd a blok sú pevné.
+Ryhy tvorí
 samotná geometria vrátane kolízie: fyzická mriežka 25 cm, priehlbiny maximálne 20 cm
 a vytlačené okraje maximálne 8,5 cm. Opakované prejazdy ich prehlbujú až po
 tento limit. Dno a vytlačené okraje majú plynulý profil. Iba prejdené diely
@@ -82,16 +95,20 @@ simulačný krok 1/60 s, nie headless renderer. Výsledky sú v
 `build/sand-lab-benchmark.json`; ide o porovnávací výkon na danom PC, nie
 garanciu mobilných FPS. Nastavenie VSync mení iba proces benchmarku.
 
-Meranie 25. 10. 2026 na RTX 3070 (Compatibility): približne 220 FPS pri jazde
-bez sprayu a 209 FPS so sprayom, 95. percentil času snímky 15,74 ms so sprayom.
-Výsledok je uložený v `build/sand-lab-benchmark-final-spray.json`.
-Jemnejšia geometria je náročnejšia než predchádzajúca hrubá mriežka
-(približne 238 FPS so starým prachom); mobil ešte nebol meraný.
+Staršie meranie 28. 10. 2026 na RTX 3070 (Compatibility, 1280 × 720), pred
+pridaním fyzických kúskov piesku a testovacích objektov: približne
+213 FPS pri jazde bez sprayu a 195 FPS so sprayom; 95. percentil času snímky
+so sprayom bol 15,4 ms. Ide o krátky laboratórny scenár, mobil ešte nebol meraný.
+Výsledok je v `build/sand-lab-benchmark-reference.json`.
+Po pridaní objektov a fyzických kúskov ukázal rovnaký PC test približne
+186 FPS pri jazde s pieskom a 95. percentil 15,8 ms; mobil nebol meraný.
+Výsledok je v `build/sand-lab-benchmark-physical.json`.
 
 Overenie: `tests/sand_lab_checks.gd` testuje jazdu, lokálnosť deformácie,
 kolíziu a zachovanie vzhľadu starých častíc. Bez `--headless` uloží aj snímky
 do `build/sand-lab-deformation.png` a `build/sand-lab-dust.png`. Voliteľný
-argument `--save-preview` obnoví generovaný náhľad pre editor.
+argument `--save-preview` obnoví generovaný náhľad pre editor. Test
+`tests/sand_lab_drift_checks.gd` porovnáva bočný šmyk pri rovnakom manévri.
 
 Nový pieskový spray platí aj v hlavnej hre: na koleso má najviac 192 drobných
 3D zrniek, 24 väčších kúskov a 28 malých prachových častíc. Jemný prach používa

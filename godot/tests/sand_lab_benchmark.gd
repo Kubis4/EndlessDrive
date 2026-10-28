@@ -23,7 +23,7 @@ func _run() -> void:
 	var results := {}
 	for phase in (["driving"] if "--drive-only" in OS.get_cmdline_user_args() else ["idle", "driving", "dust"]):
 		lab.reset_sand()
-		if phase == "dust": lab.toggle_dust()
+		if lab.dust_enabled != (phase == "dust"): lab.toggle_dust()
 		var samples: Array[float] = []
 		var car_cpu: Array[float] = []
 		var contacts_cpu: Array[float] = []

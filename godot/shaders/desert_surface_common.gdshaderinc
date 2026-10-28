@@ -106,7 +106,11 @@ void fragment() {
 		photographic = vec3(0.0);
 		// Most fragments need one or two layers, rather than four array reads.
 		if (detail_weights.x > 0.001) photographic += surface_tile(ground_uv, 0.0, 0.67326, gradient_x, gradient_y) * detail_weights.x;
-		if (detail_weights.y > 0.001) photographic += surface_tile(ground_uv, 1.0, 0.49579, gradient_x, gradient_y) * detail_weights.y;
+		// Larger stones and lower contrast avoid a field of tiny uniform grains.
+		if (detail_weights.y > 0.001) {
+			vec3 stone = surface_tile(ground_uv * 0.5, 1.0, 0.49579, gradient_x * 0.5, gradient_y * 0.5);
+			photographic += mix(vec3(1.0), stone, 0.62) * detail_weights.y;
+		}
 		if (detail_weights.z > 0.001) photographic += surface_tile(ground_uv, 2.0, 0.45871, gradient_x, gradient_y) * detail_weights.z;
 		if (detail_weights.w > 0.001) photographic += surface_tile(ground_uv, 3.0, 0.38662, gradient_x, gradient_y) * detail_weights.w;
 	}
@@ -145,7 +149,7 @@ void fragment() {
 	float aggregate = clamp((wear.b - 0.72) * 1.8, 0.0, 0.35);
 	float loose = gravel + dirt + mud + sand + snow + concrete + ice;
 	// Every road family has its own quiet wear: blown sand, stony gravel,
-	// earth patches, wet mud and dirty blue-grey snow. No painted tyre tracks.
+	// earth patches, wet mud and dirty blue-grey snow.
 	color *= 1.0 + road_cover * ((deposits.g - 0.5) * 0.04 + (wear.r - 0.5) * 0.035) * loose;
 	float blown_sand = smoothstep(0.35, 0.72, wear.r * 0.65 + deposits.b * 0.35);
 	color = mix(color, color * vec3(1.12, 1.11, 1.08), road_cover * sand * blown_sand * 0.25);
@@ -181,6 +185,17 @@ void fragment() {
 	texture_value -= concrete * wear.a * 0.13;
 	texture_value += concrete * (medium - 0.5) * 0.05;
 	float lateral = abs(UV2.x);
+	// Weathered traces of earlier traffic follow the signed road coordinate,
+	// including bends and junction arms. They are a surface cue only; the
+	// player's own tyre ruts still deform the shared mesh and collision.
+	float track_drift = (deposits.r - 0.5) * 0.30;
+	float track_distance = abs(abs(UV2.x - track_drift) - 1.10);
+	float outer_distance = abs(abs(UV2.x + track_drift * 0.7) - 3.0);
+	float old_tracks = 1.0 - smoothstep(0.12, 0.72, track_distance);
+	float outer_tracks = 1.0 - smoothstep(0.12, 0.78, outer_distance);
+	float loose_road = clamp(sand + gravel + dirt + mud + clay + leaves + snow, 0.0, 1.0);
+	float worn_sections = mix(0.65, 1.0, smoothstep(0.18, 0.75, wear.r));
+	color *= 1.0 - (old_tracks * 0.11 + outer_tracks * 0.075) * road_cover * loose_road * worn_sections;
 	// Irregular verges use the same coverage as the physical material blend.
 	// Remove the old pair of perfectly parallel bright shoulder bands.
 	float margin = 4.0 * road_cover * (1.0 - road_cover);

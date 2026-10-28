@@ -71,7 +71,12 @@ var _confirmation_distance: Label
 var _vehicle_button: Button
 var _loading_buttons: Dictionary = {}
 var _loading_backdrop: ColorRect
+var _loading_label: Label
+var _loading_bar: ProgressBar
 var _loading_modal_title := ""
+var _vehicle_preview: SubViewportContainer
+var _vehicle_shadow: ColorRect
+var _menu_vehicle_id := "izh"
 @export_enum("Menu", "Nastavenia", "Ako hrať", "Auto", "Nová jazda", "Ukončenie", "Vylepšenia") var editor_view: int = 0:
 	set(value):
 		editor_view = value
@@ -80,6 +85,7 @@ var _loading_modal_title := ""
 
 func _ready() -> void:
 	_ensure_built()
+	if not Engine.is_editor_hint(): _setup_vehicle_preview()
 	if _vehicle_choices != null:
 		_vehicle_choices.vehicle_selected.connect(func(id: String) -> void: requested.emit("vehicle:" + id))
 	_setup_language_control()
@@ -120,16 +126,39 @@ func set_loading(progress: float, message: String = "Pripravujem cestu…") -> v
 			_loading_backdrop = ColorRect.new()
 			_loading_backdrop.name = "LoadingBackdrop"
 			_loading_backdrop.color = INK
-			_loading_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_loading_backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
 			_root.add_child(_loading_backdrop)
-			_root.move_child(_loading_backdrop, 0)
 			_loading_backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			var center := CenterContainer.new()
+			center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			_loading_backdrop.add_child(center)
+			var stack := VBoxContainer.new()
+			stack.custom_minimum_size.x = 320
+			stack.add_theme_constant_override("separation", 20)
+			center.add_child(stack)
+			var title := Label.new()
+			title.text = "ENDLESS / DRIVE"
+			title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			title.add_theme_font_size_override("font_size", 34)
+			title.add_theme_color_override("font_color", Color("e9ba68"))
+			stack.add_child(title)
+			_loading_label = Label.new()
+			_loading_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			_loading_label.add_theme_color_override("font_color", Color("b9baa9"))
+			stack.add_child(_loading_label)
+			_loading_bar = ProgressBar.new()
+			_loading_bar.custom_minimum_size.y = 6
+			_loading_bar.show_percentage = false
+			stack.add_child(_loading_bar)
+		_root.move_child(_loading_backdrop, _root.get_child_count() - 1)
 		_loading_backdrop.show()
 		if _loading_buttons.is_empty():
 			for button: BaseButton in _root.find_children("*", "BaseButton", true, false):
 				_loading_buttons[button] = button.disabled
 				button.disabled = true
 		_card_status.text = "%s  %d %%" % [tr(message), roundi(progress * 100)]
+		_loading_label.text = _card_status.text
+		_loading_bar.value = progress * 100.0
 		if _modal.visible:
 			if _loading_modal_title.is_empty(): _loading_modal_title = _modal_title.text
 			_modal_title.text = _card_status.text
@@ -332,7 +361,7 @@ func _ensure_built() -> void:
 	_root.add_child(_stage)
 	var artwork := TextureRect.new()
 	artwork.name = "PaperRoad"
-	artwork.texture = preload("res://assets/ui/menu/paper-road.png")
+	artwork.texture = preload("res://assets/ui/menu/paper-road-empty.png")
 	artwork.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	artwork.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_place(_stage, artwork, Vector2.ZERO, DESIGN)
@@ -340,6 +369,39 @@ func _ensure_built() -> void:
 	_build_modal_shell()
 	_root.hide()
 	visible = false
+
+
+func _setup_vehicle_preview() -> void:
+	var shadow := ColorRect.new()
+	_vehicle_shadow = shadow
+	shadow.name = "JourneyVehicleShadow"
+	shadow.position = Vector2(838, 585)
+	shadow.size = Vector2(200, 58)
+	shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var shader := Shader.new()
+	shader.code = "shader_type canvas_item; void fragment() { float r = length((UV - vec2(0.5)) * vec2(1.0, 2.0)); COLOR = vec4(0.035, 0.025, 0.015, (1.0 - smoothstep(0.12, 0.5, r)) * 0.48); }"
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	shadow.material = material
+	_stage.add_child(shadow)
+	_stage.move_child(shadow, 1)
+	_vehicle_preview = preload("res://scripts/menu_vehicle_preview.gd").new()
+	_vehicle_preview.name = "JourneyVehiclePreview"
+	_vehicle_preview.position = Vector2(782, 460)
+	_vehicle_preview.size = Vector2(340, 215)
+	_stage.add_child(_vehicle_preview)
+	_stage.move_child(_vehicle_preview, 2)
+
+
+func set_menu_vehicle(id: String, color: Color, damage: float = 0.0) -> void:
+	_menu_vehicle_id = id
+	if is_instance_valid(_vehicle_preview): _vehicle_preview.set_vehicle(id, color, damage)
+	var artwork := _stage.get_node_or_null("PaperRoad") as TextureRect
+	if artwork != null:
+		artwork.texture = preload("res://assets/ui/menu/paper-road-izh.png") if id == "izh" else preload("res://assets/ui/menu/paper-road-empty.png")
+	if is_instance_valid(_vehicle_preview): _vehicle_preview.visible = id != "izh"
+	if is_instance_valid(_vehicle_shadow): _vehicle_shadow.visible = id != "izh"
+	if is_instance_valid(_diagram): _diagram.vehicle_id = id
 
 
 func _layout() -> void:
@@ -517,6 +579,7 @@ func _build_garage() -> void:
 	var row := _row(28)
 	_modal_body.add_child(row)
 	_diagram = Diagram.new()
+	_diagram.vehicle_id = _menu_vehicle_id
 	_diagram.custom_minimum_size = Vector2(320, 320)
 	_diagram.update_parts(_parts, "engine")
 	_diagram.selected.connect(_select_part, CONNECT_PERSIST)

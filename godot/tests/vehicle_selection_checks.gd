@@ -30,6 +30,7 @@ func _run() -> void:
 	car.set_physics_process(false)
 	await process_frame
 	check(car._wheels.size() == 4 and is_equal_approx(car.wheel_radius, 0.33208), "Van uses four normalized rigged wheels")
+	check(car.is_wheel_driven(true) and not car.is_wheel_driven(false), "IZH drives only its front axle")
 	check(car.get_node("Contact_F_L").position.x > 1.3 and car.wheelbase < 2.7, "Wheel contacts match van geometry")
 	car.toggle_drive_mode()
 	car.toggle_differential()
@@ -46,7 +47,7 @@ func _run() -> void:
 	check(car.is_front_drive() and car._wheels.size() == 4 and car._visual.name == "Visual", "Switching back rebuilds the playable van rig")
 	var fx := DriveEffects.new()
 	root.add_child(fx)
-	check(fx.trails_enabled and fx._surface_pools.all(func(pool: Dictionary) -> bool: return pool.size() == 1), "Guide trails enabled without allocating unused particle banks")
+	check(not fx.trails_enabled and fx._tracks.multimesh.instance_count == 0 and fx._surface_pools.all(func(pool: Dictionary) -> bool: return pool.size() == 1), "Physical ruts replace decorative trails without allocating unused particle banks")
 	fx.ensure_particle_bank(1, 4)
 	check(fx._surface_pools[1].size() == 2 and fx._surface_pools[2].size() == 1, "Only the contacting wheel allocates a new material bank")
 	var track_world := RenderedRoad.new()
@@ -55,8 +56,7 @@ func _run() -> void:
 	for material in [DriveTerrain.SurfaceKind.ASPHALT, DriveTerrain.SurfaceKind.SAND, DriveTerrain.SurfaceKind.DIRT, DriveTerrain.SurfaceKind.SNOW, DriveTerrain.SurfaceKind.MUD]:
 		var surface := {"material": material, "paved": 1.0 if material == DriveTerrain.SurfaceKind.ASPHALT else 0.0, "snow": 1.0 if material == DriveTerrain.SurfaceKind.SNOW else 0.0, "color": Color("99958a")}
 		fx._stamp(Vector3(10, 0, 0), Vector3.RIGHT, surface)
-	check(fx._count == 5 and is_equal_approx((fx._track_records[0].transform as Transform3D).origin.y, 3.43), "All road families receive tracks above the rendered mesh rather than the analytic ground")
-	check((fx._track_records[0].transform as Transform3D).basis.z.length() < 0.5, "Hard-road tyre prints avoid wide displaced soil shoulders")
+	check(fx._count == 0, "No decorative tracks are created on any surface")
 	track_world.queue_free()
 	var terrain := DriveTerrain.new()
 	terrain.seed_value = 24601

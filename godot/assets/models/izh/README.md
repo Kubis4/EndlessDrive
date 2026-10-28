@@ -5,9 +5,10 @@ Native playable rig: `izh_2715.tscn`; forward is +X, left is +Z.
 Four independent wheel pivots share the Jeep animation contract. Dimensions,
 front-drive capability and collider path live in `scripts/vehicle_catalog.gd`.
 
-Body: 10,397 original triangles; each wheel: 568 triangles. No supplied bitmap
-textures or vertex colours were present. The conversion assigns paint/glass
-masks and tyre/hub colours without adding a large texture dependency.
+Body: 10,397 original triangles; each wheel: 568 triangles. The supplied albedo,
+roughness and metalness TGA files are retained in `textures/`, alongside PNG
+copies used by the materials. The conversion preserves the source UV coordinates;
+the body paint mask continues to support the in-game colour selection.
 The convex chassis is simplified offline, not rebuilt during gameplay.
 
 Rebuild: native Godot, `--headless --script res://tests/build_izh_rig.gd`.

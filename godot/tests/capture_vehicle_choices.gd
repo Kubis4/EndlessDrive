@@ -30,6 +30,14 @@ func _run() -> void:
 		for frame in 5: await process_frame
 		await RenderingServer.frame_post_draw
 		view.get_texture().get_image().save_png("res://assets/ui/vehicles/" + id + ".png")
+		# The service schematic uses the same model from directly overhead.
+		view.size = Vector2i(200, 320)
+		camera.size = 5.8
+		camera.position = Vector3(0, 9, 0)
+		camera.look_at(Vector3.ZERO, Vector3.RIGHT)
+		for frame in 5: await process_frame
+		await RenderingServer.frame_post_draw
+		view.get_texture().get_image().save_png("res://assets/ui/vehicles/" + id + "_top.png")
 		view.queue_free()
 		await process_frame
 	quit()

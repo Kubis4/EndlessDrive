@@ -1,9 +1,15 @@
-[gd_resource type="ShaderMaterial" format=3]
+[gd_resource type="ShaderMaterial" format=3 uid="uid://d2og3as20bifc"]
 
-[ext_resource type="Shader" path="res://shaders/izh_paint.gdshader" id="1_rp832"]
+[ext_resource type="Shader" uid="uid://c4q3a3c7sy4jg" path="res://shaders/izh_paint.gdshader" id="1_sei8h"]
+[ext_resource type="Texture2D" uid="uid://c8q8mphugh62x" path="res://assets/models/izh/textures/IZH-2715_albedo.png" id="2_v4y6p"]
+[ext_resource type="Texture2D" uid="uid://ntg6irbgibo4" path="res://assets/models/izh/textures/IZH-2715_metalness.png" id="3_mt53b"]
+[ext_resource type="Texture2D" uid="uid://ro0vc78mgab2" path="res://assets/models/izh/textures/IZH-2715_roughness.png" id="4_04w30"]
 
 [resource]
 resource_name = "Desert_paint"
 render_priority = 0
-shader = ExtResource("1_rp832")
-shader_parameter/tint = null
+shader = ExtResource("1_sei8h")
+shader_parameter/tint = Color(0.73, 0.73, 0.67, 1)
+shader_parameter/albedo_texture = ExtResource("2_v4y6p")
+shader_parameter/roughness_texture = ExtResource("4_04w30")
+shader_parameter/metalness_texture = ExtResource("3_mt53b")

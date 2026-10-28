@@ -8,6 +8,8 @@ const Mountains = preload("res://scripts/mountain_route.gd")
 const RoadObstacles = preload("res://scripts/road_obstacle_layout.gd")
 const SECTION := 240.0
 const REGION := 960.0
+# Both exits must meet before the tunnel's foothills begin at end + 78 m.
+const EXIT_MERGE_LENGTH := 72.0
 const VARIED_SEED_MIN := 1000001
 const BIOMES := ["Prašná kotlina", "Medený kaňon", "Vidiek", "Živý les", "Horský priesmyk", "Mokrade"]
 const SURFACES := ["Piesok", "Štrk", "Asfalt", "Hlina", "Sneh", "Štrková hrádza"]
@@ -239,8 +241,8 @@ func center_at(x: float) -> float:
 	else:
 		var exit_id := floori((x - 600.0) / REGION)
 		var end := 600.0 + exit_id * REGION
-		if junction_enabled(exit_id) and x < end + 112.0:
-			center += float(route_choices.get(str(exit_id), -1)) * 42.0 * (1.0 - smoothstep(end, end + 112.0, x))
+		if junction_enabled(exit_id) and x < end + EXIT_MERGE_LENGTH:
+			center += float(route_choices.get(str(exit_id), -1)) * 42.0 * (1.0 - smoothstep(end, end + EXIT_MERGE_LENGTH, x))
 	if _centers.size() > 4096: _centers.clear()
 	_centers[x] = center
 	return center
@@ -294,9 +296,9 @@ func corridor_center(x: float) -> float:
 	if not fork_at(x).is_empty(): return _base_center(x) + route_offset(x)
 	var exit_id := floori((x - 600.0) / REGION)
 	var end := 600.0 + exit_id * REGION
-	if junction_enabled(exit_id) and x < end + 112.0:
+	if junction_enabled(exit_id) and x < end + EXIT_MERGE_LENGTH:
 		var side := float(route_choices.get(str(exit_id), -1))
-		return center_at(x) - side * 42.0 * (1.0 - smoothstep(end, end + 112.0, x))
+		return center_at(x) - side * 42.0 * (1.0 - smoothstep(end, end + EXIT_MERGE_LENGTH, x))
 	return center_at(x)
 
 
@@ -410,9 +412,9 @@ func road_centers(x: float) -> PackedFloat32Array:
 	else:
 		var exit_id := floori((x - 600.0) / REGION)
 		var end := 600.0 + exit_id * REGION
-		if junction_enabled(exit_id) and x < end + 112.0:
+		if junction_enabled(exit_id) and x < end + EXIT_MERGE_LENGTH:
 			var side := float(route_choices.get(str(exit_id), -1))
-			var other := center - side * 84.0 * (1.0 - smoothstep(end, end + 112.0, x))
+			var other := center - side * 84.0 * (1.0 - smoothstep(end, end + EXIT_MERGE_LENGTH, x))
 			result = PackedFloat32Array([minf(center, other), maxf(center, other)])
 		else: result = PackedFloat32Array([center])
 	if _junction_centers.size() > 4096: _junction_centers.clear()
@@ -795,7 +797,9 @@ func sample(x: float, z: float, include_water: bool = true, visual_blend: bool =
 			style = junction_style(exit_id)
 			var lanes := road_centers(x)
 			var middle := (float(lanes[0]) + float(lanes[-1])) * 0.5
-			upper_amount = 1.0 - smoothstep(-10.0, 10.0, z - middle) if lanes.size() > 1 else (1.0 if int(route_choices.get(str(exit_id), -1)) < 0 else 0.0)
+			var selected_upper := 1.0 if int(route_choices.get(str(exit_id), -1)) < 0 else 0.0
+			upper_amount = 1.0 - smoothstep(-10.0, 10.0, z - middle) if lanes.size() > 1 else selected_upper
+			upper_amount = lerpf(upper_amount, selected_upper, smoothstep(end + EXIT_MERGE_LENGTH * 0.5, end + EXIT_MERGE_LENGTH, x))
 	if not style.is_empty():
 		branch_layers[int(style.upper_material)] += upper_amount
 		branch_layers[int(style.lower_material)] += 1.0 - upper_amount
@@ -812,16 +816,18 @@ func sample(x: float, z: float, include_water: bool = true, visual_blend: bool =
 		drag = lerpf(drag, lerpf(0.55, 0.0, branch_paved), branch_amount)
 		paved = lerpf(paved, branch_paved, branch_amount)
 		if branch_amount > 0.5: surface = MATERIAL_NAMES[branch_material]
-	if not mountain_at(x).is_empty():
+	var mountain := mountain_at(x)
+	if not mountain.is_empty():
+		var mountain_mix := smoothstep(float(mountain.start), float(mountain.start) + 45.0, x) * (1.0 - smoothstep(float(mountain.end) - 45.0, float(mountain.end), x))
 		branch_material = SurfaceKind.GRAVEL
-		branch_amount = 1.0
+		branch_amount = mountain_mix
 		branch_layers.fill(0.0)
 		branch_layers[SurfaceKind.GRAVEL] = 1.0
-		paved = 0.0
-		color = ROAD[1]
-		grip = 0.92
-		drag = 0.45
-		surface = "Horská šotolina"
+		paved = lerpf(paved, 0.0, mountain_mix)
+		color = color.lerp(ROAD[1], mountain_mix)
+		grip = lerpf(grip, 0.92, mountain_mix)
+		drag = lerpf(drag, 0.45, mountain_mix)
+		if mountain_mix > 0.5: surface = "Horská šotolina"
 	var water := water_depth(x, z) if include_water else 0.0
 	var alpine := lerpf(1.0 if a == 4 else 0.0, 1.0 if b == 4 else 0.0, t)
 	# Ploughed/compacted gravel follows the valley. Snow builds up on high

@@ -59,8 +59,49 @@ var _retiring_chunks: Dictionary = {}
 var _wire_mesh: CylinderMesh
 var _obstacle_models: Dictionary = {}
 var _boundary_models: Dictionary = {}
+var _supplied_rocks: Dictionary = {}
 var graphics_quality := 2
 var woodland_scenery_attempts := 88
+var _terrain_visibility_probe_ms := 0
+var _terrain_blocks_road := false
+
+
+func road_visibility(camera: Camera3D, vehicle: DriveVehicle, radius: float = 6.5) -> Dictionary:
+	var pixels := get_viewport().get_visible_rect().size
+	var points: Array[Vector2] = []
+	var depths: Array[float] = []
+	for dx: float in [-12.0, 18.0]:
+		var x := vehicle.position.x + dx
+		var lanes := terrain.road_centers(x)
+		var z := float(lanes[0])
+		for lane: float in lanes:
+			if absf(lane - vehicle.position.z) < absf(z - vehicle.position.z): z = lane
+		var p := to_global(Vector3(x, height_at(x, z) + 0.2, z))
+		points.append(camera.unproject_position(p) / pixels)
+		depths.append(camera.to_local(p).z)
+	return {"road_view_start": points[0], "road_view_end": points[1],
+		"road_view_radius": radius / maxf(camera.size, 1.0), "road_view_aspect": pixels.x / maxf(pixels.y, 1.0),
+		"road_view_height": vehicle.global_position.y, "road_view_depth_start": depths[0], "road_view_depth_end": depths[1]}
+
+
+func probe_terrain_visibility(origin: Vector3, vehicle: DriveVehicle) -> void:
+	# Test the ordinary camera position even while the camera is raised, so it
+	# can return smoothly once the terrain no longer blocks the road.
+	if Time.get_ticks_msec() >= _terrain_visibility_probe_ms:
+		_terrain_visibility_probe_ms = Time.get_ticks_msec() + 150
+		_terrain_blocks_road = false
+		var ahead_x := vehicle.position.x + 8.0
+		var ahead_z := float(terrain.road_frame(ahead_x, vehicle.position.z).center)
+		var targets := [vehicle.global_position + Vector3.UP * 0.7, to_global(Vector3(ahead_x, height_at(ahead_x, ahead_z) + 0.7, ahead_z))]
+		for target: Vector3 in targets:
+			var query := PhysicsRayQueryParameters3D.create(origin, target)
+			query.exclude = [vehicle.get_rid()]
+			var hit := get_world_3d().direct_space_state.intersect_ray(query)
+			if not hit.is_empty():
+				var body := hit.collider as Node
+				if body != null and body.get_parent() != null and body.get_parent().name == "SandAndTracks" and (hit.position as Vector3).distance_to(target) > 1.2:
+					_terrain_blocks_road = true
+					break
 
 
 func set_graphics_quality(level: int) -> void:
@@ -99,10 +140,15 @@ func _ready() -> void:
 	for kind: String in TrackEdges.KINDS:
 		for suffix: String in ["", "_snow"]:
 			_boundary_models[kind + suffix] = load("res://assets/models/boundary/" + kind + suffix + ".tscn")
+	for family: String in ["plain", "mossy", "snowy", "desert"]:
+		for variant in range(1, 5):
+			_supplied_rocks[family + str(variant)] = load("res://assets/models/supplied_environment/rock_%s_%d.tscn" % [family, variant])
 	for kind: String in ["fallen_tree", "wreck", "rubble", "barrier"]:
 		_obstacle_models[kind] = load("res://assets/models/obstacles/" + kind + ".tscn")
+	_obstacle_models["wreck_1"] = load("res://assets/models/obstacles/wreck_1.tscn")
 	for key: String in ["adobe_workshop", "saguaro", "desert_scrub", "mesa_rock", "utility_pole", "ranch_fence", "water_tower", "road_delineator"]:
 		_models[key] = load("res://assets/models/" + key + ".tscn")
+	_models["mesa_rock"] = _supplied_rocks["desert1"]
 	for kind: String in DriveStops.KINDS:
 		_stop_scenes[kind] = load("res://assets/models/stops/" + kind + ".tscn")
 	_stop_scenes["start"] = load("res://scenes/world/start_camp.tscn")
@@ -110,6 +156,8 @@ func _ready() -> void:
 
 func configure(value: int) -> void:
 	_stop_worker()
+	_terrain_visibility_probe_ms = 0
+	_terrain_blocks_road = false
 	_epoch += 1
 	_pending.clear()
 	_jobs.clear()
@@ -417,14 +465,6 @@ func find_shelter(pose: Vector3, max_distance: float = 300.0, ahead_only: bool =
 		if distance < best:
 			best = distance
 			found = {"position": pos, "title": "Cestný prístrešok", "extent": Vector3(4.8, 3.4, 4.8), "distance": distance}
-	for building: Dictionary in buildings.values():
-		if str(building.kind) not in ["workshop", "repair", "paint"]: continue
-		var pos: Vector3 = building.position
-		if ahead_only and pos.x < pose.x - 8.0: continue
-		var distance := Vector2(pos.x - pose.x, pos.z - pose.z).length()
-		if distance < best:
-			best = distance
-			found = {"position": pos, "title": str(building.title), "extent": Vector3(4.5, 3.5, 3.3), "distance": distance}
 	return found
 
 
@@ -433,14 +473,6 @@ func is_sheltered(pose: Vector3) -> bool:
 		if not is_ancestor_of(refuge) or not refuge.is_inside_tree(): continue
 		var pos := to_local((refuge as Node3D).global_position)
 		if absf(pose.x - pos.x) < 4.4 and absf(pose.z - pos.z) < 4.4 and pose.y >= pos.y - 0.6 and pose.y < pos.y + 3.2: return true
-	for building: Dictionary in buildings.values():
-		if str(building.kind) not in ["workshop", "repair", "paint"]: continue
-		var pos: Vector3 = building.position
-		var delta := pose - pos
-		# Authored garage roof is 10.5 x 7.5m, open bay 4.8m wide.
-		if absf(delta.x) < 4.5 and absf(delta.z) < 3.3 and delta.y > -0.6 and delta.y < 3.5: return true
-		var front := delta.z * -signf(float(building.get("offset", -18.0)))
-		if absf(delta.x) < 2.8 and front > 3.3 and front < 5.2 and delta.y > -0.6 and delta.y < 2.9: return true
 	return false
 
 
@@ -548,11 +580,11 @@ func _create_chunk(index: int, baked: Dictionary = {}) -> void:
 				else: hazard.build(), chunk, "hazard.build")
 		var region := maxi(0, int(floor(start / 960.0)))
 		var source := supply_source(region)
-		if float(source.x) >= start and float(source.x) < start + CHUNK_LENGTH:
+		if region % 2 == 0 and float(source.x) >= start and float(source.x) < start + CHUNK_LENGTH:
 			_schedule(func() -> void:
 				if is_instance_valid(chunk): _create_supply_source(chunk, source), chunk, "_create_supply_source")
 		var obstacle_x := region * 960.0 + 270.0
-		if obstacle_x >= start and obstacle_x < start + CHUNK_LENGTH:
+		if region % 2 == 0 and obstacle_x >= start and obstacle_x < start + CHUNK_LENGTH:
 			_schedule(func() -> void:
 				if not is_instance_valid(chunk): return
 				var crate := load("res://scripts/road_debris.gd").new() as RigidBody3D
@@ -588,7 +620,9 @@ func _plan_road_obstacles(chunk: Node3D, start: float) -> void:
 				_schedule(_place_road_obstacle.bind(chunk, site), chunk, "road_obstacle")
 
 func _place_road_obstacle(chunk: Node3D, site: Dictionary) -> void:
-	var model := (_obstacle_models[str(site.kind)] as PackedScene).instantiate() as Node3D
+	var prefab := str(site.kind)
+	if prefab == "wreck" and posmod(floori(float(site.id) / 2.0), 2) == 1: prefab = "wreck_1"
+	var model := (_obstacle_models[prefab] as PackedScene).instantiate() as Node3D
 	model.name = "RoadObstacle_%d_%s" % [int(site.id), str(site.kind)]
 	model.position = site.position
 	model.basis = site.basis
@@ -598,6 +632,10 @@ func _place_road_obstacle(chunk: Node3D, site: Dictionary) -> void:
 		model.basis = (site.tree_basis as Basis).scaled(Vector3.ONE * float(site.tree_scale))
 	model.set_meta("obstacle_site", site)
 	model.add_to_group("road_obstacle", true)
+	if site.kind == "wreck":
+		model.set_meta("loot_id", -4000000 - int(site.id))
+		model.set_meta("loot_title", "Opustený vrak")
+		model.add_to_group("scavenge_debris", true)
 	chunk.add_child(model)
 	_add_anchor(model, "tree" if site.kind == "fallen_tree" else "rock", Vector3.UP * 0.65)
 	if batch_scenery: _batch_visuals(model, chunk)
@@ -802,14 +840,15 @@ func _create_scenery_prop(chunk: Node3D, start: float, count: int, random_seed: 
 	var contacts: PackedVector3Array = chunk.get_meta("vegetation_contacts", PackedVector3Array())
 	contacts.append(pos)
 	chunk.set_meta("vegetation_contacts", contacts)
-	if local_biome == 5:
+	if count % 7 == 0:
+		_place_supplied_rock(chunk, pos, local_biome, count, Vector3(1.8, 0.9, 1.2) * scale_value, yaw)
+	elif local_biome == 5:
 		var reeds := BiomeModels.reeds(chunk, pos, scale_value, yaw)
 		if batch_scenery: _batch_visuals(reeds, chunk)
 	elif local_biome in [2, 3, 4]:
 		var plant := BiomeModels.undergrowth(chunk, pos, scale_value, yaw, local_biome == 3)
 		if batch_scenery: _batch_visuals(plant, chunk)
 	elif local_biome < 2 and count % 4 == 0: _place_model(chunk, "saguaro", pos, Vector3.ONE * scale_value * 0.8, yaw)
-	elif count % 7 == 0: _place_model(chunk, "mesa_rock", pos, Vector3(1.8, 0.7, 1.2) * scale_value, x)
 	else: _place_model(chunk, "desert_scrub", pos, Vector3.ONE * scale_value, x)
 
 func _create_grass_patch(chunk: Node3D, start: float, patch: int, stops: Array[Dictionary]) -> void:
@@ -953,7 +992,7 @@ func supply_source(region: int) -> Dictionary:
 		var rng := RandomNumberGenerator.new()
 		rng.seed = world_seed + region * 104729
 		var wreck := rng.randi_range(0, 2) == 0
-		_encounter_cache[region] = {"x": region * 960.0 + rng.randf_range(245, 310), "offset": (-1 if rng.randf() < 0.5 else 1) * 12.5,
+		_encounter_cache[region] = {"x": region * 960.0 + rng.randf_range(245, 310), "offset": (-1 if rng.randf() < 0.5 else 1) * rng.randf_range(18.0, 24.0),
 			"id": (-3000000 if wreck else -2000000) - region, "wreck": wreck}
 		if region >= 3 and posmod(region - 3, 5) == 0:
 			var path := terrain.mountain_path(region)
@@ -982,19 +1021,15 @@ func _create_supply_source(chunk: Node3D, source: Dictionary) -> void:
 		var bench := body.position + Vector3(2.5, 0, 2.3)
 		bench.y = height_at(bench.x, bench.z) + 0.4
 		DesertModels.box(chunk, "LookoutBench", bench, Vector3(2.2, 0.20, 0.55), DesertModels.mat("wood"))
-	var material := BiomeModels.material(Color("79634e"))
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
 	shape.shape = box
 	if source.wreck:
-		DesertModels.box(body, "RustBody", Vector3(0, 0.6, 0), Vector3(3.7, 0.6, 1.8), material)
-		DesertModels.box(body, "RustCabin", Vector3(-0.3, 1.15, 0), Vector3(1.7, 0.65, 1.6), material)
-		for axle: float in [-1.2, 1.2]:
-			for side: float in [-0.9, 0.9]:
-				var wheel := DesertModels.cylinder(body, "FlatTyre", Vector3(axle, 0.3, side), 0.31, 0.20, DesertModels.mat("rubber"), 8)
-				wheel.rotation.x = PI * 0.5
-		box.size = Vector3(3.7, 1.4, 1.9)
-		shape.position.y = 0.7
+		var variant := posmod(int((absi(int(source.id)) - 3000000) / 2), 2)
+		var model := (load("res://assets/models/wrecks/wreck_%d.tscn" % variant) as PackedScene).instantiate() as Node3D
+		body.add_child(model)
+		box.size = Vector3(1.9, 1.8 if variant == 0 else 1.1, 4.3)
+		shape.position.y = box.size.y * 0.5
 	else:
 		DesertModels.box(body, "SupplyBox", Vector3(0, 0.55, 0), Vector3(1.3, 1.1, 1.1), DesertModels.mat("wood"))
 		box.size = Vector3(1.3, 1.1, 1.1)
@@ -1078,8 +1113,16 @@ func _create_boundaries(chunk: Node3D, start: float, segment: int, only_side: fl
 		body.add_child(shape)
 		var site := TrackEdges.site(terrain, x, side, hazards_enabled)
 		if site.is_empty(): continue
-		var key: String = str(site.kind) + ("_snow" if site.snowy else "")
-		var rock := (_boundary_models[key] as PackedScene).instantiate() as Node3D
+		var rock := Node3D.new()
+		var family := _rock_family(terrain.biome_at(x + 4))
+		if site.snowy: family = "snowy"
+		var visual := (_supplied_rocks[family + str(posmod(segment, 4) + 1)] as PackedScene).instantiate() as Node3D
+		visual.position.z = 1.0
+		visual.scale = Vector3(2.0, 1.0, 2.0)
+		var boundary_body := visual.get_node("RockCollision") as StaticBody3D
+		boundary_body.add_to_group("boundary_rock")
+		boundary_body.add_to_group("track_boundary")
+		rock.add_child(visual)
 		rock.name = "BoundaryRock_%d_%s" % [segment, "Upper" if side < 0 else "Lower"]
 		rock.transform = site.transform
 		rock.set_meta("edge_site", site)
@@ -1093,6 +1136,24 @@ func _create_boundaries(chunk: Node3D, start: float, segment: int, only_side: fl
 func _boundary_point(x: float, side: float, inset: float = 0.0) -> Vector3:
 	var z := terrain.corridor_center(x) + (terrain.boundary_width(x) + inset) * side
 	return Vector3(x, height_at(x, z), z)
+
+
+func _rock_family(biome: int) -> String:
+	if biome == 4: return "snowy"
+	if biome in [3, 5]: return "mossy"
+	if biome < 2: return "desert"
+	return "plain"
+
+
+func _place_supplied_rock(parent: Node3D, pos: Vector3, biome: int, variant: int, dimensions: Vector3, yaw: float) -> void:
+	var family := _rock_family(biome)
+	var node := (_supplied_rocks[family + str(posmod(variant, 4) + 1)] as PackedScene).instantiate() as Node3D
+	node.position = pos
+	node.scale = dimensions
+	node.rotation.y = yaw
+	parent.add_child(node)
+	_add_anchor(node, "rock", Vector3(0, 0.5, 0))
+	if batch_scenery: _batch_visuals(node, parent)
 
 
 func _place_model(parent: Node3D, key: String, pos: Vector3, dimensions := Vector3.ONE, yaw: float = 0.0) -> Node3D:
@@ -1240,7 +1301,7 @@ func _create_water(chunk: Node3D, start: float) -> void:
 	_create_baked_water(chunk, baked.water, baked.water_depths)
 
 
-func compact_tyres(points: Array[Vector3], _surface: Dictionary, pressure: float, direction := Vector2.RIGHT, shear := 0.0) -> void:
+func compact_tyres(points: Array[Vector3], _surface: Dictionary, pressure: float, direction := Vector2.RIGHT, shear := 0.0, wheel_shear: Array[float] = []) -> void:
 	if not deformation_enabled: return
 	if not points.is_empty(): _soil_focus_x = points[0].x
 	if _previous_tyres.size() != points.size(): _previous_tyres = points.duplicate()
@@ -1249,7 +1310,8 @@ func compact_tyres(points: Array[Vector3], _surface: Dictionary, pressure: float
 		var start := _previous_tyres[wheel]
 		if start.distance_to(point) > 3.0: start = point
 		if DriveDeformation.rut_limit(terrain.sample(point.x, point.z)) <= 0.0: continue
-		_soil_commands.append({"kind": 0, "start": start, "end": point, "pressure": pressure, "direction": direction, "shear": shear})
+		var contact_shear := wheel_shear[wheel] if wheel_shear.size() == points.size() else shear
+		_soil_commands.append({"kind": 0, "start": start, "end": point, "pressure": pressure, "direction": direction, "shear": contact_shear})
 	_previous_tyres = points.duplicate()
 
 

@@ -27,9 +27,16 @@ func _run() -> void:
 	var paint := ShaderMaterial.new()
 	paint.resource_name = "Desert_paint"
 	paint.shader = load("res://shaders/izh_paint.gdshader")
+	paint.set_shader_parameter("albedo_texture", load(OUT + "textures/IZH-2715_albedo.png"))
+	paint.set_shader_parameter("roughness_texture", load(OUT + "textures/IZH-2715_roughness.png"))
+	paint.set_shader_parameter("metalness_texture", load(OUT + "textures/IZH-2715_metalness.png"))
 	ResourceSaver.save(paint, OUT + "izh_paint.tres")
 	var rubber := StandardMaterial3D.new()
-	rubber.vertex_color_use_as_albedo = true
+	rubber.vertex_color_use_as_albedo = false
+	rubber.albedo_texture = load(OUT + "textures/IZH-2715_albedo.png")
+	rubber.roughness_texture = load(OUT + "textures/IZH-2715_roughness.png")
+	rubber.metallic = 1.0
+	rubber.metallic_texture = load(OUT + "textures/IZH-2715_metalness.png")
 	rubber.roughness = 0.95
 	ResourceSaver.save(rubber, OUT + "izh_tyres.tres")
 	var body_mesh: ArrayMesh
@@ -40,6 +47,8 @@ func _run() -> void:
 		var arrays := node.mesh.surface_get_arrays(0)
 		var points: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 		var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+		var uvs: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV]
+		assert(uvs.size() == points.size(), "IZH model must have UV coordinates")
 		var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
 		if indices.is_empty():
 			for i in points.size(): indices.append(i)
@@ -58,6 +67,7 @@ func _run() -> void:
 				color = Color("70736b") if radius < 0.19 else Color("242724")
 			st.set_color(color)
 			st.set_normal(normal)
+			st.set_uv(uvs[index])
 			st.add_vertex(position)
 		st.index()
 		var mesh := st.commit()
@@ -86,9 +96,9 @@ func _run() -> void:
 		var lens := MeshInstance3D.new()
 		lens.name = "BrakeLampL" if side > 0 else "BrakeLampR"
 		var box := BoxMesh.new()
-		box.size = Vector3(0.06, 0.13, 0.15)
+		box.size = Vector3(0.015, 0.07, 0.12)
 		lens.mesh = box
-		lens.position = Vector3(-2.44, 0.43, side)
+		lens.position = Vector3(-2.46, 0.24, signf(side) * 0.45)
 		var material := StandardMaterial3D.new()
 		material.albedo_color = Color("8f241b")
 		lens.material_override = material

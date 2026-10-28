@@ -35,17 +35,18 @@ func _run() -> void:
 	print("FOREST LITTER leaves=", leaf_total, " twigs=", twig_total)
 	var emitter: Node3D = game.road_leaves
 	check(emitter.scene_file_path == "res://assets/effects/road_leaves.tscn", "Leaf effect is a saved editable Godot scene")
-	game.vehicle.position = Vector3(180, game.world.height_at(180, game.world.center_at(180)) + 0.6, game.world.center_at(180))
-	game.vehicle.speed = 6
-	emitter._process(0.3)
-	check(emitter.foliage_context and emitter.particles.emitting, "Moving through trees lifts airborne leaves")
+	game.vehicle.position = leaf_point + Vector3.UP * 0.6
 	game.vehicle.speed = 0
 	game.world.wind_force = 0
 	emitter._process(0.3)
 	check(not emitter.particles.emitting, "Still air and a parked car stop leaf emission")
 	game.world.wind_force = 1
 	emitter._process(0.3)
-	check(emitter.particles.emitting, "Wind can carry leaves while the car is parked")
+	check(emitter.foliage_context and emitter.particles.emitting, "Wind carries leaves only near actual road litter")
+	game.world.wind_force = 0
+	game.vehicle.speed = 6
+	emitter._process(0.3)
+	check(emitter.particles.emitting, "Driving over ground leaves lifts them into the air")
 	game._settings_changed("quality", 0)
 	check(emitter.particles.amount <= 12 and emitter.particles.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, "Low quality reduces the one local shadowless leaf emitter")
 	game._settings_changed("quality", 2)
@@ -62,6 +63,13 @@ func _run() -> void:
 		(leaf_data.batch as MultiMeshInstance3D).free()
 		emitter.scatter_ground_leaves()
 		check(leaf_data.cleared.size() == old_count, "Unloaded leaf visuals are safely ignored even while their chunk metadata remains")
+	# Nearby trees alone must not produce phantom leaf particles.
+	game.vehicle.position = Vector3(180, 1, game.world.center_at(180) + 17.0)
+	game.vehicle.speed = 8
+	game.world.wind_force = 1
+	emitter.reset_particles()
+	emitter._process(0.3)
+	check(not emitter.foliage_context and not emitter.particles.emitting, "No airborne leaves without nearby uncollected road leaves")
 	emitter.reset_particles()
 	check(not emitter.particles.emitting, "Restart and origin-rebase reset airborne leaves")
 	game.world.configure(1000001)

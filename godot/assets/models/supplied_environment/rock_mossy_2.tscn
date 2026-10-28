@@ -1,0 +1,18 @@
+[gd_scene format=3]
+
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/rock_mossy_2.res" id="1_wei1y"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_6fbp5"]
+size = Vector3(0.75, 0.8, 0.75)
+
+[node name="SuppliedRock_Mossy_2" type="Node3D" unique_id=1522504817]
+
+[node name="RockVisual" type="MeshInstance3D" parent="." unique_id=1885052108]
+transform = Transform3D(0.015286467, 0, 0, 0, 0.01168971, -2.5956371e-18, 0, 5.0854675e-18, 0.02290291, 0, 6.20173e-05, 0)
+mesh = ExtResource("1_wei1y")
+
+[node name="RockCollision" type="StaticBody3D" parent="." unique_id=688026695]
+
+[node name="@CollisionShape3D@12" type="CollisionShape3D" parent="RockCollision" unique_id=2126071867]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+shape = SubResource("BoxShape3D_6fbp5")

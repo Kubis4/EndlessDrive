@@ -28,6 +28,7 @@ var steering_input := 0.0
 var winch_pull_velocity := Vector3.ZERO
 var controls_enabled := true
 var boundary_recovery_enabled := true # Tests disable this to prove real collision, not clamping.
+var sand_lab_drift := 0.0 # Opt-in handling for the isolated sand experiment.
 var surface_info: Dictionary = {}
 var boundary_recoveries := 0
 var cruise_enabled := false
@@ -79,6 +80,10 @@ var body_pitch := 0.0
 var body_roll := 0.0
 var _physics_age := 0.0
 var _debris_contacts: Dictionary = {}
+var _visual_load_pitch := 0.0
+var _visual_load_roll := 0.0
+var _visual_last_speed := 0.0
+var _last_visual_damage := -1.0
 
 
 func _ready() -> void:
@@ -151,11 +156,16 @@ func configure_vehicle(id: String) -> void:
 			contact.position = Vector3(axle * wheelbase * 0.5, 0, side * wheel_track * 0.5)
 			contact.rotation.x = PI * 0.5
 	_setup_visual()
+	_last_visual_damage = -1.0
 	_last_light_mode = -1
 	_last_rear_mode = -1
 
 func is_front_drive() -> bool:
 	return vehicle_id == "izh"
+
+
+func is_wheel_driven(front: bool) -> bool:
+	return (run != null and run.four_wheel_drive) or front == is_front_drive()
 
 func _setup_visual() -> void:
 	_visual = get_node_or_null("Visual") as Node3D
@@ -164,6 +174,9 @@ func _setup_visual() -> void:
 		_visual.name = "Visual"
 		add_child(_visual)
 	_prepare_model(_visual)
+	var body := _visual.get_node_or_null("Body") as MeshInstance3D
+	if body != null and body.material_override is ShaderMaterial:
+		body.material_override = body.material_override.duplicate()
 	if not has_node("VisibilityOutline"):
 		add_child(preload("res://scenes/vehicle_visibility.tscn").instantiate())
 	_visual_rest_position = _visual.position
@@ -275,8 +288,15 @@ func _physics_process(dt: float) -> void:
 		_yaw_rate = 0.0
 	heading = wrapf(heading + _yaw_rate * dt, -PI, PI)
 	var lateral_damping := 7.0 + grip * 16.0 if is_on_floor() else 0.4
+	if is_on_floor() and sand_lab_drift > 0.0 and int(surface_info.get("material", -1)) == DriveTerrain.SurfaceKind.SAND:
+		var drift_blend := clampf(sand_lab_drift, 0.0, 1.0) * smoothstep(2.5, 7.0, absf(speed))
+		lateral_damping = lerpf(lateral_damping, 2.8 + grip * 1.5, drift_blend)
 	if handbrake_input > 0.0 and absf(speed) > 2.5 and is_on_floor(): lateral_damping *= 0.25
 	_lateral_speed = (_lateral_speed - speed * _yaw_rate * dt) * exp(-lateral_damping * dt)
+	# At parking speeds the body's centre follows the front-steered bicycle
+	# path: the rear axle has almost no sideways velocity relative to its tyres.
+	var rear_follow := _yaw_rate * wheelbase * 0.5
+	_lateral_speed = lerpf(_lateral_speed, rear_follow, 1.0 - smoothstep(2.0, 6.0, absf(speed)))
 	_lateral_speed += world.wind_force * dt
 	direction = Vector3(cos(heading), 0, sin(heading))
 	var right := Vector3(-sin(heading), 0, cos(heading))
@@ -385,8 +405,8 @@ func _physics_process(dt: float) -> void:
 	run.odometer += Vector2(position.x - before_move.x, position.z - before_move.z).length() if boundary_recoveries == _recoveries_before_move else 0.0
 	run.distance = maxf(run.distance, position.x)
 	run.advance(dt, speed, throttle_input, offroad, cruise_enabled and manual_throttle < 0.02, maxf(_brake_pressure, handbrake_input * 0.6), water_depth)
-	_update_visual(dt, slope)
 	wheel_speed = speed + (-1.0 if _reverse_engaged else 1.0) * soil_slip * (effort if run.engine_running else 0.0) * 9.0
+	_update_visual(dt, slope)
 
 
 func _push_debris(body: RigidBody3D, normal: Vector3) -> void:
@@ -444,6 +464,11 @@ func _soil_traction(dt: float, grip: float, engine_force: float, effort: float) 
 
 
 func _update_visual(dt: float, slope: float) -> void:
+	if not is_equal_approx(_last_visual_damage, run.body_damage):
+		_last_visual_damage = run.body_damage
+		var body := _visual.get_node_or_null("Body") as MeshInstance3D
+		if body != null and body.material_override is ShaderMaterial:
+			(body.material_override as ShaderMaterial).set_shader_parameter("body_damage", run.body_damage)
 	wheel_contacts.clear()
 	var front := 0.0
 	var rear := 0.0
@@ -454,6 +479,9 @@ func _update_visual(dt: float, slope: float) -> void:
 	var support := 0.0
 	var rear_support := 0.0
 	var loaded_contacts: Array[Vector3] = []
+	var contact_shears: Array[float] = []
+	var driven_contacts: Array[Vector3] = []
+	var rolling_contacts: Array[Vector3] = []
 	for wheel: Dictionary in _wheels:
 		var pivot: Node3D = wheel.pivot
 		var probe := global_transform * Vector3(pivot.position.x + _visual_rest_position.x, 0, pivot.position.z + _visual_rest_position.z)
@@ -466,6 +494,9 @@ func _update_visual(dt: float, slope: float) -> void:
 			grounded += 1
 			if probe.y - wheel_radius - world.to_global(p).y < 0.30:
 				loaded_contacts.append(p)
+				contact_shears.append(clampf((soil_slip if is_wheel_driven(bool(wheel.front)) else 0.0) + absf(_lateral_speed - _yaw_rate * wheelbase * 0.5) * 0.2, 0.0, 1.0))
+				if is_wheel_driven(bool(wheel.front)): driven_contacts.append(p)
+				else: rolling_contacts.append(p)
 		else: p.y = world.height_at(p.x, p.z)
 		wheel_contacts.append(p)
 		total_sink += maxf(0.0, world.height_at(p.x, p.z) + world.terrain.deformation.depth_at(p.x, p.z) - p.y)
@@ -490,15 +521,22 @@ func _update_visual(dt: float, slope: float) -> void:
 	body_roll = lerp_angle(body_roll, clampf(roll, -0.48, 0.48) if has_support else 0.0, 1.0 - exp(-20.0 * dt))
 	# The actual collision rig follows the supporting plane. Only the small
 	# suspension residual/body lean belongs to the visual mesh.
-	_visual.rotation.z = _visual_rest_rotation.z + (clampf(pitch - body_pitch, -0.10, 0.10) if has_support else 0.0)
-	_visual.rotation.x = _visual_rest_rotation.x + (clampf(roll - body_roll, -0.08, 0.08) if has_support else 0.0) + clampf(-speed * _yaw_rate * 0.002, -0.025, 0.025)
+	var acceleration := clampf((speed - _visual_last_speed) / maxf(dt, 0.001), -8.0, 8.0)
+	_visual_last_speed = speed
+	var spring_health := lerpf(1.4, 1.0, clampf(float(run.parts.suspension), 0.0, 1.0))
+	var target_pitch := clampf(acceleration * 0.006 * spring_health, -0.05, 0.05) if has_support else 0.0
+	var target_roll := clampf(-speed * _yaw_rate * 0.006 * spring_health, -0.06, 0.06) if has_support else 0.0
+	_visual_load_pitch = lerpf(_visual_load_pitch, target_pitch, 1.0 - exp(-6.0 * dt))
+	_visual_load_roll = lerpf(_visual_load_roll, target_roll, 1.0 - exp(-6.0 * dt))
+	_visual.rotation.z = _visual_rest_rotation.z + (clampf(pitch - body_pitch, -0.10, 0.10) if has_support else 0.0) + _visual_load_pitch
+	_visual.rotation.x = _visual_rest_rotation.x + (clampf(roll - body_roll, -0.08, 0.08) if has_support else 0.0) + _visual_load_roll
 	if grounded >= 3 and is_on_floor():
 		var target_y := (front + rear) * 0.25 + wheel_radius - global_position.y + _visual_rest_position.y
 		# Do not visually bury the body through its physical supporting belly.
 		_visual.position.y = lerpf(_visual.position.y, clampf(target_y, _visual_rest_position.y - (0.04 if sink_depth > 0.12 else 0.5), _visual_rest_position.y + 0.5), 1.0 - exp(-18.0 * dt))
 	else: _visual.position.y = lerpf(_visual.position.y, _visual_rest_position.y, 1.0 - exp(-6.0 * dt))
 	if grounded >= 3 and is_on_floor() and absf(speed) > 0.6 and _last_compaction.distance_to(position) > 0.65:
-		world.compact_tyres(loaded_contacts, surface_info, 1.0 + run.cargo_weight() / 1000.0, Vector2(cos(heading), sin(heading)), clampf(soil_slip + absf(_lateral_speed) * 0.2, 0.0, 1.0))
+		world.compact_tyres(loaded_contacts, surface_info, 1.0 + run.cargo_weight() / 1000.0, Vector2(cos(heading), sin(heading)), 0.0, contact_shears)
 		_last_compaction = position
 	_soil_timer += dt
 	if _soil_timer >= 0.10:
@@ -508,7 +546,8 @@ func _update_visual(dt: float, slope: float) -> void:
 			footprint *= lerpf(0.75, 1.0, float(run.parts.tires))
 			var pressure := (1.0 + run.cargo_weight() / 1000.0) / footprint
 			var effort := (brake_input if _reverse_engaged else throttle_input) if run.engine_running else 0.0
-			world.load_tyres(loaded_contacts, pressure * maxf(wheel_support, 0.12), soil_slip, effort, _soil_timer)
+			world.load_tyres(driven_contacts, pressure * maxf(wheel_support, 0.12), soil_slip, effort, _soil_timer)
+			world.load_tyres(rolling_contacts, pressure * maxf(wheel_support, 0.12), 0.0, 0.0, _soil_timer)
 		_soil_timer = 0.0
 	_spin -= wheel_speed * dt / wheel_radius
 	_road_spin -= speed * dt / wheel_radius
@@ -516,15 +555,19 @@ func _update_visual(dt: float, slope: float) -> void:
 	for index in _wheels.size():
 		var wheel: Dictionary = _wheels[index]
 		var pivot: Node3D = wheel.pivot
+		# Tyre condition is shared, so one visibly deflated wheel represents it.
+		var flat := (1.0 - smoothstep(0.04, 0.22, float(run.parts.tires))) if str(pivot.name) == "Wheel_RR" else 0.0
+		pivot.scale.y = lerpf(1.0, 0.72, flat)
 		if grounded >= 3 and is_on_floor():
-			var local_contact := _visual.global_transform.affine_inverse() * world.to_global(wheel_contacts[index] + Vector3.UP * wheel_radius)
+			var visual_radius := wheel_radius * pivot.scale.y
+			var local_contact := _visual.global_transform.affine_inverse() * world.to_global(wheel_contacts[index] + Vector3.UP * visual_radius)
 			pivot.position.y = move_toward(pivot.position.y, clampf(local_contact.y, float(wheel.rest_y) - 0.25, float(wheel.rest_y) + 0.25), dt * 2.0)
 			max_wheel_contact_error = maxf(max_wheel_contact_error, absf(pivot.global_position.y - wheel_radius - wheel_contacts[index].y))
 		pivot.rotation.y = -wheel_angle if wheel.front else 0.0
 		var contact := wheel.get("contact") as CollisionShape3D
 		if contact != null: contact.rotation.y = pivot.rotation.y
 		var spin_node: Node3D = wheel.spin
-		spin_node.rotation.z = _spin if run.four_wheel_drive or wheel.front == is_front_drive() else _road_spin
+		spin_node.rotation.z = _spin if is_wheel_driven(bool(wheel.front)) else _road_spin
 	var light_mode := (2 if run.high_beams else 1) if run.headlights and run.battery > 0.01 else 0
 	if light_mode != _last_light_mode:
 		_last_light_mode = light_mode
@@ -724,6 +767,9 @@ func park() -> void:
 	velocity = Vector3.ZERO
 	_yaw_rate = 0.0
 	_lateral_speed = 0.0
+	_visual_last_speed = 0.0
+	_visual_load_pitch = 0.0
+	_visual_load_roll = 0.0
 	_reverse_time = 0.0
 	_reverse_engaged = false
 	_brake_pressure = 0.0

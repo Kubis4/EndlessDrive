@@ -7,7 +7,8 @@ const TRACK_SPACING := 0.65
 var vehicle: DriveVehicle
 var world: DriveWorld
 var particles_enabled := true
-var trails_enabled := true
+var trails_enabled := false
+var sand_lab_plume := false
 var _sand_clumps: Array[CPUParticles3D] = []
 var _clump_emitters: Array[CPUParticles3D] = []
 var _emitters: Array[CPUParticles3D] = []
@@ -21,6 +22,7 @@ var _exhaust: CPUParticles3D
 var _track_records: Array[Dictionary] = []
 var _refresh_cursor := 0
 var _grain_mesh: SphereMesh
+var _lab_sand_mesh: SphereMesh
 var _surface_pools: Array[Dictionary] = []
 var _update_left := 0.0
 const PARTICLE_COLORS := [Color("b9aa89"), Color("80715c"), Color("96938b"), Color("dce0de"), Color("9daead"), Color("9aa5ad")]
@@ -40,6 +42,12 @@ func _ready() -> void:
 	_grain_mesh.radial_segments = 4
 	_grain_mesh.rings = 1
 	_grain_mesh.material = template.mesh.material
+	_lab_sand_mesh = SphereMesh.new()
+	_lab_sand_mesh.radius = 0.032
+	_lab_sand_mesh.height = 0.064
+	_lab_sand_mesh.radial_segments = 5
+	_lab_sand_mesh.rings = 2
+	_lab_sand_mesh.material = template.mesh.material
 	template.free()
 	for wheel in 4:
 		_surface_pools.append({})
@@ -132,6 +140,14 @@ func ensure_particle_bank(wheel: int, family: int) -> Dictionary:
 		dust.color = Color(1, 1, 1, [0.38, 0.24, 0.20, 0.36][family])
 		dust.amount = [28, 24, 16, 28][family]
 		dust.lifetime = [1.6, 1.1, 0.85, 1.35][family]
+		if family == 0 and sand_lab_plume:
+			# The laboratory uses actual 3D grains instead of billboard clouds.
+			dust.mesh = _lab_sand_mesh
+			dust.material_override = null
+			dust.amount = 128
+			dust.lifetime = 1.1
+			dust.spread = 35.0
+			dust.color = Color("d3b788")
 		grit.mesh = _grain_mesh
 		grit.amount = [192, 128, 96, 160][family]
 		grit.lifetime = [0.65, 0.65, 0.55, 0.95][family]
@@ -174,7 +190,6 @@ func _process(dt: float) -> void:
 	var forward := Vector3(cos(vehicle.heading), 0, sin(vehicle.heading))
 	if trails_enabled: _refresh_tracks()
 	var motion := -1.0 if vehicle.wheel_speed < -0.2 else 1.0
-	var agitation := clampf(absf(vehicle.speed) / 14.0 + vehicle.soil_slip * 0.85 + absf(vehicle._lateral_speed) * 0.14, 0.0, 1.0)
 	var right := Vector3(-forward.z, 0, forward.x)
 	_exhaust.position = vehicle.position - forward * 2.25 + right * 0.65 + Vector3.UP * 0.28
 	_exhaust.direction = (-forward + Vector3.UP * 0.2).normalized()
@@ -186,10 +201,12 @@ func _process(dt: float) -> void:
 	for wheel in 4:
 		var dust := _emitters[wheel]
 		var grit := _grit[wheel]
-		if vehicle.wheel_contacts.size() != 4:
+		if vehicle.wheel_contacts.size() != 4 or vehicle._wheels.size() != 4:
 			dust.emitting = false
 			grit.emitting = false
 			continue
+		var driven := vehicle.is_wheel_driven(bool(vehicle._wheels[wheel].front))
+		var agitation := clampf(absf(vehicle.speed) / 14.0 + (vehicle.soil_slip * 0.85 if driven else 0.0) + absf(vehicle._lateral_speed) * 0.14, 0.0, 1.0)
 		var p := vehicle.wheel_contacts[wheel]
 		var surface := world.terrain.sample(p.x, p.z)
 		var wet := float(surface.water) > 0.02
@@ -264,6 +281,17 @@ func _process(dt: float) -> void:
 				clumps.gravity = Vector3(0, -5, 0)
 				clumps.scale_amount_max = 1.0
 				dust.gravity.y = 0.18
+			if family == 0 and sand_lab_plume:
+				# Ballistic grains use real mesh geometry, gravity and rearward velocity.
+				dust.position = p + Vector3.UP * 0.12
+				dust.direction = spray_direction
+				dust.scale_amount_min = 0.8
+				dust.scale_amount_max = 1.8
+				dust.initial_velocity_min = 1.2 + agitation
+				dust.initial_velocity_max = 3.0 + agitation * 4.0
+				dust.damping_min = 0.0
+				dust.damping_max = 0.15
+				dust.gravity = Vector3(0, -9.81, 0)
 		if not trails_enabled: continue
 		# The trailing axle covers the leading contact path. Stamping both on
 		# the same plane caused overlapping ribbons and needless draw/CPU work.

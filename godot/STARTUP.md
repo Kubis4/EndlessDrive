@@ -13,7 +13,7 @@ tool script. The large generated snapshot is no longer a runtime dependency.
 Open `scenes/world/generated/editor_terrain.scn` to edit its native mesh nodes.
 The other saved environment previews remain available.
 
-The menu renders before world preparation. Saved graphics preferences are read
+An opaque loading screen covers the menu during world preparation. Saved graphics preferences are read
 before creating terrain materials. Three nearby chunks are prepared by the
 existing numeric worker and frame-budgeted publication queue. The loading loop
 pumps only that queue with zero simulation delta; survival time, trains,
@@ -56,7 +56,7 @@ The subsequent scenery update also waits for the complete GPU warmup, rather
 than measuring only its construction. After the new shaders were prepared,
 the full boot measured title 60 ms, menu visible 1,768 ms and play ready
 8,719 ms. The first rebuild of the new shader cache took 30,310 ms in total.
-The branded menu remains visible during this preparation. These additional
+The loading screen remains visible during this preparation. These additional
 one-time compilation costs prevent the corresponding stalls during driving.
 
 `tests/startup_benchmark.gd` measures stages; pass `--boot` to include the real

@@ -8,6 +8,7 @@ extends Control
 signal selected(slot: String)
 
 const Icons = preload("res://scripts/item_icons.gd")
+const VEHICLE_IMAGES := {"izh": preload("res://assets/ui/vehicles/izh_top.png"), "jeep": preload("res://assets/ui/vehicles/jeep_top.png")}
 const SLOTS: Array[String] = ["radiator", "engine", "alternator", "tires", "brakes", "suspension"]
 const NAMES := {"engine": "Motor", "tires": "Pneumatiky", "brakes": "Brzdy", "suspension": "Odpruženie", "radiator": "Chladič", "alternator": "Alternátor"}
 const CREAM := Color("f5ecd7")
@@ -37,6 +38,10 @@ const ZONES := {
 		conditions = value
 		queue_redraw()
 var _hovered := ""
+var vehicle_id := "izh":
+	set(value):
+		vehicle_id = value if VEHICLE_IMAGES.has(value) else "izh"
+		queue_redraw()
 
 
 func _ready() -> void:
@@ -152,17 +157,8 @@ func _draw() -> void:
 	var factor := _fit()
 	draw_set_transform(_origin(), 0.0, Vector2.ONE * factor)
 	_text(Vector2(114, 17), "↑ PREDOK", 12, MUTED)
-	# Silhouette, wheelbase, glazing and rear cargo deck are drawn natively.
-	var shell := PackedVector2Array([Vector2(128, 30), Vector2(172, 30), Vector2(182, 50), Vector2(182, 209), Vector2(172, 229), Vector2(128, 229), Vector2(118, 209), Vector2(118, 50)])
-	draw_colored_polygon(shell, Color("303a39"))
-	draw_polyline(shell + PackedVector2Array([shell[0]]), Color("a9b3ac"), 1.5, true)
-	draw_style_box(_box(Color("172729"), Color("627877")), Rect2(125, 125, 41, 42))
-	draw_line(Vector2(125, 130), Vector2(166, 130), Color("8faaa5"), 2.0, true)
-	draw_rect(Rect2(128, 207, 44, 9), Color("586260"))
-	for point: Vector2 in [Vector2(121, 35), Vector2(172, 35)]:
-		draw_rect(Rect2(point, Vector2(7, 5)), GOLD)
-	for point: Vector2 in [Vector2(108, 69), Vector2(179, 69), Vector2(108, 179), Vector2(179, 179)]:
-		draw_style_box(_box(Color("17201f"), _color("tires")), Rect2(point, Vector2(13, 34)))
+	# The underlying image is rendered from the selected playable model.
+	draw_texture_rect(VEHICLE_IMAGES[vehicle_id], Rect2(94, 28, 112, 205), false)
 	for slot: String in SLOTS:
 		var rect: Rect2 = ZONES[slot]
 		draw_style_box(_box(_color(slot).darkened(0.72), _color(slot)), rect)

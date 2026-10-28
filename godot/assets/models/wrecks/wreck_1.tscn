@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="ArrayMesh" path="res://assets/models/wrecks/wreck_1_sm_asset_03.res" id="1_56n6d"]
+[ext_resource type="ArrayMesh" path="res://assets/models/wrecks/wreck_1_sm_ivy_10.res" id="2_3j4v2"]
+[ext_resource type="ArrayMesh" path="res://assets/models/wrecks/wreck_1_sm_ivy_11.res" id="3_4wxq3"]
+
+[node name="SuppliedWreck1" type="Node3D" unique_id=1282677854]
+
+[node name="SM_asset_03" type="MeshInstance3D" parent="." unique_id=2143872455]
+transform = Transform3D(100, 0, 0, 0, -1.1920929e-05, 99.99999, 0, -99.99999, -1.1920929e-05, 9.536743e-07, 1.2257533e-07, 2.9243529e-06)
+mesh = ExtResource("1_56n6d")
+
+[node name="SM_ivy_10" type="MeshInstance3D" parent="." unique_id=858799697]
+transform = Transform3D(100, 0, 0, 0, -1.1920929e-05, 99.99999, 0, -99.99999, -1.1920929e-05, -0.80098295, 3.0138926e-07, 1.4207253)
+mesh = ExtResource("2_3j4v2")
+
+[node name="SM_ivy_11" type="MeshInstance3D" parent="." unique_id=1888860281]
+transform = Transform3D(100, 0, 0, 0, -1.1920929e-05, 99.99999, 0, -99.99999, -1.1920929e-05, -0.80098295, 3.0138926e-07, 1.4207253)
+mesh = ExtResource("3_4wxq3")

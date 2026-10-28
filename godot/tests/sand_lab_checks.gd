@@ -34,7 +34,9 @@ func _run() -> void:
 	var car: DriveVehicle = lab.vehicle
 	var world = lab.world
 	await frames(30)
-	check(not lab.dust_enabled and not lab.effects.trails_enabled and lab.effects._tracks.multimesh.instance_count == 0, "Sand lab allocates no decorative tracks")
+	check(lab.dust_enabled and lab.effects.sand_lab_plume and car.sand_lab_drift > 0.0 and car.vehicle_id == "jeep" and lab.run.four_wheel_drive, "Sand lab starts with the 4x4 model, reference dust and loose-sand handling enabled")
+	check(not lab.effects.trails_enabled and lab.effects._tracks.multimesh.instance_count == 0, "Sand lab allocates no decorative tracks")
+	lab.toggle_dust()
 	var start := car.position
 	var max_sink := 0.0
 	for tick in 510:
@@ -106,6 +108,7 @@ func _run() -> void:
 		preview.free()
 	if DisplayServer.get_name() != "headless":
 		lab.get_node("LabControls").hide()
+		lab.follow_camera = false
 		var camera: Camera3D = lab.get_node("Camera3D")
 		var center := (start + car.position) * 0.5
 		camera.position = center + Vector3(8, 19, 22)
@@ -127,7 +130,7 @@ func _run() -> void:
 	check(old_dust.color == old_color and not old_dust.emitting and old_grit.material_override == null, "Existing sand dust/grit retains its color and material after mud, snow and water")
 	check(fx._emitters[1] == fx._surface_pools[1][0].dust, "Changing one wheel does not switch the other wheels' particle banks")
 	check(fx._surface_pools[0][4].grit.material_override != null and fx._surface_pools.size() == 4, "Water owns a separate material in a bounded lazy pool")
-	check(fx._surface_pools[0][0].dust.material_override is ShaderMaterial and fx._surface_pools[0][0].dust.amount == 28 and fx._surface_pools[0][0].grit.amount == 192 and fx._sand_clumps.size() == 4, "Sand uses bounded geometry spray and a lightweight texture-free powder shader")
+	check(fx._surface_pools[0][0].dust.mesh is SphereMesh and fx._surface_pools[0][0].dust.material_override == null and fx._surface_pools[0][0].dust.amount == 128 and fx._surface_pools[0][0].grit.amount == 192, "Sand spray uses 3D grain geometry instead of billboard clouds")
 	if DisplayServer.get_name() != "headless":
 		lab.toggle_dust()
 		car.set_physics_process(true)

@@ -29,7 +29,7 @@ func _run() -> void:
 	check(boot.get_child_count() > 0 and root.get_child_count() == 1, "Boot displays without instantiating the driving world")
 	while current_scene == boot: await process_frame
 	var game := current_scene
-	check(not game.startup_ready and game.menu.visible and paused, "Menu appears while nearby terrain is still loading")
+	check(not game.startup_ready and game.menu._loading_backdrop.visible and paused, "Dedicated loading screen covers terrain preparation")
 	check(game.menu._new_button.disabled and game.menu._continue_button.disabled, "Play buttons cannot enter incomplete terrain")
 	var initial_seed: int = game.run.world_seed
 	game._menu_action("new")
@@ -50,10 +50,14 @@ func _run() -> void:
 	game.vehicle.park()
 	game._open_menu(false)
 	game._menu_action("vehicle:izh")
+	game.route_origin = Vector3(2048, 0, 0)
+	game.position = -game.route_origin
+	game.world.set_route_origin(game.route_origin)
 	game._menu_action("new")
-	check(not game.startup_ready and paused and not game.hud.visible, "Later New journey is generated behind the loading menu")
+	check(not game.startup_ready and paused and not game.hud.visible and game.menu._loading_backdrop.visible, "Later New journey is generated behind the loading screen")
 	await _wait_ready(game)
 	check(game.run.world_seed != initial_seed and not paused and game.vehicle.controls_enabled, "Later New journey changes the seed and resumes after collision publication")
+	check(game.route_origin == Vector3.ZERO and game.position == Vector3.ZERO and game.world.route_origin == Vector3.ZERO, "New journey clears the old floating origin before terrain generation")
 	# Restore away from the origin, with actual soil history and graphics prefs.
 	game._open_menu(false)
 	var saved_run := DriveRun.new()

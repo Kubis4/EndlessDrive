@@ -2,13 +2,13 @@ extends RefCounted
 ## Small saved native models; no simulation or model generation during driving.
 const KINDS := ["fallen_tree", "wreck", "rubble", "barrier"]
 
-static func build(kind: String) -> Node3D:
+static func build(kind: String, wreck_variant: int = 0) -> Node3D:
 	var root := Node3D.new()
 	root.name = kind.to_pascal_case()
 	root.set_meta("obstacle_kind", kind)
 	match kind:
 		"fallen_tree": _fallen_tree(root)
-		"wreck": _wreck(root)
+		"wreck": _wreck(root, wreck_variant)
 		"rubble": _rubble(root)
 		"barrier": _barrier(root)
 	return root
@@ -44,24 +44,19 @@ static func _fallen_tree(root: Node3D) -> void:
 		var angle := i * TAU / 5
 		_beam(root, "Root%d" % i, Vector3(0, 0.55, -5.9), Vector3(cos(angle) * 0.9, 0.5 + sin(angle) * 0.45, -6.65), 0.08, false)
 
-static func _wreck(root: Node3D) -> void:
-	DesertModels.box(root, "RustedChassis", Vector3(0, 0.7, 0), Vector3(4.6, 0.70, 1.95), DesertModels.mat("accent"))
-	DesertModels.box(root, "Cabin", Vector3(-0.35, 1.32, 0), Vector3(2.7, 0.85, 1.8), DesertModels.mat("steel"))
-	for side: float in [-1, 1]:
-		DesertModels.box(root, "BrokenSideGlass", Vector3(-0.3, 1.42, side * 0.915), Vector3(2.1, 0.46, 0.025), DesertModels.mat("glass"))
-		for x: float in [-1.55, 1.5]:
-			var tyre := DesertModels.cylinder(root, "FlatTyre", Vector3(x, 0.34, side * 0.94), 0.34, 0.24, DesertModels.mat("rubber"), 8)
-			tyre.rotation.x = PI * 0.5
-	DesertModels.box(root, "ShatteredWindscreen", Vector3(1.02, 1.43, 0), Vector3(0.025, 0.48, 1.45), DesertModels.mat("glass"))
-	var hood := DesertModels.box(root, "BuckledHood", Vector3(1.65, 1.08, 0), Vector3(1.25, 0.09, 1.8), DesertModels.mat("accent"))
-	hood.rotation.z = -0.14
-	for i in 3:
-		DesertModels.box(root, "ExposedMetal", Vector3(-1.7 + i * 1.1, 0.72, 0.99), Vector3(0.44, 0.24, 0.035), DesertModels.mat("wood"))
-	DesertModels.collider(root, Vector3(0, 0.97, 0), Vector3(4.6, 1.55, 1.95))
+static func _wreck(root: Node3D, variant: int) -> void:
+	variant = clampi(variant, 0, 1)
+	var model := (load("res://assets/models/wrecks/wreck_%d.tscn" % variant) as PackedScene).instantiate() as Node3D
+	model.name = "SuppliedWreck%d" % variant
+	# Source assets are lengthwise on Z; road obstacle footprints use X.
+	model.rotation.y = PI * 0.5
+	root.add_child(model)
+	var height := 1.8 if variant == 0 else 1.1
+	DesertModels.collider(root, Vector3(0, height * 0.5, 0), Vector3(4.3, height, 1.9))
 
 static func _rubble(root: Node3D) -> void:
-	var packed := load("res://assets/models/mesa_rock.tscn") as PackedScene
 	for i in 4:
+		var packed := load("res://assets/models/supplied_environment/rock_plain_%d.tscn" % (i + 1)) as PackedScene
 		var rock := packed.instantiate() as Node3D
 		rock.name = "RoadRock%d" % i
 		rock.position = Vector3(-0.5 + (i % 2) * 1.1, -0.12, -2.1 + i * 1.3)

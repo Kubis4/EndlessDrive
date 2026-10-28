@@ -73,6 +73,18 @@ func _run() -> void:
 		var b := profile.sample(x + 0.02, z, false, true)
 		for layer in 14: transitions = transitions and absf(a.material_weights[layer] - b.material_weights[layer]) < 0.08
 	check(transitions, "Region boundaries retain continuous ground layers, including the midpoint of a biome transition")
+	var road_transitions := true
+	for seed_value in [24601, 1000001, 1000004, 1000006]:
+		profile.seed_value = seed_value
+		for choice in [-1, 1]:
+			profile.route_choices = {"0": choice}
+			profile.clear_caches()
+			for x: float in [671.99, 2979.99, 3719.99]:
+				var before := profile.sample(x, profile.center_at(x), false, true)
+				var after := profile.sample(x + 0.02, profile.center_at(x + 0.02), false, true)
+				for layer in 14: road_transitions = road_transitions and absf(before.material_weights[layer] - after.material_weights[layer]) < 0.08
+	check(road_transitions, "Road materials fade continuously at merged junctions and mountain entrances")
+	profile.route_choices.clear()
 	profile.seed_value = 1000003
 	profile.clear_caches()
 	var a := DriveTerrainBake.bake(profile, 0)

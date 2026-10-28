@@ -12,61 +12,61 @@
 albedo_color = Color(0.56078434, 0.14117648, 0.105882354, 1)
 
 [sub_resource type="BoxMesh" id="BoxMesh_xudjc"]
-size = Vector3(0.06, 0.13, 0.15)
+size = Vector3(0.015, 0.07, 0.12)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ic71m"]
 albedo_color = Color(0.56078434, 0.14117648, 0.105882354, 1)
 
 [sub_resource type="BoxMesh" id="BoxMesh_ujfgf"]
-size = Vector3(0.06, 0.13, 0.15)
+size = Vector3(0.015, 0.07, 0.12)
 
-[node name="IZH2715" type="Node3D" unique_id=1824756458]
+[node name="IZH2715" type="Node3D" unique_id=2028793077]
 metadata/model_id = "izh"
 
-[node name="Body" type="MeshInstance3D" parent="." unique_id=1393990288]
+[node name="Body" type="MeshInstance3D" parent="." unique_id=1538393740]
 material_override = ExtResource("1_skbhe")
 mesh = ExtResource("2_dbpdn")
 
-[node name="Wheel_RR" type="Node3D" parent="." unique_id=753667109]
+[node name="Wheel_RR" type="Node3D" parent="." unique_id=702123769]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.3175731, 0, -0.6790303)
 
-[node name="TyreAndRim" type="MeshInstance3D" parent="Wheel_RR" unique_id=677915365]
+[node name="TyreAndRim" type="MeshInstance3D" parent="Wheel_RR" unique_id=1637027792]
 material_override = ExtResource("3_dducb")
 mesh = ExtResource("4_fbjtf")
 
-[node name="Wheel_FR" type="Node3D" parent="." unique_id=1069881656]
+[node name="Wheel_FR" type="Node3D" parent="." unique_id=1114943316]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3175734, 0, -0.67903066)
 
-[node name="TyreAndRim" type="MeshInstance3D" parent="Wheel_FR" unique_id=1773205793]
+[node name="TyreAndRim" type="MeshInstance3D" parent="Wheel_FR" unique_id=1019731493]
 material_override = ExtResource("3_dducb")
 mesh = ExtResource("5_jfriu")
 
-[node name="Wheel_RL" type="Node3D" parent="." unique_id=973521946]
+[node name="Wheel_RL" type="Node3D" parent="." unique_id=1194989744]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.3175735, 0, 0.67903054)
 
-[node name="TyreAndRim" type="MeshInstance3D" parent="Wheel_RL" unique_id=1863090907]
+[node name="TyreAndRim" type="MeshInstance3D" parent="Wheel_RL" unique_id=894068668]
 material_override = ExtResource("3_dducb")
 mesh = ExtResource("6_cease")
 
-[node name="Wheel_FL" type="Node3D" parent="." unique_id=1373501291]
+[node name="Wheel_FL" type="Node3D" parent="." unique_id=1300907605]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3175732, 0, 0.6790304)
 
-[node name="TyreAndRim" type="MeshInstance3D" parent="Wheel_FL" unique_id=368677199]
+[node name="TyreAndRim" type="MeshInstance3D" parent="Wheel_FL" unique_id=2032319051]
 material_override = ExtResource("3_dducb")
 mesh = ExtResource("7_axdcr")
 
-[node name="HeadlightR" type="Marker3D" parent="." unique_id=1489436399]
+[node name="HeadlightR" type="Marker3D" parent="." unique_id=1584588238]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0.48, -0.68)
 
-[node name="BrakeLampR" type="MeshInstance3D" parent="." unique_id=843004158]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.44, 0.43, -0.68)
+[node name="BrakeLampR" type="MeshInstance3D" parent="." unique_id=1229056340]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.46, 0.24, -0.45)
 material_override = SubResource("StandardMaterial3D_hqkjo")
 mesh = SubResource("BoxMesh_xudjc")
 
-[node name="HeadlightL" type="Marker3D" parent="." unique_id=398730037]
+[node name="HeadlightL" type="Marker3D" parent="." unique_id=627860742]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0.48, 0.68)
 
-[node name="BrakeLampL" type="MeshInstance3D" parent="." unique_id=1093853479]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.44, 0.43, 0.68)
+[node name="BrakeLampL" type="MeshInstance3D" parent="." unique_id=66767260]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.46, 0.24, 0.45)
 material_override = SubResource("StandardMaterial3D_ic71m")
 mesh = SubResource("BoxMesh_ujfgf")

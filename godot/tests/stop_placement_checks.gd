@@ -76,7 +76,7 @@ func _test_catalog() -> void:
 			check(DriveStops.next_stop(x, seed_value).id == id, "Next stop includes current coordinate")
 			check(DriveStops.next_stop(x + 0.1, seed_value).id > id, "Next stop advances after passing coordinate")
 			if previous >= 0.0:
-				check(x - previous >= 1800.0 and x - previous <= 2050.0, "Sparse stop spacing stays within target")
+				check(x - previous >= 3700.0 and x - previous <= 4000.0, "Sparse stop spacing stays within target")
 			previous = x
 			check(absf(float(stop.offset)) >= 18.0 and absf(float(stop.offset)) <= 26.0, "Roadside offset range")
 			check(DriveStops._clear_footprint(profile, x, float(stop.offset)), "Footprint clears roads and rock limits")
@@ -99,7 +99,7 @@ func _test_catalog() -> void:
 	# Find a stop whose reserved yard overlaps an adjacent chunk, not just its owner.
 	var seam_stop: Dictionary = {}
 	for seed_value in 200:
-		var stop := DriveStops.next_stop(960, seed_value)
+		var stop := DriveStops.next_stop(DriveStops.REGION_LENGTH / 2, seed_value)
 		if float(stop.local_x) < 8.0 or float(stop.local_x) > 88.0:
 			seam_stop = stop
 			break
@@ -144,10 +144,8 @@ func _test_bay(world: DriveWorld, stop: Dictionary) -> void:
 	var pos: Vector3 = world.buildings[int(stop.id)].position
 	var front := -signf(float(stop.offset))
 	var space := world.get_world_3d().direct_space_state
-	for dx: float in [-1.15, 0.0, 1.15]:
-		var a := pos + Vector3(dx, 1.1, front * 6.5)
-		var b := pos + Vector3(dx, 1.1, front * 0.3)
-		var query := PhysicsRayQueryParameters3D.create(a, b)
-		check(space.intersect_ray(query).is_empty(), "Full vehicle-width bay entrance is physically open")
+	var approach := pos + Vector3(0, 0, front * 7.0)
+	check(world.nearest_building(approach).id == stop.id, "Service remains reachable outside the supplied building")
+	check(not world.is_sheltered(approach), "A closed building does not falsely shelter the forecourt")
 	var wall_query := PhysicsRayQueryParameters3D.create(pos + Vector3(-8, 1.5, 0), pos + Vector3(0, 1.5, 0))
 	check(not space.intersect_ray(wall_query).is_empty(), "Garage wall remains a real collision barrier")

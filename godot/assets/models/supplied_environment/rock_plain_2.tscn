@@ -1,0 +1,18 @@
+[gd_scene format=3]
+
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/rock_plain_2.res" id="1_kpelk"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_wfsao"]
+size = Vector3(0.75, 0.8, 0.75)
+
+[node name="SuppliedRock_Plain_2" type="Node3D" unique_id=1346103627]
+
+[node name="RockVisual" type="MeshInstance3D" parent="." unique_id=1745235627]
+transform = Transform3D(0.015286467, 0, 0, 0, 0.01168971, -2.5956371e-18, 0, 5.085467e-18, 0.022902908, 0, 6.20173e-05, 0)
+mesh = ExtResource("1_kpelk")
+
+[node name="RockCollision" type="StaticBody3D" parent="." unique_id=1463793735]
+
+[node name="@CollisionShape3D@8" type="CollisionShape3D" parent="RockCollision" unique_id=1118745437]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+shape = SubResource("BoxShape3D_wfsao")

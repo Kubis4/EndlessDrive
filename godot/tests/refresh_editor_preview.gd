@@ -10,24 +10,26 @@ func _run() -> void:
 	var distance := 0.0
 	var output := GENERATED + "editor_terrain.scn"
 	var showcases := false
+	var geometry_only := false
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--seed="): seed = arg.trim_prefix("--seed=").to_int()
 		if arg.begins_with("--distance="): distance = arg.trim_prefix("--distance=").to_float()
 		if arg.begins_with("--output="): output = arg.trim_prefix("--output=")
 		if arg == "--showcases": showcases = true
+		if arg == "--geometry-only": geometry_only = true
 	if output not in [GENERATED + "editor_terrain.scn", GENERATED + "bridge.scn", GENERATED + "rail.scn", GENERATED + "tunnel.scn", GENERATED + "alpine.scn", GENERATED + "mountain.scn", GENERATED + "canyon.scn", GENERATED + "forest.scn", GENERATED + "swamp.scn"]:
 		push_error("Only known generated preview resources may be replaced")
 		quit(1)
 		return
 	_build(seed, distance, output)
 	if showcases:
-		_wrapper("editor_terrain", seed, distance)
+		if not geometry_only: _wrapper("editor_terrain", seed, distance)
 		# Legacy seed determines feature type without rewriting the route logic.
 		for entry: Array in [["bridge", 2664.0], ["rail", 744.0], ["tunnel", 1704.0]]:
 			_build(24601, entry[1], GENERATED + entry[0] + ".scn")
-			_wrapper(entry[0], 24601, entry[1])
+			if not geometry_only: _wrapper(entry[0], 24601, entry[1])
 		_build(1000005, 180.0, GENERATED + "alpine.scn")
-		_wrapper("alpine", 1000005, 180.0)
+		if not geometry_only: _wrapper("alpine", 1000005, 180.0)
 		# Every saved showcase embeds geometry, including these older views.
 		for entry: Array in [["canyon", 1000002, 180.0], ["forest", 1000004, 180.0], ["swamp", 1000006, 120.0], ["mountain", 24601, 3200.0]]:
 			_build(int(entry[1]), float(entry[2]), GENERATED + entry[0] + ".scn")
@@ -50,7 +52,7 @@ func _build(seed: int, distance: float, path: String) -> void:
 	for chunk in world.get_children():
 		world.remove_child(chunk)
 		geometry.add_child(chunk)
-	_strip(geometry)
+	_strip(geometry, path == GENERATED + "editor_terrain.scn")
 	_owners(geometry, geometry)
 	var packed := PackedScene.new()
 	var error := packed.pack(geometry)
@@ -70,11 +72,11 @@ func _flatten(node: Node) -> void:
 		child.scene_file_path = ""
 		_flatten(child)
 
-func _strip(node: Node) -> void:
+func _strip(node: Node, omit_start_camp: bool = false) -> void:
 	for key in node.get_meta_list(): node.remove_meta(key)
 	if node is RouteHazard: node.set_script(null)
 	for child: Node in node.get_children():
-		if child is CollisionShape3D or str(child.name).begins_with("Building_"):
+		if child is CollisionShape3D or (omit_start_camp and str(child.name).begins_with("Building_0_")):
 			node.remove_child(child)
 			child.free()
 		elif child is CollisionObject3D:
@@ -88,8 +90,8 @@ func _strip(node: Node) -> void:
 			node.remove_child(child)
 			child.free()
 			node.add_child(visual)
-			_strip(visual)
-		else: _strip(child)
+			_strip(visual, omit_start_camp)
+		else: _strip(child, omit_start_camp)
 
 func _owners(node: Node, scene_root: Node) -> void:
 	for child: Node in node.get_children():

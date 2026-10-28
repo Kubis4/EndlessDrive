@@ -19,6 +19,13 @@ func _run() -> void:
 	await frames(3)
 	game._update_camera(1, true)
 	var before: Vector3 = game.camera.position
+	game.world._terrain_visibility_probe_ms = Time.get_ticks_msec() + 10000
+	game.world._terrain_blocks_road = true
+	game._update_camera(1.0, true)
+	check(game._terrain_camera_lift > 0.99 and game.camera.position.y > before.y + 45.0, "Blocked mountain view raises the camera without cutting terrain")
+	game.world._terrain_blocks_road = false
+	game._update_camera(1.0, true)
+	game.world._terrain_visibility_probe_ms = 0
 	var point: Vector3 = game.vehicle.position + Vector3(5, 0, 0)
 	for i in 40: game.world.terrain.deformation.compact(point, {"paved": 0.0, "deformable": true})
 	game._update_camera(1.0 / 60.0)

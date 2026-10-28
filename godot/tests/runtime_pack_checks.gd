@@ -17,6 +17,10 @@ func _run() -> void:
 			push_error("Missing runtime model: " + path)
 			quit(1)
 			return
+	for family: String in ["plain", "mossy", "snowy", "desert"]:
+		for variant in range(1, 5):
+			var path := "res://assets/models/supplied_environment/rock_%s_%d.tscn" % [family, variant]
+			assert(ResourceLoader.exists(path), "Missing runtime rock: " + path)
 	var game := (load("res://scenes/main.tscn") as PackedScene).instantiate()
 	game.set("_ephemeral", true)
 	root.add_child(game)

@@ -750,6 +750,7 @@ func refresh_loot(preserve_selection: bool = false) -> void:
 	if contents.is_empty():
 		_loot_list.add_child(_label(tr("Tu už nič nezostalo.\nMôžeš sa vrátiť na cestu."), 22, MUTED))
 	_update_selection()
+	_loot_diagram.vehicle_id = run.vehicle_id
 	_loot_diagram.update_parts(run.parts, _selected_part)
 
 
@@ -762,6 +763,7 @@ func _inspect_loot(item: Dictionary) -> void:
 	elif item.kind in DriveRun.FLUIDS:
 		detail += tr("\nV kufri: %d %% · nález: %d %%.") % [roundi(float(run.inventory_quality[item.kind]) * 100), roundi(float(item.get("quality", 1.0)) * 100)]
 	_loot_detail.text = detail
+	_loot_diagram.vehicle_id = run.vehicle_id
 	_loot_diagram.update_parts(run.parts, _selected_part)
 
 
@@ -822,6 +824,7 @@ func refresh_service() -> void:
 		var capacity: float = {"fuel": DriveRun.FUEL_CAPACITY, "oil": DriveRun.OIL_CAPACITY, "coolant": DriveRun.COOLANT_CAPACITY}[kind]
 		var label: Label = _fluid_info[kind]
 		label.text = tr("Auto %.1f / %.0f l · kvalita %d %%\nKufor %.1f l · kvalita %d %%") % [run.get(kind), capacity, roundi(float(run.fluid_quality[kind]) * 100), run.inventory[kind], roundi(float(run.inventory_quality[kind]) * 100)]
+	_car_diagram.vehicle_id = run.vehicle_id
 	_car_diagram.update_parts(run.parts, _selected_part)
 	_component_info.text = tr("%s · %s\nStav %d %% · sady v kufri: %d") % [tr(DriveRun.PART_NAMES[_selected_part]), tr(DriveRun.VARIANT_NAMES[run.variants[_selected_part]]), roundi(float(run.parts[_selected_part]) * 100), int(run.inventory.repairkit)]
 	if _selected_part == "brakes":

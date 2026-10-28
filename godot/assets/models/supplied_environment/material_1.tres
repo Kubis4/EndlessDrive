@@ -1,0 +1,29 @@
+[gd_resource type="StandardMaterial3D" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/models/supplied_environment/texture_1.res" id="1_l8ute"]
+[ext_resource type="Texture2D" path="res://assets/models/supplied_environment/texture_3.res" id="2_dnl6r"]
+[ext_resource type="Texture2D" path="res://assets/models/supplied_environment/texture_4.res" id="3_vvhq0"]
+[ext_resource type="Texture2D" path="res://assets/models/supplied_environment/texture_2.res" id="4_220ix"]
+
+[resource]
+resource_name = "material"
+transparency = 2
+alpha_scissor_threshold = 0.46988338
+alpha_antialiasing_mode = 0
+cull_mode = 2
+albedo_texture = ExtResource("1_l8ute")
+metallic = 1.0
+metallic_texture = ExtResource("2_dnl6r")
+metallic_texture_channel = 2
+roughness_texture = ExtResource("2_dnl6r")
+roughness_texture_channel = 1
+emission_enabled = true
+emission = Color(1, 1, 1, 1)
+emission_energy_multiplier = 1.9019542
+emission_operator = 1
+emission_texture = ExtResource("3_vvhq0")
+normal_enabled = true
+normal_texture = ExtResource("4_220ix")
+ao_enabled = true
+ao_texture = ExtResource("2_dnl6r")
+metadata/_gltf_primary_texture_coord = 0

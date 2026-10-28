@@ -60,6 +60,8 @@ static func sites(profile, region: int) -> Array[Dictionary]:
 				var wreck_point := Vector3(x, 0, center) - across * side * 1.4
 				wreck_point.y = profile.height_at(wreck_point.x, wreck_point.z)
 				site.position = wreck_point
+		# Leave longer clear stretches between abandoned cars on the road.
+		if site.kind == "wreck" and posmod(region * 3 + slot, 2) != 0: continue
 		result.append(site)
 	return result
 

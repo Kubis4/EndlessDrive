@@ -56,11 +56,11 @@ func _run() -> void:
 		terrain.route_choices = {"0": 1}
 		terrain.clear_caches()
 		var open := true
-		for x in range(600, 712, 4):
+		for x in range(600, 672, 4):
 			var lanes := terrain.road_centers(x)
 			open = open and lanes.size() == 2
 			for z in lanes: open = open and float(terrain.sample(x, z, false).road) > 0.99
-		check(open and absf(terrain.road_centers(711.99)[1] - terrain.road_centers(711.99)[0]) < 0.01, "%s: both exits stay paved/drivable and join the continuing route" % layout)
+		check(open and absf(terrain.road_centers(671.99)[1] - terrain.road_centers(671.99)[0]) < 0.01 and terrain.road_centers(678.0).size() == 1, "%s: both exits join before the tunnel foothills" % layout)
 	var world := DriveWorld.new()
 	root.add_child(world)
 	world.configure(24601)

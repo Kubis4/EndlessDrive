@@ -11,7 +11,8 @@ complete prefab, so branch/trunk collisions follow the visible model. A fitted
 ground plane aligns the trunk to the slope; support samples prevent burying it
 in a hump or leaving a badly floating log. Partial placements keep an open
 lane, while wider falls still require the off-road detour.
-The other obstacles are a rusted car shell, a small rockfall and damaged
+The other obstacles are two supplied rusted car models (`wreck.tscn` and
+`wreck_1.tscn`), a small rockfall and damaged
 concrete barriers. Instances keep winch anchors. These are static scenery;
 they do not add per-frame physics simulation or moving rigid bodies.
 

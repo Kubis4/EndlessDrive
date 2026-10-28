@@ -16,7 +16,7 @@ class SandTerrain extends DriveTerrain:
 	func center_at(_x: float) -> float: return 0.0
 	func corridor_center(_x: float) -> float: return 0.0
 	func boundary_width(_x: float) -> float: return 1000.0
-	func dry_height(x: float, z: float) -> float: return sin(x * 0.075) * sin(z * 0.09) * 0.45
+	func dry_height(x: float, z: float) -> float: return sin(x * 0.075 + z * 0.035) * 1.15 + sin(z * 0.13 - x * 0.045) * 0.42
 	func feature_at(_x: float) -> Dictionary: return {}
 	func pools_near(_x: float) -> Array[Dictionary]: return []
 	func sample(x: float, z: float, _include_water := true, _visual_blend := false) -> Dictionary:
@@ -39,8 +39,8 @@ func _ready() -> void:
 		for z in 64:
 			var a := x * 65 + z
 			fine_indices.append_array(PackedInt32Array([a, a + 65, a + 1, a + 65, a + 66, a + 1]))
-	for x in range(-4, 4):
-		for z in range(-3, 3): _build_tile(Vector2i(x, z))
+	for x in range(-7, 7):
+		for z in range(-5, 5): _build_tile(Vector2i(x, z))
 
 func _process(_dt: float) -> void:
 	var started := Time.get_ticks_usec()
@@ -162,7 +162,7 @@ func _mark(point: Vector3) -> void:
 	for x in range(floori((point.x - 1) / TILE), floori((point.x + 1) / TILE) + 1):
 		for z in range(floori((point.z - 1) / TILE), floori((point.z + 1) / TILE) + 1): dirty[Vector2i(x, z)] = true
 
-func compact_tyres(points: Array[Vector3], surface: Dictionary, pressure: float, direction := Vector2.RIGHT, shear := 0.0) -> void:
+func compact_tyres(points: Array[Vector3], surface: Dictionary, pressure: float, direction := Vector2.RIGHT, shear := 0.0, wheel_shear: Array[float] = []) -> void:
 	if previous_contacts.size() != points.size(): previous_contacts = points.duplicate()
 	for wheel in points.size():
 		var end := points[wheel]
@@ -171,7 +171,8 @@ func compact_tyres(points: Array[Vector3], surface: Dictionary, pressure: float,
 		var steps := maxi(1, ceili(Vector2(end.x - start.x, end.z - start.z).length() / 0.15))
 		for step in steps:
 			var p := start.lerp(end, float(step + 1) / steps)
-			if terrain.deformation.compact(p, surface, pressure, direction, shear): _mark(p)
+			var contact_shear := wheel_shear[wheel] if wheel_shear.size() == points.size() else shear
+			if terrain.deformation.compact(p, surface, pressure, direction, contact_shear): _mark(p)
 	previous_contacts = points.duplicate()
 
 func load_tyres(points: Array[Vector3], pressure: float, slip: float, effort: float, dt: float) -> void:
@@ -187,3 +188,5 @@ func flush_deformation() -> void:
 	for key: Vector2i in dirty.keys():
 		if tiles.has(key): _update_tile(key)
 	dirty.clear()
+
+

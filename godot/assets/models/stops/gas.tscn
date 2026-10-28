@@ -1,257 +1,314 @@
 [gd_scene format=3]
 
-[ext_resource type="Shader" path="res://shaders/prop_surface.gdshader" id="1_hxb4o"]
-[ext_resource type="CompressedTexture2DArray" path="res://assets/textures/surface-albedo-atlas.png" id="2_eyob3"]
-[ext_resource type="CompressedTexture2DArray" path="res://assets/textures/world-materials-atlas.png" id="3_y38eg"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_floor_low_poly_mat_0.res" id="1_2bvv8"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_roof_low_poly_low_poly_mat_0.res" id="2_voxm0"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_station_low_poly_mat_0.res" id="3_dsrrh"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_base_low_poly_mat_0.res" id="4_tqy3d"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_concrete_roof_low_poly_mat_0.res" id="5_mk6c1"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_billboard_low_poly_mat_0.res" id="6_cvo0y"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_door_low_poly_mat_0.res" id="7_flfd7"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_condition_low_poly_mat_0.res" id="8_c3tw2"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_condition_metal_low_poly_mat_0.res" id="9_l0rg3"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_condition_station_low_poly_mat_0.res" id="10_hxacu"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_condition_holder_low_poly_mat_0.res" id="11_hqiao"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_tube_roof_low_poly_mat_0.res" id="12_7v02r"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_gas_crome_low_poly_mat_0.res" id="13_y6q8q"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_roof_light_2_low_poly_mat_0.res" id="14_851j5"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_roof_light_4_low_poly_mat_0.res" id="15_0u7nk"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_roof_light_1_low_poly_mat_0.res" id="16_0uwcx"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_roof_light_3_low_poly_mat_0.res" id="17_k8p7m"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_automat_1_low_poly_mat_0.res" id="18_itwyc"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_automat_2_low_poly_mat_0.res" id="19_xphu4"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_panel_low_poly_mat_0.res" id="20_x5nfc"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_jalousie_low_poly_mat_0.res" id="21_wh1b0"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_wood_frame_low_poly_mat_0.res" id="22_hmiey"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_trash_1_low_poly_mat_0.res" id="23_dr5my"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_glass_low_poly_mat_0.res" id="24_32ptc"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_electro_box_low_poly_mat_0.res" id="25_fxbep"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_bolts_low_poly_mat_0.res" id="26_tjlu5"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_holder_insulator_low_poly_mat_0.res" id="27_xsdw8"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_insulator_low_poly_mat_0.res" id="28_kcmus"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_metal_insulator_low_poly_mat_0.res" id="29_513go"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_generator_holder_low_poly_mat_0.res" id="30_1mkka"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_generator_frize_low_poly_mat_0.res" id="31_1cvkv"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_generator_emiss_low_poly_mat_0.res" id="32_rlb6s"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_billboar_light_low_poly_mat_0.res" id="33_8wxfm"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_sigh_metal_low_poly_mat_0.res" id="34_0v6of"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_text_low_poly_mat_0.res" id="35_3lrcf"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_sigh_2_low_poly_mat_0.res" id="36_15o8k"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_sigh_2_metal_low_poly_mat_0.res" id="37_ynyv3"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_chair_low_poly_mat_0.res" id="38_lftad"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_generator_low_poly_mat_0.res" id="39_1qmhd"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_concrete_post_low_poly_mat_0.res" id="40_cukvi"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_sigh_low_poly_mat_0.res" id="41_rb708"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_gas_corpus_low_poly_mat_0.res" id="42_bjj8v"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_gas_holder_low_poly_mat_0.res" id="43_sxgnn"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_gas_cable_low_poly_mat_0.res" id="44_fkxpy"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_trash_1_wheel_low_poly_mat_0.res" id="45_ydc7s"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_gas_glass_low_poly_mat_0.res" id="46_vx7yi"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_generator_tube_low_poly_mat_0.res" id="47_xibk4"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_fan_low_poly_mat_0.res" id="48_ua773"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_generator_holder_2_low_poly_mat_0.res" id="49_iknn6"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_generator_frize_2_low_poly_mat_0.res" id="50_3ya4s"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_generator_2_emiss_low_poly_mat_0.res" id="51_6fq6i"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_generator_2_low_poly_mat_0.res" id="52_k45ro"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_generator_2_tube_low_poly_mat_0.res" id="53_m1b0r"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_trash_2_low_poly_mat_0.res" id="54_bepbp"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_trash_2_wheel_low_poly_mat_0.res" id="55_2ohsu"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_gas_crome_2_low_poly_mat_0.res" id="56_e2586"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_gas_corpus_2_low_poly_mat_0.res" id="57_jmmra"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_gas_holder_2_low_poly_mat_0.res" id="58_cm1i1"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_gas_cable_2_low_poly_mat_0.res" id="59_xdvse"]
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/gas_gas_glass_2_low_poly_mat_0.res" id="60_q10ld"]
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_5732b"]
-resource_name = "Detailed_1"
-render_priority = 0
-shader = ExtResource("1_hxb4o")
-shader_parameter/world_atlas = ExtResource("3_y38eg")
-shader_parameter/terrain_atlas = ExtResource("2_eyob3")
-shader_parameter/tint = Color(0.8862745, 0.8392157, 0.70980394, 1)
-shader_parameter/surface_kind = 1
-shader_parameter/roughness_value = 0.9
-shader_parameter/metallic_value = 0.0
+[sub_resource type="ConcavePolygonShape3D" id="ConcavePolygonShape3D_osid1"]
+data = PackedVector3Array(-2.3313, 3.5233998, -0.6554, -1.8256999, 3.6344, -0.6554, -1.8256999, 3.5233998, -0.6554, -1.8256999, 3.6344, -0.6554, -2.3313, 3.5233998, -0.6554, -2.3313, 6.2075996, -0.6554, -1.8256999, 3.6344, -0.6554, -2.3313, 6.2075996, -0.6554, -1.8256999, 6.2075996, -0.6554, -2.3313, 6.2075996, -0.6554, -1.8256999, 6.5234, -0.6554, -1.8256999, 6.2075996, -0.6554, -2.3313, 6.2075996, -0.6554, -2.3313, 6.5234, -0.6554, -1.8256999, 6.5234, -0.6554, 2.0667, 6.2426, 1.4988999, 5.5643, 0.5151, 1.5008999, 2.0667, 0.5, 1.4988999, 2.0667, 6.2426, 1.4988999, 5.5643, 6.2439, 1.5008999, 5.5643, 0.5151, 1.5008999, 2.0667, 0.51489997, 1.6222, 2.4987, -5.7058997, 1.6383, 2.0667, -5.2613, 1.6222, 2.0667, 0.51489997, 1.6222, 2.4987, 0.0718, 1.6383, 2.4987, -5.7058997, 1.6383, -2.0667, -5.2613, 1.6222, -2.4989, 6.6872, 1.6383, -2.0667, 6.2426, 1.6222, -2.0667, -5.2613, 1.6222, -2.4989, -5.7058997, 1.6383, -2.4989, 6.6872, 1.6383, 2.3311, 0.2145, -1.6301999, 2.3311, -5.5422, 1.3371999, 2.3311, 0.2145, 1.3371999, 2.3311, 0.2145, -1.6301999, 2.3311, -5.5422, -1.6301999, 2.3311, -5.5422, 1.3371999, 2.0667, -5.2613, 1.6222, 2.0667, 0.5, 1.4988999, 2.0667, 0.51489997, 1.6222, 2.0667, -5.2613, 1.6222, 2.0667, -5.2613, 1.4988999, 2.0667, 0.5, 1.4988999, -2.5395, 6.7518, 1.3166, -1.818, 6.6872, 1.6383, -2.4989, 6.6872, 1.6383, -2.5395, 6.7518, 1.3166, -1.8220999, 6.7518, 1.3166, -1.818, 6.6872, 1.6383, -1.8220999, 6.7518, 1.3166, 2.0693998, 6.6872, 1.6381999, -1.818, 6.6872, 1.6383, -1.8220999, 6.7518, 1.3166, 2.0693998, 6.7518, 1.3166, 2.0693998, 6.6872, 1.6381999, 2.0693998, 6.7518, 1.3166, 5.9779997, 6.6872, 1.6383, 2.0693998, 6.6872, 1.6381999, 2.0693998, 6.7518, 1.3166, 6.0186996, 6.7518, 1.3166, 5.9779997, 6.6872, 1.6383, 2.5393999, 0.0042999997, 1.3166, 2.4987, -5.7058997, 1.6383, 2.4987, 0.0718, 1.6383, 2.5393999, 0.0042999997, 1.3166, 2.5393999, -5.7703, 1.3166, 2.4987, -5.7058997, 1.6383, 2.5393999, -5.7703, 1.3166, -2.4989, -5.7058997, 1.6383, 2.4987, -5.7058997, 1.6383, 2.5393999, -5.7703, 1.3166, -2.5395, -5.7703, 1.3166, -2.4989, -5.7058997, 1.6383, 2.0667, -5.2613, 1.6222, -2.4989, -5.7058997, 1.6383, -2.0667, -5.2613, 1.6222, 2.0667, -5.2613, 1.6222, 2.4987, -5.7058997, 1.6383, -2.4989, -5.7058997, 1.6383, 2.0693998, 6.5234, 1.3371999, -1.8220999, 6.7518, 1.3166, -1.8253, 6.5234, 1.3371999, 2.0693998, 6.5234, 1.3371999, 2.0693998, 6.7518, 1.3166, -1.8220999, 6.7518, 1.3166, -1.8220999, 6.7518, 1.3166, -2.3313, 6.5234, 1.3371999, -1.8253, 6.5234, 1.3371999, -1.8220999, 6.7518, 1.3166, -2.5395, 6.7518, 1.3166, -2.3313, 6.5234, 1.3371999, -2.3313, -5.5422, 1.3371999, 2.5393999, -5.7703, 1.3166, 2.3311, -5.5422, 1.3371999, -2.3313, -5.5422, 1.3371999, -2.5395, -5.7703, 1.3166, 2.5393999, -5.7703, 1.3166, -2.5395, -5.7703, 1.3166, -2.4989, 6.6872, 1.6383, -2.4989, -5.7058997, 1.6383, -2.5395, -5.7703, 1.3166, -2.5395, 6.7518, 1.3166, -2.4989, 6.6872, 1.6383, -2.0667, -5.2613, 1.6222, 2.0667, -5.2613, 1.4988999, 2.0667, -5.2613, 1.6222, -2.0667, -5.2613, 1.6222, -2.0667, -5.2613, 1.4988999, 2.0667, -5.2613, 1.4988999, 2.0667, 6.2426, 1.6222, -2.0667, 6.2426, 1.4988999, -2.0667, 6.2426, 1.6222, 2.0667, 6.2426, 1.6222, 2.0667, 6.2426, 1.4988999, -2.0667, 6.2426, 1.4988999, -2.3313, 3.3495, -1.299, -2.3313, 6.1843, -1.6301999, -2.3313, 6.1914997, -1.324, -2.3313, 6.1843, -1.6301999, -2.3313, 6.5234, -1.327, -2.3313, 6.1914997, -1.324, -2.3313, 6.1843, -1.6301999, -2.3313, 6.5234, -1.6301999, -2.3313, 6.5234, -1.327, -2.3313, 6.5234, -1.327, -2.3313, 6.2075996, -0.6554, -2.3313, 6.1914997, -1.324, -2.3313, 6.5234, -1.327, -2.3313, 6.5234, -0.6554, -2.3313, 6.2075996, -0.6554, -2.3313, 3.3495, -1.299, -2.3313, 6.1914997, -1.324, -2.3313, 6.2075996, -0.6554, -2.3313, 3.3495, -1.299, -2.3313, 3.3523998, -1.6301999, -2.3313, 6.1843, -1.6301999, -2.3313, 3.3495, -1.299, -2.3313, 6.2075996, -0.6554, -2.3313, 3.5233998, -0.6554, -2.3313, 1.9440999, -1.6301999, -2.3313, 3.3523998, -1.6301999, -2.3313, 3.3495, -1.299, -2.3313, 3.5233998, -0.6554, -2.3313, 3.3495, 0.701, -2.3313, 3.3495, -1.299, -2.3313, 1.9440999, -1.6301999, -2.3313, 3.3495, -1.299, -2.3313, 1.9495, -1.299, -2.3313, 3.5233998, -0.6554, -2.3313, 3.5233998, 0.701, -2.3313, 3.3495, 0.701, -2.3313, -2.5016, -1.6301999, -2.3313, 1.9440999, -1.6301999, -2.3313, 1.9495, -1.299, -2.3313, 3.3495, 0.701, -2.3313, 3.5233998, 0.701, -2.3313, 3.5251, 1.3371999, -2.3313, 3.5233998, 0.701, -2.3313, 6.1777997, 1.3371999, -2.3313, 3.5251, 1.3371999, -2.3313, 3.3495, 0.701, -2.3313, 3.5251, 1.3371999, -2.3313, 3.3414998, 1.3371999, -2.3313, 3.5233998, 0.701, -2.3313, 6.2128, 0.701, -2.3313, 6.1777997, 1.3371999, -2.3313, 6.2128, 0.701, -2.3313, 6.5234, 1.3371999, -2.3313, 6.1777997, 1.3371999, -2.3313, 6.2128, 0.701, -2.3313, 6.5234, 0.701, -2.3313, 6.5234, 1.3371999, -2.3313, 1.9495, 0.701, -2.3313, 3.3495, 0.701, -2.3313, 3.3414998, 1.3371999, -2.3313, 1.9495, 0.701, -2.3313, 3.3414998, 1.3371999, -2.3313, 1.9554, 1.3371999, -2.3313, 1.7903, 0.701, -2.3313, 1.9495, 0.701, -2.3313, 1.9554, 1.3371999, -2.3313, 1.9495, 0.701, -2.3313, 1.7903, 0.701, -2.3313, 1.7903, -0.6554, -2.3313, 1.9495, 0.701, -2.3313, 1.7903, -0.6554, -2.3313, 1.9495, -1.299, -2.3313, 1.7854999, 1.1319, -2.3313, 1.7903, 0.701, -2.3313, 1.9554, 1.3371999, -2.3313, -0.2586, -0.6554, -2.3313, 1.9495, -1.299, -2.3313, 1.7903, -0.6554, -2.3313, 1.7854999, 1.1319, -2.3313, -0.2586, 0.701, -2.3313, 1.7903, 0.701, -2.3313, 1.9554, 1.3371999, -2.3313, 1.7832999, 1.3371999, -2.3313, 1.7854999, 1.1319, -2.3313, 1.7854999, 1.1319, -2.3313, -2.5305, 1.1435, -2.3313, -0.2586, 0.701, -2.3313, -2.5305, 1.1435, -2.3313, 1.7854999, 1.1319, -2.3313, 1.7832999, 1.3371999, -2.3313, -2.5305, 1.1435, -2.3313, 1.7832999, 1.3371999, -2.3313, -2.5224, 1.3371999, -2.3313, -2.5305, 1.1435, -2.3313, -0.2586, 0.39999998, -2.3313, -0.2586, 0.701, -2.3313, -4.1082997, 1.3371999, -2.3313, -2.5305, 1.1435, -2.3313, -2.5224, 1.3371999, -2.3313, -4.1082997, 1.3371999, -2.3313, -4.1013, 1.1435, -2.3313, -2.5305, 1.1435, -2.3313, -2.5305, 1.1435, -2.3313, -2.5305, 0.46699998, -2.3313, -0.2586, 0.39999998, -2.3313, -2.5305, 0.46699998, -2.3313, -0.2586, -0.6554, -2.3313, -0.2586, 0.39999998, -2.3313, -4.2118998, 1.3371999, -2.3313, -4.1013, 1.1435, -2.3313, -4.1082997, 1.3371999, -2.3313, -4.2118998, 1.3371999, -2.3313, -4.1953, 1.1435, -2.3313, -4.1013, 1.1435, -2.3313, -4.2118998, 1.3371999, -2.3313, -5.4537, 1.1435, -2.3313, -4.1953, 1.1435, -2.3313, -4.2118998, 1.3371999, -2.3313, -5.5422, 1.3371999, -2.3313, -5.4537, 1.1435, -2.3313, -4.1953, 1.1435, -2.3313, -4.1013, 0.46699998, -2.3313, -4.1013, 1.1435, -2.3313, -5.4537, 0.46699998, -2.3313, -5.4537, 1.1435, -2.3313, -5.5422, 1.3371999, -2.3313, -5.4537, 0.46699998, -2.3313, -5.5422, 1.3371999, -2.3313, -5.5422, 0.46179998, -2.3313, -4.1953, 1.1435, -2.3313, -4.1953, 0.46699998, -2.3313, -4.1013, 0.46699998, -2.3313, -5.4537, 0.46699998, -2.3313, -5.5422, 0.46179998, -2.3313, -5.5422, -1.3074, -2.3313, -4.1953, 0.46699998, -2.3313, -5.4537, 0.46699998, -2.3313, -5.4452996, -1.3073, -2.3313, -5.4537, 0.46699998, -2.3313, -5.5422, -1.3074, -2.3313, -5.4452996, -1.3073, -2.3313, -5.5422, -1.3074, -2.3313, -5.444, -1.6301999, -2.3313, -5.4452996, -1.3073, -2.3313, -5.5422, -1.3074, -2.3313, -5.5422, -1.6301999, -2.3313, -5.444, -1.6301999, -2.3313, -4.1953, 0.46699998, -2.3313, -5.4452996, -1.3073, -2.3313, -4.1875, -1.3059, -2.3313, -5.444, -1.6301999, -2.3313, -4.1875, -1.3059, -2.3313, -5.4452996, -1.3073, -2.3313, -4.1013, 0.46699998, -2.3313, -4.1953, 0.46699998, -2.3313, -4.1875, -1.3059, -2.3313, -5.444, -1.6301999, -2.3313, -4.1861, -1.6301999, -2.3313, -4.1875, -1.3059, -2.3313, -4.1013, 0.46699998, -2.3313, -4.1875, -1.3059, -2.3313, -4.0924997, -1.3058, -2.3313, -4.1861, -1.6301999, -2.3313, -4.0924997, -1.3058, -2.3313, -4.1875, -1.3059, -2.3313, -2.5305, 0.46699998, -2.3313, -4.1013, 0.46699998, -2.3313, -4.0924997, -1.3058, -2.3313, -4.1861, -1.6301999, -2.3313, -4.0908, -1.6301999, -2.3313, -4.0924997, -1.3058, -2.3313, -2.5305, 0.46699998, -2.3313, -4.0924997, -1.3058, -2.3313, -2.5061998, -1.304, -2.3313, -4.0908, -1.6301999, -2.3313, -2.5061998, -1.304, -2.3313, -4.0924997, -1.3058, -2.3313, -2.5305, 0.46699998, -2.3313, -2.5061998, -1.304, -2.3313, -0.2586, -0.6554, -2.3313, -4.0908, -1.6301999, -2.3313, -2.5016, -1.6301999, -2.3313, -2.5061998, -1.304, -2.3313, -0.2586, -0.6554, -2.3313, -2.5061998, -1.304, -2.3313, 1.9495, -1.299, -2.3313, -2.5016, -1.6301999, -2.3313, 1.9495, -1.299, -2.3313, -2.5061998, -1.304, -2.3313, 1.9495, 0.701, -1.8256999, 1.9495, -1.299, -1.8256999, 1.9495, 0.701, -2.3313, 1.9495, 0.701, -2.3313, 1.9495, -1.299, -1.8256999, 1.9495, -1.299, -1.8256999, 1.9495, -1.299, -2.3313, 3.3495, -1.299, -1.8256999, 3.3495, -1.299, -1.8256999, 1.9495, -1.299, -2.3313, 1.9495, -1.299, -2.3313, 3.3495, -1.299, -1.8256999, 3.3495, 0.701, -2.3313, 1.9495, 0.701, -1.8256999, 1.9495, 0.701, -1.8256999, 3.3495, 0.701, -2.3313, 3.3495, 0.701, -2.3313, 1.9495, 0.701, -2.3313, 1.7903, -0.6554, -1.8256999, 1.7903, 0.701, -1.8256999, 1.7903, -0.6554, -2.3313, 1.7903, -0.6554, -2.3313, 1.7903, 0.701, -1.8256999, 1.7903, 0.701, -2.3313, -0.2586, 0.39999998, -1.8256999, -0.2586, -0.6554, -1.8256999, -0.2586, 0.39999998, -2.3313, -0.2586, 0.39999998, -2.3313, -0.2586, -0.6554, -1.8256999, -0.2586, -0.6554, -2.3313, -0.2586, 0.701, -2.3313, -0.2586, 0.39999998, -1.8256999, -0.2586, 0.39999998, -2.3313, -0.2586, 0.701, -1.8256999, -0.2586, 0.39999998, -1.8256999, -0.2586, 0.701, -1.8256999, -0.2586, -0.6554, -2.3313, 1.7903, -0.6554, -1.8256999, 1.7903, -0.6554, -1.8256999, -0.2586, -0.6554, -2.3313, -0.2586, -0.6554, -2.3313, 1.7903, -0.6554, -1.8256999, 1.7903, 0.701, -2.3313, -0.2586, 0.701, -1.8256999, -0.2586, 0.701, -1.8256999, 1.7903, 0.701, -2.3313, 1.7903, 0.701, -2.3313, -0.2586, 0.701, -2.3313, 3.5233998, 0.701, -1.8256999, 3.5233998, -0.6554, -1.8256999, 3.5233998, 0.701, -2.3313, 3.5233998, 0.701, -2.3313, 3.5233998, -0.6554, -1.8256999, 3.5233998, -0.6554, -1.8256999, 6.2128, 0.701, -2.3313, 3.5233998, 0.701, -1.8256999, 3.5233998, 0.701, -1.8256999, 6.2128, 0.701, -2.3313, 6.2128, 0.701, -2.3313, 3.5233998, 0.701, -1.8256999, 6.5234, 0.701, -2.3313, 6.2128, 0.701, -1.8256999, 6.2128, 0.701, -1.8256999, 6.5234, 0.701, -2.3313, 6.5234, 0.701, -2.3313, 6.2128, 0.701, -1.8256999, 3.3495, 0.701, -2.3313, 3.3495, -1.299, -2.3313, 3.3495, 0.701, -1.8256999, 3.3495, 0.701, -1.8256999, 3.3495, -1.299, -2.3313, 3.3495, -1.299, -1.8256999, 6.2128, 0.701, -0.47599998, 6.5234, 0.701, -1.8256999, 6.5234, 0.701, -1.8256999, 6.2128, 0.701, -0.47599998, 6.2128, 0.701, -0.47599998, 6.5234, 0.701, -0.47599998, 6.5234, -0.6554, -0.47599998, 6.2128, 0.701, -0.47599998, 6.2075996, -0.6554, -0.47599998, 6.5234, -0.6554, -0.47599998, 6.5234, 0.701, -0.47599998, 6.2128, 0.701, -1.8256999, 6.5234, -0.6554, -0.47599998, 6.2075996, -0.6554, -1.8256999, 6.2075996, -0.6554, -1.8256999, 6.5234, -0.6554, -0.47599998, 6.5234, -0.6554, -0.47599998, 6.2075996, -0.6554, 2.0693998, 6.5234, 1.3371999, -1.8256999, 6.5234, 0.701, -0.47599998, 6.5234, 0.701, 2.0693998, 6.5234, 1.3371999, -0.47599998, 6.5234, 0.701, -0.47599998, 6.5234, -0.6554, 2.0693998, 6.5234, 1.3371999, -1.8253, 6.5234, 1.3371999, -1.8256999, 6.5234, 0.701, -1.8253, 6.5234, 1.3371999, -2.3313, 6.5234, 0.701, -1.8256999, 6.5234, 0.701, -1.8253, 6.5234, 1.3371999, -2.3313, 6.5234, 1.3371999, -2.3313, 6.5234, 0.701, 2.0693998, 6.5234, 1.3371999, -0.47599998, 6.5234, -0.6554, 2.0693998, 6.5234, -1.6301999, 2.3069, 6.5234, 1.1711999, 2.0693998, 6.5234, 1.3371999, 2.0693998, 6.5234, -1.6301999, 2.3069, 6.5234, 1.1711999, 2.0693998, 6.5234, -1.6301999, 2.3069, 6.5234, -1.6301999, 5.5731997, 6.5234, 1.1711999, 2.0693998, 6.5234, 1.3371999, 2.3069, 6.5234, 1.1711999, 5.5731997, 6.5234, 1.1711999, 5.8104997, 6.5234, 1.3371999, 2.0693998, 6.5234, 1.3371999, 5.5731997, 6.5234, -1.6301999, 5.8104997, 6.5234, 1.3371999, 5.5731997, 6.5234, 1.1711999, 5.5731997, 6.5234, -1.6301999, 5.8104997, 6.5234, -1.6301999, 5.8104997, 6.5234, 1.3371999, 2.0693998, 6.5234, -1.6301999, -0.47599998, 6.5234, -0.6554, -1.8256999, 6.5234, -1.3441, -0.47599998, 6.5234, -0.6554, -1.8256999, 6.5234, -0.6554, -1.8256999, 6.5234, -1.3441, -1.8256999, 6.5234, -1.3441, -1.8256999, 6.5234, -1.6301999, 2.0693998, 6.5234, -1.6301999, -1.8256999, 6.5234, -0.6554, -2.3313, 6.5234, -1.327, -1.8256999, 6.5234, -1.3441, -2.3313, 6.5234, -1.327, -1.8256999, 6.5234, -1.6301999, -1.8256999, 6.5234, -1.3441, -1.8256999, 6.5234, -0.6554, -2.3313, 6.5234, -0.6554, -2.3313, 6.5234, -1.327, -2.3313, 6.5234, -1.327, -2.3313, 6.5234, -1.6301999, -1.8256999, 6.5234, -1.6301999, -1.9092, -2.5305, 0.46699998, -2.3313, -2.5305, 1.1435, -1.9092, -2.5305, 1.1435, -1.9092, -2.5305, 0.46699998, -2.3313, -2.5305, 0.46699998, -2.3313, -2.5305, 1.1435, -1.9092, -2.5305, 0.46699998, -1.9092, -4.1013, 1.1435, -1.9092, -4.1013, 0.46699998, -1.9092, -2.5305, 0.46699998, -1.9092, -2.5305, 1.1435, -1.9092, -4.1013, 1.1435, -2.3313, -4.1013, 1.1435, -1.9092, -4.1013, 0.46699998, -1.9092, -4.1013, 1.1435, -2.3313, -4.1013, 1.1435, -2.3313, -4.1013, 0.46699998, -1.9092, -4.1013, 0.46699998, -1.9092, -4.1013, 0.46699998, -2.3313, -2.5305, 0.46699998, -1.9092, -2.5305, 0.46699998, -1.9092, -4.1013, 0.46699998, -2.3313, -4.1013, 0.46699998, -2.3313, -2.5305, 0.46699998, -1.9092, -2.5305, 1.1435, -2.3313, -4.1013, 1.1435, -1.9092, -4.1013, 1.1435, -1.9092, -2.5305, 1.1435, -2.3313, -2.5305, 1.1435, -2.3313, -4.1013, 1.1435, -1.9092, -4.1953, 0.46699998, -2.3313, -4.1953, 1.1435, -1.9092, -4.1953, 1.1435, -1.9092, -4.1953, 0.46699998, -2.3313, -4.1953, 0.46699998, -2.3313, -4.1953, 1.1435, -1.9092, -4.1953, 0.46699998, -1.9092, -5.4537, 1.1435, -1.9092, -5.4537, 0.46699998, -1.9092, -4.1953, 0.46699998, -1.9092, -4.1953, 1.1435, -1.9092, -5.4537, 1.1435, -2.3313, -5.4537, 1.1435, -1.9092, -5.4537, 0.46699998, -1.9092, -5.4537, 1.1435, -2.3313, -5.4537, 1.1435, -2.3313, -5.4537, 0.46699998, -1.9092, -5.4537, 0.46699998, -1.9092, -5.4537, 0.46699998, -2.3313, -4.1953, 0.46699998, -1.9092, -4.1953, 0.46699998, -1.9092, -5.4537, 0.46699998, -2.3313, -5.4537, 0.46699998, -2.3313, -4.1953, 0.46699998, -1.9092, -4.1953, 1.1435, -2.3313, -5.4537, 1.1435, -1.9092, -5.4537, 1.1435, -1.9092, -4.1953, 1.1435, -2.3313, -4.1953, 1.1435, -2.3313, -5.4537, 1.1435, 2.0667, 6.2426, 1.6222, 5.5643, 6.2439, 1.5008999, 2.0667, 6.2426, 1.4988999, 2.0667, 6.2426, 1.6222, 5.5643, 6.2439, 1.6383, 5.5643, 6.2439, 1.5008999, 2.3311, -5.5422, 1.3371999, 2.5393999, 0.0042999997, 1.3166, 2.3311, 0.2145, 1.3371999, 2.3311, -5.5422, 1.3371999, 2.5393999, -5.7703, 1.3166, 2.5393999, 0.0042999997, 1.3166, 6.0186996, 6.7518, 1.3166, 5.9779997, 0.0718, 1.6383, 5.9779997, 6.6872, 1.6383, 6.0186996, 6.7518, 1.3166, 6.0186996, 0.0042999997, 1.3166, 5.9779997, 0.0718, 1.6383, 5.8104997, 6.5234, -1.6301999, 5.8104997, 0.2145, 1.3371999, 5.8104997, 6.5234, 1.3371999, 5.8104997, 6.5234, -1.6301999, 5.8104997, 0.2145, -1.6301999, 5.8104997, 0.2145, 1.3371999, 2.3311, 0.2145, 1.3371999, 6.0186996, 0.0042999997, 1.3166, 5.8104997, 0.2145, 1.3371999, 2.3311, 0.2145, 1.3371999, 2.5393999, 0.0042999997, 1.3166, 6.0186996, 0.0042999997, 1.3166, 5.8104997, 6.5234, 1.3371999, 5.8104997, 0.2145, 1.3371999, 6.0186996, 0.0042999997, 1.3166, 5.8104997, 6.5234, 1.3371999, 6.0186996, 0.0042999997, 1.3166, 6.0186996, 6.7518, 1.3166, 5.8104997, 6.5234, 1.3371999, 6.0186996, 6.7518, 1.3166, 2.0693998, 6.7518, 1.3166, 5.8104997, 6.5234, 1.3371999, 2.0693998, 6.7518, 1.3166, 2.0693998, 6.5234, 1.3371999, 2.4987, 0.0718, 1.6383, 6.0186996, 0.0042999997, 1.3166, 2.5393999, 0.0042999997, 1.3166, 2.4987, 0.0718, 1.6383, 5.9779997, 0.0718, 1.6383, 6.0186996, 0.0042999997, 1.3166, 2.3069, 6.5234, -1.6301999, 2.3069, 5.9414, 1.1711999, 2.3069, 6.5234, 1.1711999, 2.3069, 6.5234, -1.6301999, 2.3069, 5.9414, -1.6301999, 2.3069, 5.9414, 1.1711999, 2.3311, 0.2145, 1.3371999, 5.8104997, 0.2145, -1.6301999, 2.3311, 0.2145, -1.6301999, 2.3311, 0.2145, 1.3371999, 5.8104997, 0.2145, 1.3371999, 5.8104997, 0.2145, -1.6301999, 5.5643, 6.2439, 1.6383, 2.0693998, 6.6872, 1.6381999, 5.9779997, 6.6872, 1.6383, 5.5643, 6.2439, 1.6383, 2.0667, 6.2426, 1.6222, 2.0693998, 6.6872, 1.6381999, -1.818, 6.6872, 1.6383, 2.0693998, 6.6872, 1.6381999, 2.0667, 6.2426, 1.6222, -1.818, 6.6872, 1.6383, 2.0667, 6.2426, 1.6222, -2.0667, 6.2426, 1.6222, -2.0667, 6.2426, 1.6222, -2.4989, 6.6872, 1.6383, -1.818, 6.6872, 1.6383, 5.5643, 6.2439, 1.6383, 5.9779997, 0.0718, 1.6383, 5.5643, 0.5151, 1.6383, 5.5643, 6.2439, 1.6383, 5.9779997, 6.6872, 1.6383, 5.9779997, 0.0718, 1.6383, 5.5643, 0.5151, 1.6383, 2.4987, 0.0718, 1.6383, 2.0667, 0.51489997, 1.6222, 5.5643, 0.5151, 1.6383, 5.9779997, 0.0718, 1.6383, 2.4987, 0.0718, 1.6383, 5.5643, 0.5151, 1.6383, 5.5643, 6.2439, 1.5008999, 5.5643, 6.2439, 1.6383, 5.5643, 0.5151, 1.6383, 5.5643, 0.5151, 1.5008999, 5.5643, 6.2439, 1.5008999, -2.0667, 6.2426, 1.6222, -2.0667, -5.2613, 1.4988999, -2.0667, -5.2613, 1.6222, -2.0667, 6.2426, 1.6222, -2.0667, 6.2426, 1.4988999, -2.0667, -5.2613, 1.4988999, 5.5643, 0.5151, 1.5008999, 2.0667, 0.51489997, 1.6222, 2.0667, 0.5, 1.4988999, 5.5643, 0.5151, 1.5008999, 5.5643, 0.5151, 1.6383, 2.0667, 0.51489997, 1.6222, 5.5731997, 6.5234, 1.1711999, 5.5731997, 5.9414, -1.6301999, 5.5731997, 6.5234, -1.6301999, 5.5731997, 6.5234, 1.1711999, 5.5731997, 5.9414, 1.1711999, 5.5731997, 5.9414, -1.6301999, 2.3069, 6.5234, 1.1711999, 5.5731997, 5.9414, 1.1711999, 5.5731997, 6.5234, 1.1711999, 2.3069, 6.5234, 1.1711999, 2.3069, 5.9414, 1.1711999, 5.5731997, 5.9414, 1.1711999, -2.3313, 6.5234, 1.3371999, -2.5395, 6.7518, 1.3166, -2.5395, -5.7703, 1.3166, -2.5395, -5.7703, 1.3166, -2.3313, -5.5422, 1.3371999, -2.3313, 6.5234, 1.3371999, 2.3311, -5.5422, 1.3371999, 2.3311, -5.5422, -1.6301999, -2.3313, -5.5422, -1.6301999, -2.3313, -5.5422, -1.6301999, -2.3313, -5.5422, -1.3074, 2.3311, -5.5422, 1.3371999, -2.3313, -5.5422, -1.3074, -2.3313, -5.5422, 0.46179998, 2.3311, -5.5422, 1.3371999, -2.3313, -5.5422, 0.46179998, -2.3313, -5.5422, 1.3371999, 2.3311, -5.5422, 1.3371999, 2.0667, -5.2613, 1.4988999, -2.0667, -5.2613, 1.4988999, -2.0667, 6.2426, 1.4988999, -2.0667, 6.2426, 1.4988999, 2.0667, 6.2426, 1.4988999, 2.0667, -5.2613, 1.4988999)
 
-[sub_resource type="BoxMesh" id="BoxMesh_v7eup"]
-size = Vector3(10, 2.9, 4.2)
+[node name="SuppliedGasStation" type="Node3D" unique_id=745538267]
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_2c46g"]
-size = Vector3(10, 2.9, 4.2)
+[node name="FLOOR_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=207770167]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -0.58797914, -2.1401432e-16, 6.402052)
+mesh = ExtResource("1_2bvv8")
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hxb4o"]
-albedo_color = Color(0.27058825, 0.42352942, 0.44705883, 1)
-roughness = 0.87
+[node name="ROOF_LOW_POLY_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=121241516]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -2.1142454, 3.4293056, 8.1586)
+mesh = ExtResource("2_voxm0")
 
-[sub_resource type="BoxMesh" id="BoxMesh_eyob3"]
-size = Vector3(3.5, 1.35, 0.08)
+[node name="STATION_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=231281407]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 0.4907273, 1.6242381, 1.7396393)
+mesh = ExtResource("3_dsrrh")
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_hc0ot"]
-resource_name = "Detailed_0"
-render_priority = 0
-shader = ExtResource("1_hxb4o")
-shader_parameter/world_atlas = ExtResource("3_y38eg")
-shader_parameter/terrain_atlas = ExtResource("2_eyob3")
-shader_parameter/tint = Color(0.29411766, 0.46666667, 0.48235294, 1)
-shader_parameter/surface_kind = 0
-shader_parameter/roughness_value = 0.9
-shader_parameter/metallic_value = 0.0
+[node name="BASE_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1199770082]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -2.1903086, 0.17180075, 4.835801)
+mesh = ExtResource("4_tqy3d")
 
-[sub_resource type="BoxMesh" id="BoxMesh_5732b"]
-size = Vector3(1.35, 2.2, 0.1)
+[node name="CONCRETE_ROOF_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1504351592]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -2.141021, 3.408735, 4.833802)
+mesh = ExtResource("5_mk6c1")
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_oph67"]
-resource_name = "Detailed_2"
-render_priority = 0
-shader = ExtResource("1_hxb4o")
-shader_parameter/world_atlas = ExtResource("3_y38eg")
-shader_parameter/terrain_atlas = ExtResource("2_eyob3")
-shader_parameter/tint = Color(0.7764706, 0.45882353, 0.27450982, 1)
-shader_parameter/surface_kind = 2
-shader_parameter/roughness_value = 0.68
-shader_parameter/metallic_value = 0.25
+[node name="BILLBOARD_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1320189156]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -0.24590161, 5.105912, 7.3707194)
+mesh = ExtResource("6_cvo0y")
 
-[sub_resource type="BoxMesh" id="BoxMesh_oph67"]
-size = Vector3(11.3, 0.3, 7.2)
+[node name="DOOR_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1346917501]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -1.458726, 1.3252612, 4.0322766)
+mesh = ExtResource("7_flfd7")
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_0ysna"]
-size = Vector3(11.3, 0.3, 7.2)
+[node name="CONDITION_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=560326405]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 2.405769, 3.546931, 4.5319834)
+mesh = ExtResource("8_c3tw2")
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_0ysna"]
-resource_name = "Detailed_2"
-render_priority = 0
-shader = ExtResource("1_hxb4o")
-shader_parameter/world_atlas = ExtResource("3_y38eg")
-shader_parameter/terrain_atlas = ExtResource("2_eyob3")
-shader_parameter/tint = Color(0.9411765, 0.87058824, 0.6862745, 1)
-shader_parameter/surface_kind = 2
-shader_parameter/roughness_value = 0.68
-shader_parameter/metallic_value = 0.25
+[node name="CONDITION_METAL_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1833927414]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 2.405769, 3.201799, 4.5319834)
+mesh = ExtResource("9_l0rg3")
 
-[sub_resource type="BoxMesh" id="BoxMesh_latff"]
-size = Vector3(11.35, 0.2, 0.06)
+[node name="CONDITION_STATION_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1409813323]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 2.405769, 2.429524, 3.8735034)
+mesh = ExtResource("10_hxacu")
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_aa1wg"]
-resource_name = "Detailed_2"
-render_priority = 0
-shader = ExtResource("1_hxb4o")
-shader_parameter/world_atlas = ExtResource("3_y38eg")
-shader_parameter/terrain_atlas = ExtResource("2_eyob3")
-shader_parameter/tint = Color(0.8862745, 0.8392157, 0.70980394, 1)
-shader_parameter/surface_kind = 2
-shader_parameter/roughness_value = 0.68
-shader_parameter/metallic_value = 0.25
+[node name="CONDITION_HOLDER_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1783966509]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 2.7853804, 3.0931518, 4.4926643)
+mesh = ExtResource("11_hqiao")
 
-[sub_resource type="BoxMesh" id="BoxMesh_0b6tb"]
-size = Vector3(0.22, 3.6, 0.22)
+[node name="TUBE_ROOF_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1773172247]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 5.346317, 3.4695134, 1.1180515)
+mesh = ExtResource("12_7v02r")
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_uvti1"]
-size = Vector3(0.22, 3.6, 0.22)
+[node name="GAS_CROME_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=14814774]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -1.1771568, 1.1046075, 9.900828)
+mesh = ExtResource("13_y6q8q")
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_latff"]
-resource_name = "Detailed_2"
-render_priority = 0
-shader = ExtResource("1_hxb4o")
-shader_parameter/world_atlas = ExtResource("3_y38eg")
-shader_parameter/terrain_atlas = ExtResource("2_eyob3")
-shader_parameter/tint = Color(0.70980394, 0.3372549, 0.24705882, 1)
-shader_parameter/surface_kind = 2
-shader_parameter/roughness_value = 0.68
-shader_parameter/metallic_value = 0.25
+[node name="ROOF_LIGHT_2_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=407355461]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -2.0743847, 3.267208, 6.0085235)
+mesh = ExtResource("14_851j5")
 
-[sub_resource type="BoxMesh" id="BoxMesh_rw275"]
-size = Vector3(0.9, 1.9, 0.85)
+[node name="ROOF_LIGHT_4_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=273634416]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -1.3487711, 3.0030773, 4.835049)
+mesh = ExtResource("15_0u7nk")
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_vn47w"]
-size = Vector3(0.9, 1.9, 0.85)
+[node name="ROOF_LIGHT_1_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=2024237860]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 1.3460784, 2.9427948, 5.4867535)
+mesh = ExtResource("16_0uwcx")
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_yp1gv"]
-albedo_color = Color(0.8392157, 0.84705883, 0.6509804, 1)
-roughness = 0.87
+[node name="ROOF_LIGHT_3_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=915962021]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -5.684873, 2.9427948, 5.486754)
+mesh = ExtResource("17_k8p7m")
 
-[sub_resource type="BoxMesh" id="BoxMesh_nudtf"]
-size = Vector3(0.68, 0.45, 0.04)
+[node name="AUTOMAT_1_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1745139050]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 1.4100951, 0.9913442, 4.4618497)
+mesh = ExtResource("18_itwyc")
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_e2v0w"]
-albedo_color = Color(0.1882353, 0.22352941, 0.21568628, 1)
-roughness = 0.87
+[node name="AUTOMAT_2_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=294422177]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 2.452056, 0.9913442, 4.4618497)
+mesh = ExtResource("19_xphu4")
 
-[sub_resource type="CylinderMesh" id="CylinderMesh_6tgqi"]
-top_radius = 0.05
-bottom_radius = 0.05
-height = 1.2835498
-radial_segments = 5
+[node name="PANEL_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1534461359]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 2.862318, 1.1560044, 4.83303)
+mesh = ExtResource("20_x5nfc")
 
-[sub_resource type="BoxMesh" id="BoxMesh_l6k1h"]
-size = Vector3(0.22, 3.6, 0.22)
+[node name="JALOUSIE_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=564593055]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 0.17091492, 1.639071, 3.7514434)
+mesh = ExtResource("21_wh1b0")
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_jlwob"]
-size = Vector3(0.22, 3.6, 0.22)
+[node name="WOOD_FRAME_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1127734586]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -0.2652325, 1.639071, 3.9948788)
+mesh = ExtResource("22_hmiey")
 
-[sub_resource type="BoxMesh" id="BoxMesh_r7y47"]
-size = Vector3(0.9, 1.9, 0.85)
+[node name="TRASH_1_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1846915977]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 3.1741507, 1.1197436, -1.2224768)
+mesh = ExtResource("23_dr5my")
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_f35x1"]
-size = Vector3(0.9, 1.9, 0.85)
+[node name="GLASS_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1852544840]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 5.3203516, 2.4306586, 3.9948785)
+mesh = ExtResource("24_32ptc")
 
-[sub_resource type="BoxMesh" id="BoxMesh_c6pfu"]
-size = Vector3(0.68, 0.45, 0.04)
+[node name="ELECTRO_BOX_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1775008847]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 4.618054, 4.162161, 2.942007)
+mesh = ExtResource("25_fxbep")
 
-[sub_resource type="CylinderMesh" id="CylinderMesh_8soh7"]
-top_radius = 0.05
-bottom_radius = 0.05
-height = 1.2835498
-radial_segments = 5
+[node name="BOLTS_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1664056504]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 4.6437006, 5.470357, 2.9497461)
+mesh = ExtResource("26_tjlu5")
 
-[node name="Stop_gas" type="Node3D" unique_id=1805543535]
+[node name="HOLDER_INSULATOR_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1760811129]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 4.657306, 5.307313, 2.944347)
+mesh = ExtResource("27_xsdw8")
 
-[node name="StationKiosk" type="MeshInstance3D" parent="." unique_id=1150680269]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.45, -1.4)
-material_override = SubResource("ShaderMaterial_5732b")
-mesh = SubResource("BoxMesh_v7eup")
+[node name="INSULATOR_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=772787249]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 4.640282, 5.620953, 2.950961)
+mesh = ExtResource("28_kcmus")
 
-[node name="Collision" type="StaticBody3D" parent="." unique_id=849319377]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.45, -1.4)
+[node name="METAL_INSULATOR_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=396773955]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 4.6046443, 5.32915, 2.9443617)
+mesh = ExtResource("29_513go")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Collision" unique_id=2104697459]
-shape = SubResource("BoxShape3D_2c46g")
+[node name="GENERATOR_HOLDER_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=203360676]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 6.8729258, 0.16016765, 2.3514237)
+mesh = ExtResource("30_1mkka")
 
-[node name="KioskWindow" type="MeshInstance3D" parent="." unique_id=1470257832]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 1.6, 0.75)
-material_override = SubResource("StandardMaterial3D_hxb4o")
-mesh = SubResource("BoxMesh_eyob3")
+[node name="GENERATOR_FRIZE_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=2063647682]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 7.319535, 1.3408923, 3.5759268)
+mesh = ExtResource("31_1cvkv")
 
-[node name="KioskDoor" type="MeshInstance3D" parent="." unique_id=673925050]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.8, 1.1, 0.76)
-material_override = SubResource("ShaderMaterial_hc0ot")
-mesh = SubResource("BoxMesh_5732b")
+[node name="GENERATOR_EMISS_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=595744224]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 6.8729258, 0.39459082, 2.8177829)
+mesh = ExtResource("32_rlb6s")
 
-[node name="PumpCanopy" type="MeshInstance3D" parent="." unique_id=243046163]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.8, 2.8)
-material_override = SubResource("ShaderMaterial_oph67")
-mesh = SubResource("BoxMesh_oph67")
+[node name="BILLBOAR_LIGHT_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1070600971]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -0.23980066, 5.9928, 11.546315)
+mesh = ExtResource("33_8wxfm")
 
-[node name="StaticBody3D" type="StaticBody3D" parent="." unique_id=1744060215]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.8, 2.8)
+[node name="SIGH_METAL_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=597829937]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 11.581319, 0.075339735, 12.233024)
+mesh = ExtResource("34_0v6of")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D" unique_id=2119124787]
-shape = SubResource("BoxShape3D_0ysna")
+[node name="TEXT_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=617616537]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -2.1701026, 2.670971, 4.075773)
+mesh = ExtResource("35_3lrcf")
 
-[node name="CanopyStripe" type="MeshInstance3D" parent="." unique_id=2015444878]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.78, 6.43)
-material_override = SubResource("ShaderMaterial_0ysna")
-mesh = SubResource("BoxMesh_latff")
+[node name="SIGH_2_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1455378966]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -5.9658055, 2.6800547, 4.3875685)
+mesh = ExtResource("36_15o8k")
 
-[node name="CanopyColumn" type="MeshInstance3D" parent="." unique_id=290833328]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 1.8, 5.5)
-material_override = SubResource("ShaderMaterial_aa1wg")
-mesh = SubResource("BoxMesh_0b6tb")
+[node name="SIGH_2_METAL_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=953407388]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -5.9677954, 2.566297, 4.1127076)
+mesh = ExtResource("37_ynyv3")
 
-[node name="StaticBody3D2" type="StaticBody3D" parent="." unique_id=1831436166]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 1.8, 5.5)
+[node name="CHAIR_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=217772805]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -3.52081, 0.6538304, 4.4524693)
+mesh = ExtResource("38_lftad")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D2" unique_id=1190529108]
-shape = SubResource("BoxShape3D_uvti1")
+[node name="GENERATOR_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=976800571]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 6.007638, 2.6586916, 2.8340704)
+mesh = ExtResource("39_1qmhd")
 
-[node name="FuelPump" type="MeshInstance3D" parent="." unique_id=1762618361]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.3, 0.95, 3.4)
-material_override = SubResource("ShaderMaterial_latff")
-mesh = SubResource("BoxMesh_rw275")
+[node name="CONCRETE_POST_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1135004460]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -0.24590173, 2.8715377, 4.8336926)
+mesh = ExtResource("40_cukvi")
 
-[node name="StaticBody3D3" type="StaticBody3D" parent="." unique_id=1627415917]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.3, 0.95, 3.4)
+[node name="SIGH_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1347773207]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 11.651468, 1.7058771, 12.064749)
+mesh = ExtResource("41_rb708")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D3" unique_id=1702105559]
-shape = SubResource("BoxShape3D_vn47w")
+[node name="GAS_CORPUS_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1684748928]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -1.1761153, 1.254451, 9.900109)
+mesh = ExtResource("42_bjj8v")
 
-[node name="PumpDisplay" type="MeshInstance3D" parent="." unique_id=2020675914]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.3, 1.3, 3.8400002)
-material_override = SubResource("StandardMaterial3D_yp1gv")
-mesh = SubResource("BoxMesh_nudtf")
+[node name="GAS_HOLDER_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=978336729]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -1.1771569, 1.2718768, 9.900828)
+mesh = ExtResource("43_sxgnn")
 
-[node name="FuelHose" type="MeshInstance3D" parent="." unique_id=1089758341]
-transform = Transform3D(0.47750795, 0.11686325, -0.87082094, -0.11686325, -0.9738617, -0.19477227, -0.87082094, 0.19477227, -0.45136964, -2.725, 0.975, 3.525)
-material_override = SubResource("StandardMaterial3D_e2v0w")
-mesh = SubResource("CylinderMesh_6tgqi")
+[node name="GAS_CABLE_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1028832645]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -1.1771257, 1.0158684, 9.900823)
+mesh = ExtResource("44_fkxpy")
 
-[node name="CanopyColumn2" type="MeshInstance3D" parent="." unique_id=1891017399]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 1.8, 5.5)
-material_override = SubResource("ShaderMaterial_aa1wg")
-mesh = SubResource("BoxMesh_l6k1h")
+[node name="TRASH_1_WHEEL_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1738921355]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 3.1741507, 1.1197436, -1.2224768)
+mesh = ExtResource("45_ydc7s")
 
-[node name="StaticBody3D4" type="StaticBody3D" parent="." unique_id=1667371201]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 1.8, 5.5)
+[node name="GAS_GLASS_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=258558609]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -1.1767638, 1.4168975, 9.899049)
+mesh = ExtResource("46_vx7yi")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D4" unique_id=1208563576]
-shape = SubResource("BoxShape3D_jlwob")
+[node name="GENERATOR_TUBE_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1269544829]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 6.382048, 2.6169937, 3.253466)
+mesh = ExtResource("47_xibk4")
 
-[node name="FuelPump2" type="MeshInstance3D" parent="." unique_id=1368681653]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.3, 0.95, 3.4)
-material_override = SubResource("ShaderMaterial_latff")
-mesh = SubResource("BoxMesh_r7y47")
+[node name="FAN_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1273257216]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 2.2731957, 3.5348384, 4.3539453)
+mesh = ExtResource("48_ua773")
 
-[node name="StaticBody3D5" type="StaticBody3D" parent="." unique_id=1051742045]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.3, 0.95, 3.4)
+[node name="GENERATOR_HOLDER_2_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1032588807]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 6.8729258, 0.16016765, 0.19804291)
+mesh = ExtResource("49_iknn6")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D5" unique_id=940281777]
-shape = SubResource("BoxShape3D_f35x1")
+[node name="GENERATOR_FRIZE_2_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1881769100]
+transform = Transform3D(-6.953942e-07, -1, -1.6292067e-07, 1.4470265e-22, -1.6292067e-07, 1, -1, 6.953942e-07, 1.1329409e-13, 6.870034, 1.3433639, 0.67168486)
+mesh = ExtResource("50_3ya4s")
 
-[node name="PumpDisplay2" type="MeshInstance3D" parent="." unique_id=210466800]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.3, 1.3, 3.8400002)
-material_override = SubResource("StandardMaterial3D_yp1gv")
-mesh = SubResource("BoxMesh_c6pfu")
+[node name="GENERATOR_2_EMISS_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=976326920]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 6.8729258, 0.39459082, 0.6644028)
+mesh = ExtResource("51_6fq6i")
 
-[node name="FuelHose2" type="MeshInstance3D" parent="." unique_id=1510744260]
-transform = Transform3D(0.47750795, 0.11686325, -0.87082094, -0.11686325, -0.9738617, -0.19477227, -0.87082094, 0.19477227, -0.45136964, 3.875, 0.975, 3.525)
-material_override = SubResource("StandardMaterial3D_e2v0w")
-mesh = SubResource("CylinderMesh_8soh7")
+[node name="GENERATOR_2_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1504846691]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 6.007638, 2.6586916, 0.68069005)
+mesh = ExtResource("52_k45ro")
 
-[node name="ServiceTitle" type="Label3D" parent="." unique_id=1559043637]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.8, 6.48)
-pixel_size = 0.008
-modulate = Color(0.972549, 0.92941177, 0.79607844, 1)
-text = "PALIVO"
-font_size = 48
-outline_size = 3
+[node name="GENERATOR_2_TUBE_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=383078853]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, 6.382048, 2.6169937, 1.1000859)
+mesh = ExtResource("53_m1b0r")
+
+[node name="TRASH_2_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1000146648]
+transform = Transform3D(9.0996286e-07, 1, -7.54979e-08, -1.224648e-16, 7.54979e-08, 1, 1, -9.0996286e-07, 6.882275e-14, 1.5263772, 1.1197436, -1.2224768)
+mesh = ExtResource("54_bepbp")
+
+[node name="TRASH_2_WHEEL_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=322319125]
+transform = Transform3D(-6.953942e-07, -1, -1.6292067e-07, 1.4470265e-22, -1.6292067e-07, 1, -1, 6.953942e-07, 1.1329409e-13, 1.5263772, 1.1197436, -1.2224768)
+mesh = ExtResource("55_2ohsu")
+
+[node name="GAS_CROME_2_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=94520036]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -3.0905213, 1.1046075, 9.900828)
+mesh = ExtResource("56_e2586")
+
+[node name="GAS_CORPUS_2_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1079889067]
+transform = Transform3D(4.3312576e-07, 1, -7.54979e-08, 1.2246457e-16, 7.54979e-08, 1, 1, -4.3312576e-07, 3.257762e-14, -3.0894802, 1.254451, 9.900109)
+mesh = ExtResource("57_jmmra")
+
+[node name="GAS_HOLDER_2_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1192228393]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -3.0905218, 1.2718768, 9.900828)
+mesh = ExtResource("58_cm1i1")
+
+[node name="GAS_CABLE_2_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1409522577]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -3.0904906, 1.0158684, 9.900823)
+mesh = ExtResource("59_xdvse")
+
+[node name="GAS_GLASS_2_LOW_POLY_mat_0" type="MeshInstance3D" parent="." unique_id=1576119388]
+transform = Transform3D(-4.371139e-08, -1, -1.6292067e-07, 0, -1.6292067e-07, 1, -1, 4.371139e-08, 7.121489e-15, -3.0901282, 1.4168975, 9.899049)
+mesh = ExtResource("60_q10ld")
+
+[node name="StationCollision" type="StaticBody3D" parent="." unique_id=1475274570]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
+
+[node name="@CollisionShape3D@6" type="CollisionShape3D" parent="StationCollision" unique_id=1927601234]
+transform = Transform3D(1, 0, 0, 0, -1.6292067e-07, 1, 0, -1, -1.6292067e-07, -1.7396393, 1.6242381, 0.49072722)
+shape = SubResource("ConcavePolygonShape3D_osid1")

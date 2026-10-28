@@ -81,14 +81,6 @@ func _tunnel() -> void:
 	if mountain_geometry.is_empty(): mountain_geometry = preload("res://scripts/tunnel_geology.gd").bake(world.terrain, feature_x)
 	var stone := rock_material().duplicate() as ShaderMaterial
 	_cutaway_stone = stone
-	var cutaway := StandardMaterial3D.new()
-	cutaway.albedo_color = Color(0.40, 0.42, 0.37, 0.18)
-	cutaway.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	# The overview's translucent cutaway is a visual guide. Lighting it with
-	# every tunnel lamp creates many costly alpha/shadow shader combinations.
-	cutaway.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	cutaway.roughness = 1.0
-	cutaway.cull_mode = BaseMaterial3D.CULL_DISABLED
 	var rings: Array[PackedVector3Array] = []
 	for i in 25:
 		var x := feature_x - 36 + i * 3.0
@@ -126,7 +118,7 @@ func _tunnel() -> void:
 			if arc < 7: near_side.append_array(faces)
 			else: opaque.append_array(faces)
 	_step(_shell.bind("TunnelFarArch", opaque, stone))
-	_step(_shell.bind("TunnelCutawayArch", near_side, cutaway))
+	_step(_shell.bind("TunnelCutawayArch", near_side, stone))
 	var all_faces := opaque.duplicate()
 	all_faces.append_array(near_side)
 	_step(func() -> void:
@@ -178,11 +170,9 @@ func _process(dt: float) -> void:
 	var near_tunnel := absf(vehicle.position.x - feature_x) < 60 and absf(vehicle.position.z - world.center_at(vehicle.position.x)) < 12
 	_cutaway_amount = move_toward(_cutaway_amount, 1.0 if near_tunnel else 0.0, dt * 3.5)
 	if _cutaway_amount <= 0 and _cover_shadows: return
-	var focus := vehicle.global_position + Vector3(cos(vehicle.heading), 0, sin(vehicle.heading)) * 5.0
-	var pixels := get_viewport().get_visible_rect().size
+	var data := world.road_visibility(camera, vehicle, 5.5)
 	_cutaway_stone.set_shader_parameter("cutaway_amount", _cutaway_amount)
-	_cutaway_stone.set_shader_parameter("cutaway_center", camera.unproject_position(focus) / pixels)
-	_cutaway_stone.set_shader_parameter("cutaway_radius", Vector2(0.23, 0.30) * clampf(40.0 / camera.size, 0.6, 1.6))
+	for key in data: _cutaway_stone.set_shader_parameter(key, data[key])
 	var cast := _cutaway_amount < 0.05
 	if cast != _cover_shadows:
 		_cover_shadows = cast

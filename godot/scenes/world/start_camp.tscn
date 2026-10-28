@@ -1,7 +1,7 @@
 [gd_scene format=3]
 
 [ext_resource type="PackedScene" path="res://assets/models/stops/workshop.tscn" id="1_0p2b3"]
-[ext_resource type="PackedScene" path="res://assets/models/mesa_rock.tscn" id="2_q5mn4"]
+[ext_resource type="PackedScene" path="res://assets/models/supplied_environment/rock_desert_1.tscn" id="2_q5mn4"]
 [ext_resource type="PackedScene" path="res://assets/models/desert_scrub.tscn" id="3_c0xxs"]
 [ext_resource type="PackedScene" path="res://assets/models/saguaro.tscn" id="4_8fcoq"]
 

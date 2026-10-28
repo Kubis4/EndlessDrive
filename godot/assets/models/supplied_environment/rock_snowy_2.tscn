@@ -1,0 +1,18 @@
+[gd_scene format=3]
+
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/rock_snowy_2.res" id="1_mhgbr"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_hsnxg"]
+size = Vector3(0.75, 0.8, 0.75)
+
+[node name="SuppliedRock_Snowy_2" type="Node3D" unique_id=451148128]
+
+[node name="RockVisual" type="MeshInstance3D" parent="." unique_id=1504113162]
+transform = Transform3D(0.015286467, 0, 0, 0, 0.01168971, -2.5956371e-18, 0, 5.085465e-18, 0.022902898, 0, 6.20173e-05, 0)
+mesh = ExtResource("1_mhgbr")
+
+[node name="RockCollision" type="StaticBody3D" parent="." unique_id=1671400984]
+
+[node name="@CollisionShape3D@16" type="CollisionShape3D" parent="RockCollision" unique_id=1203900379]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+shape = SubResource("BoxShape3D_hsnxg")

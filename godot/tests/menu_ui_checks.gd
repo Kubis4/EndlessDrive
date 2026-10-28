@@ -42,6 +42,11 @@ func _run() -> void:
 	var elapsed: float = game.run.elapsed
 	await frames(4)
 	check(paused and game.menu.menu_open and not game.hud.visible and game.run.elapsed == elapsed, "Main menu freezes survival and vehicle while showing the world")
+	var background := game.menu._stage.get_node("PaperRoad") as TextureRect
+	check(background.texture.resource_path.ends_with("paper-road-izh.png") and not game.menu._vehicle_preview.visible, "IZH uses the fully composed menu illustration")
+	game.menu.set_menu_vehicle("jeep", Color.WHITE)
+	check(background.texture.resource_path.ends_with("paper-road-empty.png") and game.menu._vehicle_preview.visible and game.menu._vehicle_preview.vehicle_id == "jeep", "Jeep retains its own selectable model in the menu")
+	game.menu.set_menu_vehicle("izh", Color.WHITE)
 	check(game.menu._continue_button.disabled, "Fresh install cannot continue an invented save")
 	game.menu.show_panel("settings")
 	await frames(2)
@@ -59,6 +64,7 @@ func _run() -> void:
 	check(game.effects._count == 0 and game.effects._tracks.multimesh.visible_instance_count == 0, "New journey clears the preceding world's visual tracks")
 	game._open_menu()
 	check(not game.menu._continue_button.disabled, "Current ride enables Continue without requiring a fake disk save")
+	check(game.menu._vehicle_preview.vehicle_id == game.run.vehicle_id and game.menu._vehicle_preview._model.scene_file_path == preload("res://scripts/vehicle_catalog.gd").DATA[game.run.vehicle_id].scene, "Main menu uses the active journey's real vehicle rig")
 	game._menu_action("garage")
 	await frames(4)
 	check(paused and game._garage_from_menu and game.hud._modal_kind == "service", "Menu garage opens the real car/cargo maintenance panel")
@@ -72,6 +78,7 @@ func _run() -> void:
 	var screen: Rect2 = game.hud._root.get_global_rect()
 	check(screen.encloses(game.hud._service.get_global_rect()), "Expanded component/cargo service panel fits the viewport")
 	check(game.hud._car_diagram.conditions == game.run.parts, "Component diagram shows the actual installed component conditions")
+	check(game.hud._car_diagram.vehicle_id == game.run.vehicle_id, "Service diagram shows the active vehicle model")
 	game.run.inventory.paintcan = 1
 	game._action("paint:a54e43")
 	check(game._paint_materials.size() > 0 and (game._paint_materials[0].get_shader_parameter("tint") as Color).is_equal_approx(Color("a54e43")), "Painting visibly changes newly authored car body materials")

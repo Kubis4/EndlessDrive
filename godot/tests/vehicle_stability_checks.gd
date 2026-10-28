@@ -9,7 +9,7 @@ class BankTerrain extends DriveTerrain:
 	func feature_at(_x: float) -> Dictionary: return {}
 	func fork_at(_x: float) -> Dictionary: return {}
 	func sample(_x: float, z: float, _include_water: bool = true, _visual_blend: bool = false) -> Dictionary:
-		return {"color": Color("777777"), "material": SurfaceKind.ASPHALT, "road": 1.0, "grip": 1.0, "drag": 0.0, "roughness": 0.0, "paved": 1.0, "lateral": z, "label": "Asfalt", "water": 0.0, "snow": 0.0, "soil_softness": 0.0, "soil_depth": 0.0, "deformable": false}
+		return {"color": Color("777777"), "material": SurfaceKind.ASPHALT, "material_weights": PackedFloat32Array([0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0]), "road": 1.0, "grip": 1.0, "drag": 0.0, "roughness": 0.0, "paved": 1.0, "lateral": z, "label": "Asfalt", "water": 0.0, "snow": 0.0, "soil_softness": 0.0, "soil_depth": 0.0, "deformable": false}
 func _initialize() -> void: call_deferred("_run")
 func frames(n: int) -> void:
 	for tick in n:
