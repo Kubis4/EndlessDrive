@@ -16,11 +16,16 @@ void vertex() {
 void fragment() {
 	vec2 cell = vec2(mod(atlas_layer, 4.0), floor(atlas_layer / 4.0));
 	vec2 atlas_uv = (cell * 256.0 + 8.0 + fract(UV) * 240.0) / 1024.0;
-	vec4 texel = texture(plants_atlas, atlas_uv);
+	vec2 gradient_x = dFdx(UV) * (240.0 / 1024.0);
+	vec2 gradient_y = dFdy(UV) * (240.0 / 1024.0);
+	vec4 texel = textureGrad(plants_atlas, atlas_uv, gradient_x, gradient_y);
 	vec3 tint = mix(vec3(1.0), vec3(0.84, 0.91, 0.81), foliage);
 	float snow = snow_cover * foliage * smoothstep(0.05, 0.65, upward);
 	ALBEDO = mix(texel.rgb * tint, vec3(0.66, 0.73, 0.74), snow * 0.85);
 	ROUGHNESS = 0.94;
 	ALPHA = texel.a;
-	ALPHA_SCISSOR_THRESHOLD = 0.45;
+	// Mipmapped leaf cards otherwise lose most of their crown at the overview
+	// distance. Keep near edges crisp while retaining distant leaf coverage.
+	float footprint = max(length(gradient_x), length(gradient_y)) * 1024.0;
+	ALPHA_SCISSOR_THRESHOLD = mix(0.45, 0.22, smoothstep(1.0, 3.5, footprint) * foliage);
 }

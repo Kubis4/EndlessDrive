@@ -69,18 +69,18 @@ func _run() -> void:
 	legacy_weather.vehicle = car
 	game.add_child(legacy_weather)
 	legacy_weather.set_process(false)
-	check(legacy_weather.has_shelter_target and legacy_weather.storm_warning >= 30.0 and legacy_weather.storm_edge < car.position.x - 100, "An old saved storm migrates to reachable cover with renewed preparation time")
+	check(legacy_weather.has_shelter_target and is_equal_approx(legacy_weather.storm_warning, 20.0) and legacy_weather.storm_edge < car.position.x - 100, "An old saved storm migrates to reachable cover with renewed preparation time")
 	legacy_weather.queue_free()
 	game.weather.forced_mode = ""
 	game.weather.reset_weather()
 	game.weather._next_storm = 0
 	game.weather._process(0.1)
-	check(game.weather.storm_active and game.weather.has_shelter_target and game.weather.storm_warning >= 29.0, "A dust chase starts with an actual shelter and a fair advance warning")
+	check(game.weather.storm_active and game.weather.has_shelter_target and game.weather.storm_warning > 19.0 and game.weather.storm_warning <= 20.0, "A dust chase starts with an actual shelter and a fair advance warning")
 	game.weather.shelter_target = Vector3(999999.0, 0, 0)
-	game.weather.storm_warning = 0
+	game.weather.storm_warning = 7.0
 	game.weather._shelter_check = 0
 	game.weather._process(0.1)
-	check(game.weather.has_shelter_target and game.weather.shelter_target.x < 400.0 and game.weather.storm_warning > 10.0, "A removed future shelter is replaced with real loaded cover and renewed warning")
+	check(game.weather.has_shelter_target and game.weather.shelter_target.x < 400.0 and game.weather.storm_warning <= 7.0, "A changed shelter does not restart the twenty-second warning")
 	var health: float = game.run.parts.radiator
 	game.weather.storm_edge = car.position.x + 20
 	game.weather._process(1.0)

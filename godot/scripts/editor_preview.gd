@@ -53,7 +53,9 @@ func _reload_geometry() -> void:
 		remove_child(previous)
 		previous.queue_free()
 	add_child(geometry)
-	geometry.owner = get_tree().edited_scene_root
+	# This is an editor-only view. Serialising it into main.tscn would make
+	# gameplay load the entire snapshot before immediately throwing it away.
+	# The independent generated scene remains fully editable on disk.
 	_preview_shadows(geometry)
 	_previous_modified = FileAccess.get_modified_time(geometry_path)
 

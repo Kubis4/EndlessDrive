@@ -17,7 +17,13 @@ func check(value: bool, title: String) -> void:
 func _run() -> void:
 	var game := load("res://scenes/main.tscn").instantiate() as Node3D
 	game._ephemeral = true
-	check(game.get_node("EditorTerrainPreview").get_child_count() > 0, "Main scene contains visible terrain before running scripts")
+	var preview := game.get_node("EditorTerrainPreview")
+	var geometry_path: String = preview.geometry_path
+	check(preview.get_script().is_tool() and ResourceLoader.exists(geometry_path), "Main scene links the editor-only terrain preview")
+	check(not str(ResourceLoader.get_dependencies("res://scenes/world/editor_terrain.tscn")).contains("generated/"), "Game startup does not preload terrain intended only for the editor")
+	var geometry := (load(geometry_path) as PackedScene).instantiate()
+	check(geometry.get_child_count() > 0, "Native editable terrain geometry is still available to the editor")
+	geometry.free()
 	check(game.get_node("Vehicle/Visual").get_child_count() > 0, "Vehicle model and chassis exist in the scene file")
 	var pedal := game.get_node("HUD/Root/PedalsLeft") as Button
 	pedal.name = "MyRenamedPedal"

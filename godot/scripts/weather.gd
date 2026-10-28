@@ -142,7 +142,7 @@ func _ready() -> void:
 		storm_velocity = Vector2(float(run.weather_state.get("storm_vx", 2.0)), float(run.weather_state.get("storm_vz", 0)))
 		_storm_duration = clampf(float(run.weather_state.get("storm_duration", 90)), 50, 110)
 		_storm_left = minf(_storm_left, _storm_duration)
-		storm_warning = minf(storm_warning, 120.0)
+		storm_warning = minf(storm_warning, 20.0)
 		storm_visibility = clampf(float(run.weather_state.get("storm_visibility", 0)), 0, 1)
 		if storm_active:
 			_refresh_shelter(not run.weather_state.has("storm_x"))
@@ -236,11 +236,11 @@ func _refresh_shelter(renew_warning: bool = false) -> bool:
 			shelter_target = refuge.position
 			has_shelter_target = true
 			if renew_warning or changed:
-				var crawl := clampf(run.power_factor() * 8.0, 2.0, 7.0)
-				if travel / crawl * 1.6 + 12.0 > 120.0:
+				var crawl := maxf(clampf(run.power_factor() * 8.0, 2.0, 7.0), absf(vehicle.speed) * 0.75)
+				if travel / crawl * 1.2 + 3.0 > 20.0:
 					_defer_storm()
 					return false
-				storm_warning = maxf(travel / crawl * 1.6 + 12.0, 30.0)
+				if renew_warning: storm_warning = 20.0
 				storm_center = Vector2(vehicle.position.x - 150.0, vehicle.position.z)
 				storm_edge = storm_center.x - 110.0
 			_shelter_check = 1.0

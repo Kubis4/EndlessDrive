@@ -8,7 +8,7 @@ static var _surfaces: Dictionary = {}
 func _surface(active: bool) -> Texture2D:
 	if not _surfaces.has(active):
 		var gradient := Gradient.new()
-		gradient.colors = PackedColorArray([Color("6b542e"), Color("272419")]) if active else PackedColorArray([Color("2b404f"), Color("0d1822")])
+		gradient.colors = PackedColorArray([Color("6b542e"), Color("272419")]) if active else PackedColorArray([Color("343d2e"), Color("1b2118")])
 		var texture := GradientTexture2D.new()
 		texture.gradient = gradient
 		texture.width = 64
@@ -36,7 +36,7 @@ func _draw() -> void:
 	draw_polygon(polygon, PackedColorArray([Color.WHITE]), uv, _surface(active))
 	var outline := polygon.duplicate()
 	outline.append(polygon[0])
-	draw_polyline(outline, Color("ffc66b") if active else Color("537184"), 2, true)
+	draw_polyline(outline, Color("e9ba68") if active else Color("70735e"), 2, true)
 func _has_point(point: Vector2) -> bool:
 	var delta := point - size * 0.5
 	var degrees := fposmod(rad_to_deg(delta.angle()), 360.0)

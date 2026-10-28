@@ -12,9 +12,11 @@ config_version=5
 
 config/name="Endless Drive"
 config/description="A road, an old car, and everything you need to keep going."
-config/version="5.0.0"
-run/main_scene="res://scenes/main.tscn"
+config/version="6.0.0"
+run/main_scene="res://scenes/boot.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
+boot_splash/bg_color=Color(0.098, 0.11, 0.098, 1)
+boot_splash/show_image=false
 config/icon="res://icon.svg"
 
 [display]

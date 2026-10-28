@@ -1,0 +1,166 @@
+[gd_scene format=3]
+
+[ext_resource type="Shader" path="res://shaders/prop_surface.gdshader" id="1_7t6up"]
+[ext_resource type="CompressedTexture2DArray" path="res://assets/textures/surface-albedo-atlas.png" id="2_dkewd"]
+[ext_resource type="CompressedTexture2DArray" path="res://assets/textures/world-materials-atlas.png" id="3_mnwxn"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_8h8uo"]
+resource_name = "Detailed_2"
+render_priority = 0
+shader = ExtResource("1_7t6up")
+shader_parameter/world_atlas = ExtResource("3_mnwxn")
+shader_parameter/terrain_atlas = ExtResource("2_dkewd")
+shader_parameter/tint = Color(0.7647059, 0.6784314, 0.5294118, 1)
+shader_parameter/surface_kind = 2
+shader_parameter/roughness_value = 0.68
+shader_parameter/metallic_value = 0.25
+
+[sub_resource type="BoxMesh" id="BoxMesh_7i2dn"]
+size = Vector3(0.85, 0.32, 2.75)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_cpbvm"]
+resource_name = "Detailed_4"
+render_priority = 0
+shader = ExtResource("1_7t6up")
+shader_parameter/world_atlas = ExtResource("3_mnwxn")
+shader_parameter/terrain_atlas = ExtResource("2_dkewd")
+shader_parameter/tint = Color(0.7254902, 0.627451, 0.47843137, 1)
+shader_parameter/surface_kind = 4
+shader_parameter/roughness_value = 0.9
+shader_parameter/metallic_value = 0.0
+
+[sub_resource type="BoxMesh" id="BoxMesh_xehwh"]
+size = Vector3(0.45, 0.9, 2.65)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_wihco"]
+resource_name = "Detailed_2"
+render_priority = 0
+shader = ExtResource("1_7t6up")
+shader_parameter/world_atlas = ExtResource("3_mnwxn")
+shader_parameter/terrain_atlas = ExtResource("2_dkewd")
+shader_parameter/tint = Color(0.6509804, 0.43137255, 0.2627451, 1)
+shader_parameter/surface_kind = 2
+shader_parameter/roughness_value = 0.68
+shader_parameter/metallic_value = 0.25
+
+[sub_resource type="BoxMesh" id="BoxMesh_22ffk"]
+size = Vector3(0.025, 0.28, 0.28)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_fnxc8"]
+resource_name = "Detailed_2"
+render_priority = 0
+shader = ExtResource("1_7t6up")
+shader_parameter/world_atlas = ExtResource("3_mnwxn")
+shader_parameter/terrain_atlas = ExtResource("2_dkewd")
+shader_parameter/tint = Color(0.14117648, 0.15294118, 0.1254902, 1)
+shader_parameter/surface_kind = 2
+shader_parameter/roughness_value = 0.68
+shader_parameter/metallic_value = 0.25
+
+[sub_resource type="BoxMesh" id="BoxMesh_144tr"]
+size = Vector3(0.025, 0.28, 0.28)
+
+[sub_resource type="BoxMesh" id="BoxMesh_2xxfl"]
+size = Vector3(0.025, 0.28, 0.28)
+
+[sub_resource type="BoxMesh" id="BoxMesh_lht5k"]
+size = Vector3(0.025, 0.28, 0.28)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_85m10"]
+size = Vector3(0.85, 1.16, 2.75)
+
+[sub_resource type="BoxMesh" id="BoxMesh_r7f13"]
+size = Vector3(0.85, 0.32, 2.75)
+
+[sub_resource type="BoxMesh" id="BoxMesh_0eqyv"]
+size = Vector3(0.45, 0.9, 2.65)
+
+[sub_resource type="BoxMesh" id="BoxMesh_mb8on"]
+size = Vector3(0.025, 0.28, 0.28)
+
+[sub_resource type="BoxMesh" id="BoxMesh_xjcfq"]
+size = Vector3(0.025, 0.28, 0.28)
+
+[sub_resource type="BoxMesh" id="BoxMesh_jn26t"]
+size = Vector3(0.025, 0.28, 0.28)
+
+[sub_resource type="BoxMesh" id="BoxMesh_3llsb"]
+size = Vector3(0.025, 0.28, 0.28)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_558c0"]
+size = Vector3(0.85, 1.16, 2.75)
+
+[node name="Barrier" type="Node3D" unique_id=769635971]
+metadata/obstacle_kind = "barrier"
+
+[node name="ConcreteFoot" type="MeshInstance3D" parent="." unique_id=1799318470]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.16, -1.5)
+material_override = SubResource("ShaderMaterial_8h8uo")
+mesh = SubResource("BoxMesh_7i2dn")
+
+[node name="ConcreteBlock" type="MeshInstance3D" parent="." unique_id=1972426845]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.68, -1.5)
+material_override = SubResource("ShaderMaterial_cpbvm")
+mesh = SubResource("BoxMesh_xehwh")
+
+[node name="FadedWarning" type="MeshInstance3D" parent="." unique_id=1432697271]
+transform = Transform3D(1, 0, 0, 0, 0.9393727, -0.3428978, 0, 0.3428978, 0.9393727, -0.24, 0.72, -2.5)
+material_override = SubResource("ShaderMaterial_wihco")
+mesh = SubResource("BoxMesh_22ffk")
+
+[node name="FadedWarning2" type="MeshInstance3D" parent="." unique_id=1286077262]
+transform = Transform3D(1, 0, 0, 0, 0.9393727, -0.3428978, 0, 0.3428978, 0.9393727, -0.24, 0.72, -1.84)
+material_override = SubResource("ShaderMaterial_fnxc8")
+mesh = SubResource("BoxMesh_144tr")
+
+[node name="FadedWarning3" type="MeshInstance3D" parent="." unique_id=539287826]
+transform = Transform3D(1, 0, 0, 0, 0.9393727, -0.3428978, 0, 0.3428978, 0.9393727, -0.24, 0.72, -1.18)
+material_override = SubResource("ShaderMaterial_wihco")
+mesh = SubResource("BoxMesh_2xxfl")
+
+[node name="FadedWarning4" type="MeshInstance3D" parent="." unique_id=243349966]
+transform = Transform3D(1, 0, 0, 0, 0.9393727, -0.3428978, 0, 0.3428978, 0.9393727, -0.24, 0.72, -0.52)
+material_override = SubResource("ShaderMaterial_fnxc8")
+mesh = SubResource("BoxMesh_lht5k")
+
+[node name="Collision" type="StaticBody3D" parent="." unique_id=2144908864]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.58, -1.5)
+
+[node name="@CollisionShape3D@8" type="CollisionShape3D" parent="Collision" unique_id=611654232]
+shape = SubResource("BoxShape3D_85m10")
+
+[node name="ConcreteFoot2" type="MeshInstance3D" parent="." unique_id=1151791579]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.16, 1.5)
+material_override = SubResource("ShaderMaterial_8h8uo")
+mesh = SubResource("BoxMesh_r7f13")
+
+[node name="ConcreteBlock2" type="MeshInstance3D" parent="." unique_id=79898465]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.68, 1.5)
+material_override = SubResource("ShaderMaterial_cpbvm")
+mesh = SubResource("BoxMesh_0eqyv")
+
+[node name="FadedWarning5" type="MeshInstance3D" parent="." unique_id=812676060]
+transform = Transform3D(1, 0, 0, 0, 0.9393727, -0.3428978, 0, 0.3428978, 0.9393727, -0.24, 0.72, 0.5)
+material_override = SubResource("ShaderMaterial_wihco")
+mesh = SubResource("BoxMesh_mb8on")
+
+[node name="FadedWarning6" type="MeshInstance3D" parent="." unique_id=1725559428]
+transform = Transform3D(1, 0, 0, 0, 0.9393727, -0.3428978, 0, 0.3428978, 0.9393727, -0.24, 0.72, 1.16)
+material_override = SubResource("ShaderMaterial_fnxc8")
+mesh = SubResource("BoxMesh_xjcfq")
+
+[node name="FadedWarning7" type="MeshInstance3D" parent="." unique_id=1584201759]
+transform = Transform3D(1, 0, 0, 0, 0.9393727, -0.3428978, 0, 0.3428978, 0.9393727, -0.24, 0.72, 1.82)
+material_override = SubResource("ShaderMaterial_wihco")
+mesh = SubResource("BoxMesh_jn26t")
+
+[node name="FadedWarning8" type="MeshInstance3D" parent="." unique_id=99244433]
+transform = Transform3D(1, 0, 0, 0, 0.9393727, -0.3428978, 0, 0.3428978, 0.9393727, -0.24, 0.72, 2.48)
+material_override = SubResource("ShaderMaterial_fnxc8")
+mesh = SubResource("BoxMesh_3llsb")
+
+[node name="@StaticBody3D@10" type="StaticBody3D" parent="." unique_id=1268362871]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.58, 1.5)
+
+[node name="@CollisionShape3D@9" type="CollisionShape3D" parent="@StaticBody3D@10" unique_id=520438518]
+shape = SubResource("BoxShape3D_558c0")

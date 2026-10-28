@@ -1,13 +1,19 @@
 class_name BiomeModels
 extends RefCounted
-## New code-native scenery: layered low-poly conifers, wetland trees and snow caps.
+## Saved supplied vegetation. Runtime placement never constructs tree geometry.
 
 static var materials: Dictionary = {}
-static var _trees: Dictionary = {}
 static var _reed_scene: PackedScene
 static var _primitives: Dictionary = {}
 static var _supplied: Dictionary = {}
 static var _supplied_materials: Dictionary = {}
+static var _tree_bounds: Dictionary = {}
+
+static func warmup() -> void:
+	# Resolve the small saved scene bank once, before any frame-budgeted tree
+	# job. Entering a new biome must not perform first-use texture/file I/O.
+	for label: String in ["broadleaf_a", "broadleaf_b", "broadleaf_c", "calocedrus", "bush", "grass"]:
+		if not _supplied.has(label): _supplied[label] = load("res://assets/models/vegetation/" + label + ".tscn")
 
 static func supplied(label: String) -> Node3D:
 	if not _supplied.has(label): _supplied[label] = load("res://assets/models/vegetation/" + label + ".tscn")
@@ -26,48 +32,37 @@ static func material(color: Color) -> StandardMaterial3D:
 
 static func tree(parent: Node3D, pos: Vector3, size: float, snowy: bool, wetland: bool, snow_cover: float = -1.0, variant: int = 0) -> void:
 	var coverage := (1.0 if snowy else 0.0) if snow_cover < 0.0 else snappedf(snow_cover, 0.25)
-	var key := "%s/%s/%d" % [coverage, wetland, variant]
-	if not _trees.has(key):
-		var prototype := _tree_prototype(coverage, wetland, variant)
-		preload("res://scripts/world_materials.gd").apply(prototype)
-		_share_meshes(prototype)
-		_own(prototype, prototype)
-		var packed := PackedScene.new()
-		packed.pack(prototype)
-		_trees[key] = packed
-		prototype.free()
-	var instance := (_trees[key] as PackedScene).instantiate() as Node3D
+	var label := "calocedrus" if variant == 4 else ["broadleaf_a", "broadleaf_b", "broadleaf_c"][posmod(variant, 3)] as String
+	var instance := supplied(label)
+	instance.name = "WetlandTree" if wetland else "MountainPine"
+	var foliage := instance.get_node("Foliage") as MeshInstance3D
+	if not _supplied_materials.has(coverage):
+		var shaded := foliage.material_override.duplicate() as ShaderMaterial
+		shaded.set_shader_parameter("snow_cover", coverage)
+		_supplied_materials[coverage] = shaded
+	foliage.material_override = _supplied_materials[coverage]
+	if not _tree_bounds.has(label): _tree_bounds[label] = _visibility_bounds(instance)
+	instance.set_meta("occlusion_bounds", _tree_bounds[label])
+	instance.set_meta("vegetation_source", label)
 	instance.position = pos
 	instance.scale = Vector3.ONE * size
 	instance.rotation.y = fposmod(pos.x * 1.73 + pos.z * 0.49, TAU)
 	parent.add_child(instance, true)
 	instance.add_to_group("vehicle_occluder", true)
 
-static func _tree_prototype(coverage: float, wetland: bool, variant: int) -> Node3D:
-	var label := "wetland_tree" if wetland else (["mountain_pine", "juniper", "woodland_tree"][posmod(variant, 3)] as String)
-	if variant == 3: label = "dead_tree"
-	if coverage > 0.66 and not wetland: label = "alpine_pine"
-	var tree_root: Node3D
-	if variant == 4:
-		tree_root = supplied("calocedrus")
-	elif coverage < 0.66 and variant != 3:
-		tree_root = supplied(["broadleaf_a", "broadleaf_b", "broadleaf_c"][posmod(variant, 3)])
-	else:
-		tree_root = preload("res://scripts/expedition_scenery.gd").instance(label)
-	tree_root.name = "WetlandTree" if wetland else "MountainPine"
-	for child in tree_root.get_children():
-		if child is MeshInstance3D and str(child.name) in ["Pine", "PineLight", "Leaf", "LeafLight", "Foliage"]:
-			if child.name == "Foliage":
-				if not _supplied_materials.has(coverage):
-					var shaded := child.material_override.duplicate() as ShaderMaterial
-					shaded.set_shader_parameter("snow_cover", coverage)
-					_supplied_materials[coverage] = shaded
-				child.material_override = _supplied_materials[coverage]
-				continue
-			var shaded := child.material_override.duplicate() as ShaderMaterial
-			shaded.set_shader_parameter("snow_cover", coverage)
-			child.material_override = shaded
-	return tree_root
+static func _visibility_bounds(root: Node3D) -> AABB:
+	var bounds := AABB()
+	var first := true
+	for mesh: MeshInstance3D in root.find_children("*", "MeshInstance3D", true, false):
+		var transform := mesh.transform
+		var parent := mesh.get_parent()
+		while parent != root and parent is Node3D:
+			transform = parent.transform * transform
+			parent = parent.get_parent()
+		var box := transform * mesh.mesh.get_aabb()
+		bounds = box if first else bounds.merge(box)
+		first = false
+	return bounds
 
 static func reeds(parent: Node3D, pos: Vector3, size: float, yaw: float) -> Node3D:
 	if _reed_scene == null:

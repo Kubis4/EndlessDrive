@@ -2,7 +2,7 @@
 
 Projekt otvor cez `project.godot` v tomto priečinku:
 
-`C:\Users\Kubis\StudioProjects\EndlessDrive\godot`
+`C:\Users\KubicaVl\AndroidStudioProjects\EndlessDrive\godot`
 
 Ak už máš Godot otvorený, potvrď **Reload / znovunačítanie zmenených scén**.
 Ak sa nezobrazí výzva, zatvor kartu `main` a otvor ju znova zo súborového stromu.
@@ -32,6 +32,10 @@ náhľadoch terénu. Ovládanie: **V** pohon 4×2/4×4, **B** uzávierka,
 
 Otvor `scenes/main.tscn` a hore zvoľ **3D**. Už obsahuje cestu, skaly,
 vegetáciu, úvodnú dielňu, auto, svetlo a kameru aj bez spustenej hry.
+Terén sa do náhľadu načíta editorovým skriptom; pri spustení hry sa už táto
+veľká kópia sveta nenačítava. Ak chceš upravovať jednotlivé uzly náhľadu,
+otvor `scenes/world/generated/editor_terrain.scn`. **F5** teraz spustí ľahkú
+úvodnú scénu `scenes/boot.tscn`, ktorá následne použije to isté `main.tscn`.
 
 - Označ `Vehicle` a stlač **F** na priblíženie pohľadu k autu.
 - Označ `Camera3D` a zapni **Preview**, ak chceš pohľad hernej kamery.

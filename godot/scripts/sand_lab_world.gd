@@ -19,7 +19,7 @@ class SandTerrain extends DriveTerrain:
 	func dry_height(x: float, z: float) -> float: return sin(x * 0.075) * sin(z * 0.09) * 0.45
 	func feature_at(_x: float) -> Dictionary: return {}
 	func pools_near(_x: float) -> Array[Dictionary]: return []
-	func sample(x: float, z: float, _include_water := true) -> Dictionary:
+	func sample(x: float, z: float, _include_water := true, _visual_blend := false) -> Dictionary:
 		return {"color": Color("d7bd88"), "road": 0.0, "lateral": z, "paved": 0.0,
 			"grip": 0.88, "drag": 0.50, "water": 0.0, "snow": 0.0, "label": "Piesok",
 			"roughness": 0.0, "material": SurfaceKind.SAND, "deformable": true,

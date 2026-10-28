@@ -1,10 +1,7 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://scripts/editor_preview.gd" id="1_r1ic2"]
-[ext_resource type="PackedScene" path="res://scenes/world/generated/editor_terrain.scn" id="2_6dvfi"]
 
 [node name="EditorTerrainPreview" type="Node3D" unique_id=1678042157]
 script = ExtResource("1_r1ic2")
 geometry_path = "res://scenes/world/generated/editor_terrain.scn"
-
-[node name="GeneratedTerrain" type="Node3D" parent="." unique_id=913248069 instance=ExtResource("2_6dvfi")]

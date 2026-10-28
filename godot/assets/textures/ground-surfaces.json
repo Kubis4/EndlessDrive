@@ -1,0 +1,33 @@
+{
+  "source": "imagegen built-in; new photographic ground atlas",
+  "width": 1254,
+  "height": 1254,
+  "layer_size": 627,
+  "sha256": "0e7858fd5ac38b051ec719375655ad4d9677351a9cdee25c72ea710d04a5d51e",
+  "layers": [
+    {
+      "name": "sand",
+      "mean_luma": 0.67326,
+      "deviation": 0.100741,
+      "border_mean_jump": 0.005352
+    },
+    {
+      "name": "stone",
+      "mean_luma": 0.49579,
+      "deviation": 0.175431,
+      "border_mean_jump": 0.012943
+    },
+    {
+      "name": "earth",
+      "mean_luma": 0.458712,
+      "deviation": 0.124535,
+      "border_mean_jump": 0.002976
+    },
+    {
+      "name": "grass",
+      "mean_luma": 0.386623,
+      "deviation": 0.162421,
+      "border_mean_jump": 0.005803
+    }
+  ]
+}

@@ -3,7 +3,7 @@ extends RefCounted
 ## Engine-independent survival rules. SI units; no rendering or UI dependencies.
 ## First migration slice, not a replacement for the full Kotlin simulation yet.
 
-const SAVE_VERSION := 5
+const SAVE_VERSION := 6
 const FUEL_CAPACITY := 40.0
 const OIL_CAPACITY := 4.0
 const COOLANT_CAPACITY := 6.0
@@ -22,6 +22,8 @@ const PART_NAMES := {
 }
 
 var world_seed: int = 24601
+# Legacy standalone fixtures/saves are Jeep; a new profile prepares the IZH.
+var vehicle_id := "jeep"
 var terrain_deformation: Array = []
 var distance := 0.0
 var fuel := 7.0
@@ -81,7 +83,7 @@ func toggle_engine() -> String:
 		return "Najprv oprav motor."
 	battery = maxf(0.0, battery - 0.035)
 	engine_running = true
-	return "Motor beží. Šťastnú cestu."
+	return "Motor naštartovaný."
 
 
 func advance(dt: float, speed: float, throttle: float, offroad: bool, cruise_driving: bool = false, brake_load: float = 0.0, water_depth: float = 0.0) -> void:
@@ -503,7 +505,7 @@ func _stop_kind(building_id: int) -> String:
 
 func to_data(include_terrain: bool = true) -> Dictionary:
 	return {
-		"version": SAVE_VERSION, "seed": world_seed, "distance": distance,
+		"version": SAVE_VERSION, "seed": world_seed, "distance": distance, "vehicle_id": vehicle_id,
 		"fuel": fuel, "oil": oil, "coolant": coolant, "battery": battery,
 		"temperature": temperature, "elapsed": elapsed, "day_time": day_time,
 		"headlights": headlights, "four_wheel_drive": four_wheel_drive, "differential_locked": differential_locked, "parts": parts.duplicate(),
@@ -522,11 +524,14 @@ func to_data(include_terrain: bool = true) -> Dictionary:
 static func from_data(data: Dictionary) -> DriveRun:
 	var version: Variant = data.get("version", -1)
 	var saved_seed: Variant = data.get("seed", 24601)
-	if not (version is int or version is float) or not is_finite(float(version)) or float(version) not in [1.0, 2.0, 3.0, 4.0, float(SAVE_VERSION)]:
+	if not (version is int or version is float) or not is_finite(float(version)) or float(version) not in [1.0, 2.0, 3.0, 4.0, 5.0, float(SAVE_VERSION)]:
 		return null
 	if not (saved_seed is int or saved_seed is float) or not is_finite(float(saved_seed)) or absf(float(saved_seed)) > 2147483647.0:
 		return null
 	var result := DriveRun.new()
+	var model: Variant = data.get("vehicle_id", "jeep")
+	if not model is String or model not in ["izh", "jeep"]: return null
+	result.vehicle_id = model
 	var ruts: Variant = data.get("terrain_deformation", [])
 	if not ruts is Array or ruts.size() > DriveDeformation.MAX_CELLS: return null
 	var field := DriveDeformation.new()
@@ -576,6 +581,7 @@ static func from_data(data: Dictionary) -> DriveRun:
 		if not mode is bool: return null
 		result.set(key, mode)
 	if result.differential_locked and not result.four_wheel_drive: return null
+	if result.vehicle_id == "izh" and (result.four_wheel_drive or result.differential_locked): return null
 	var choices: Variant = data.get("route_choices", {})
 	if not choices is Dictionary: return null
 	for key: Variant in choices:

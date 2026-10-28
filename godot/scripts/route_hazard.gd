@@ -11,16 +11,20 @@ var _lamps: Array[StandardMaterial3D] = []
 var _bell: AudioStreamPlayer3D
 var _beep_time := 0.0
 var _streamed := false
+var mountain_geometry: Dictionary = {}
 static var _bell_sound: AudioStreamWAV
 static var _rock_material: ShaderMaterial
+var _cutaway_stone: ShaderMaterial
+var _cutaway_amount := 0.0
+var _cover_shadows := true
+var _last_lighting_quality := -1
 
 
 static func rock_material() -> ShaderMaterial:
 	if _rock_material == null:
 		_rock_material = ShaderMaterial.new()
 		_rock_material.shader = load("res://shaders/rock_surface.gdshader")
-		_rock_material.set_shader_parameter("surface_atlas", load("res://assets/textures/surface-albedo-atlas.png"))
-		_rock_material.set_shader_parameter("micro_height", load("res://assets/textures/surface-microheight-2k.png"))
+		_rock_material.set_shader_parameter("rock_albedo", load("res://assets/textures/mountain-rock.png"))
 	return _rock_material
 
 
@@ -72,7 +76,11 @@ func _bridge() -> void:
 
 
 func _tunnel() -> void:
-	var stone := rock_material()
+	# Gameplay receives these numeric arrays from the terrain worker. Direct
+	# standalone builders and the editor can prepare their own snapshot.
+	if mountain_geometry.is_empty(): mountain_geometry = preload("res://scripts/tunnel_geology.gd").bake(world.terrain, feature_x)
+	var stone := rock_material().duplicate() as ShaderMaterial
+	_cutaway_stone = stone
 	var cutaway := StandardMaterial3D.new()
 	cutaway.albedo_color = Color(0.40, 0.42, 0.37, 0.18)
 	cutaway.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -106,8 +114,9 @@ func _tunnel() -> void:
 				var light := OmniLight3D.new()
 				light.position = center + Vector3.UP * 3.8
 				light.light_color = Color("f1c685")
-				light.light_energy = 1.4
-				light.omni_range = 14
+				light.light_energy = 2.0
+				light.omni_range = 18
+				light.visible = world.graphics_quality == 2
 				add_child(light))
 	var opaque := PackedVector3Array()
 	var near_side := PackedVector3Array()
@@ -133,6 +142,53 @@ func _tunnel() -> void:
 	# Seal the shoulders into the boundary escarpments for the full tunnel
 	# length. These are actual mountain masses, with collision, not fences.
 	for side: float in [-1.0, 1.0]: _step(_tunnel_mountain.bind(side, stone))
+	# A continuous solid ridge crosses ABOVE the arch. The inner tunnel stays
+	# hollow; side embankments alone used to leave an open trench from above.
+	for section in 4: _step(_tunnel_roof.bind(section, stone))
+	for peak in 4: _step(_tunnel_peak.bind(peak, stone))
+	_step(_tunnel_guides)
+
+
+func _tunnel_guides() -> void:
+	var faces := PackedVector3Array()
+	for side: float in [-1.0, 1.0]:
+		for i in 36:
+			var x := feature_x - 36 + i * 2.0
+			var a := _point(x, side * 4.7, 0.055)
+			var b := _point(x + 2, side * 4.7, 0.055)
+			var edge := Vector3(0, 0, 0.09)
+			faces.append_array(PackedVector3Array([a - edge, b - edge, a + edge, b - edge, b + edge, a + edge]))
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.albedo_color = Color("c1b591")
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_shell("TunnelRoadGuides", faces, material)
+
+
+func _process(dt: float) -> void:
+	if _cutaway_stone == null or world == null: return
+	if _last_lighting_quality != world.graphics_quality:
+		_last_lighting_quality = world.graphics_quality
+		for child in get_children():
+			if child is OmniLight3D: child.visible = _last_lighting_quality == 2
+	var vehicle := world.get_parent().get_node_or_null("Vehicle") as DriveVehicle
+	if vehicle == null: return
+	var camera := get_viewport().get_camera_3d()
+	if camera == null: return
+	var near_tunnel := absf(vehicle.position.x - feature_x) < 60 and absf(vehicle.position.z - world.center_at(vehicle.position.x)) < 12
+	_cutaway_amount = move_toward(_cutaway_amount, 1.0 if near_tunnel else 0.0, dt * 3.5)
+	if _cutaway_amount <= 0 and _cover_shadows: return
+	var focus := vehicle.global_position + Vector3(cos(vehicle.heading), 0, sin(vehicle.heading)) * 5.0
+	var pixels := get_viewport().get_visible_rect().size
+	_cutaway_stone.set_shader_parameter("cutaway_amount", _cutaway_amount)
+	_cutaway_stone.set_shader_parameter("cutaway_center", camera.unproject_position(focus) / pixels)
+	_cutaway_stone.set_shader_parameter("cutaway_radius", Vector2(0.23, 0.30) * clampf(40.0 / camera.size, 0.6, 1.6))
+	var cast := _cutaway_amount < 0.05
+	if cast != _cover_shadows:
+		_cover_shadows = cast
+		for mesh: MeshInstance3D in find_children("*", "MeshInstance3D", true, false):
+			if mesh.material_override == _cutaway_stone:
+				mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if cast else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
 func _rail() -> void:
@@ -244,29 +300,39 @@ func _finish_rail() -> void:
 	_train.reset_physics_interpolation()
 
 
-func _tunnel_mountain(side: float, stone: Material) -> void:
-	var rings: Array[PackedVector3Array] = []
-	for step in 25:
-		var x := feature_x - 36 + step * 3.0
-		var center := _point(x, 0)
-		var width := world.terrain.boundary_width(x)
-		var ring := PackedVector3Array([center + Vector3(0, -5, side * 6.45)])
-		var lateral := [6.45, 12.0, 22.0, 31.0, width + 10.0]
-		var heights := [6.5, 10.5, 14.0, 10.0, 6.0]
-		for edge in lateral.size():
-			var variation := sin(x * 0.17 + edge * 1.7 + side) * (0.35 if edge == 0 else 1.2)
-			ring.append(center + Vector3(0, float(heights[edge]) + variation, side * float(lateral[edge])))
-		ring.append(center + Vector3(0, -5, side * (width + 10)))
-		rings.append(ring)
-	var faces := PackedVector3Array()
-	for row in rings.size() - 1:
-		for edge in rings[row].size() - 1:
-			faces.append_array(PackedVector3Array([rings[row][edge], rings[row + 1][edge], rings[row][edge + 1], rings[row + 1][edge], rings[row + 1][edge + 1], rings[row][edge + 1]]))
-	for end: int in [0, rings.size() - 1]:
-		for edge in range(1, rings[end].size() - 1): faces.append_array(PackedVector3Array([rings[end][0], rings[end][edge], rings[end][edge + 1]]))
-	_shell("TunnelMountainFillNorth" if side < 0 else "TunnelMountainFillSouth", faces, stone)
+func _mountain_surface(x: float, offset: float) -> Vector3:
+	return preload("res://scripts/tunnel_geology.gd").surface(world.terrain, feature_x, x, offset)
+
+
+func _tunnel_peak(index: int, stone: Material) -> void:
+	# Reuse native rock formations as geological crests above the connected
+	# hollow mass. Their buried bases never add a collider inside the roadway.
+	var source := preload("res://scripts/expedition_scenery.gd")
+	var model: Node3D = source.instance("rocky_peak" if index % 2 == 0 else "mountain_ridge")
+	model.name = "TunnelGeologicalPeak%d" % index
+	var bounds := BiomeModels._visibility_bounds(model)
+	var scale_value := Vector3(22, 17 if index % 2 == 0 else 13, 24) / bounds.size
+	model.basis = Basis(Vector3.UP, 0.4 + index * 0.85).scaled(scale_value)
+	var x: float = feature_x + [-21.0, 12.0, 23.0, -16.0][index]
+	var lateral: float = [-19.0, 21.0, -27.0, 29.0][index]
+	var base := Vector3(bounds.get_center().x, bounds.position.y, bounds.get_center().z)
+	model.position = _mountain_surface(x, lateral) - Vector3.UP * 7.0 - model.basis * base
+	for child: Node in model.find_children("*", "CollisionObject3D", true, false):
+		child.collision_layer = 0
+		child.collision_mask = 0
+	for mesh: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false): mesh.material_override = stone
+	add_child(model)
+
+
+func _tunnel_roof(section: int, stone: Material) -> void:
+	var faces: PackedVector3Array = mountain_geometry["roof%d" % section]
+	_shell("TunnelMountainRidge%d" % section, faces, stone)
+	_mountain_collision("TunnelMountainCollisionRoof%d" % section, faces)
+
+
+func _mountain_collision(label: String, faces: PackedVector3Array) -> void:
 	var body := StaticBody3D.new()
-	body.name = "TunnelMountainCollisionNorth" if side < 0 else "TunnelMountainCollisionSouth"
+	body.name = label
 	add_child(body)
 	var shape := ConcavePolygonShape3D.new()
 	shape.backface_collision = true
@@ -274,6 +340,12 @@ func _tunnel_mountain(side: float, stone: Material) -> void:
 	var collision := CollisionShape3D.new()
 	collision.shape = shape
 	body.add_child(collision)
+
+
+func _tunnel_mountain(side: float, stone: Material) -> void:
+	var faces: PackedVector3Array = mountain_geometry["north" if side < 0 else "south"]
+	_shell("TunnelMountainFillNorth" if side < 0 else "TunnelMountainFillSouth", faces, stone)
+	_mountain_collision("TunnelMountainCollisionNorth" if side < 0 else "TunnelMountainCollisionSouth", mountain_geometry["collision_north" if side < 0 else "collision_south"])
 
 
 func _physics_process(dt: float) -> void:

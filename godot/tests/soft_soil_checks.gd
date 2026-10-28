@@ -8,7 +8,7 @@ class SoilTerrain extends DriveTerrain:
 	func dry_height(_x: float, _z: float) -> float: return 0.0
 	func feature_at(_x: float) -> Dictionary: return {}
 	func pools_near(_x: float) -> Array[Dictionary]: return []
-	func sample(x: float, z: float, _include_water: bool = true) -> Dictionary:
+	func sample(x: float, z: float, _include_water: bool = true, _visual_blend: bool = false) -> Dictionary:
 		var soft := absf(z) > 8.0
 		return {"color": Color("857357"), "road": 0.0 if soft else 1.0, "lateral": z,
 			"paved": 0.0 if soft else 1.0, "grip": 0.42 if soft else 1.0, "drag": 1.0 if soft else 0.0,

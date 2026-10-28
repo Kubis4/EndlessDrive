@@ -126,7 +126,7 @@ func _run() -> void:
 	for family in [1, 3, 4, 2]: fx.select_particle_bank(0, family)
 	check(old_dust.color == old_color and not old_dust.emitting and old_grit.material_override == null, "Existing sand dust/grit retains its color and material after mud, snow and water")
 	check(fx._emitters[1] == fx._surface_pools[1][0].dust, "Changing one wheel does not switch the other wheels' particle banks")
-	check(fx._surface_pools[0][4].grit.material_override != null and fx._surface_pools.size() == 4, "Water owns a separate material in a bounded preallocated pool")
+	check(fx._surface_pools[0][4].grit.material_override != null and fx._surface_pools.size() == 4, "Water owns a separate material in a bounded lazy pool")
 	check(fx._surface_pools[0][0].dust.material_override is ShaderMaterial and fx._surface_pools[0][0].dust.amount == 28 and fx._surface_pools[0][0].grit.amount == 192 and fx._sand_clumps.size() == 4, "Sand uses bounded geometry spray and a lightweight texture-free powder shader")
 	if DisplayServer.get_name() != "headless":
 		lab.toggle_dust()

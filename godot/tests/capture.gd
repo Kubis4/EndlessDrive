@@ -13,6 +13,13 @@ func _capture() -> void:
 	root.add_child(game)
 	var output := "res://../build/godot-preview.png"
 	for argument: String in OS.get_cmdline_user_args():
+		if argument.begins_with("--vehicle="):
+			game.profile.selected_vehicle = argument.trim_prefix("--vehicle=")
+			game.profile.prepare_run(game.run)
+			game.vehicle.configure_vehicle(game.run.vehicle_id)
+
+		if argument.begins_with("--quality="):
+			game._settings_changed("quality", argument.trim_prefix("--quality=").to_float())
 		if argument == "--touch-ui":
 			game.hud.expedition_ui.touch_mode = 1
 			game.hud.expedition_ui._layout()
@@ -63,6 +70,12 @@ func _capture() -> void:
 		if argument == "--fx":
 			game.run.engine_running = true
 			game.vehicle.speed = 12
+		if argument == "--leaf-breeze":
+			game.weather.set_process(false)
+			game.vehicle.set_physics_process(false)
+			game.world.wind_force = 1.0
+			game.road_leaves.particles.preprocess = 2.0
+			game.road_leaves._process(0.3)
 		if argument == "--upgrades":
 			game._open_menu(false)
 			game.profile.bank = 35
@@ -122,6 +135,26 @@ func _capture() -> void:
 			game.run.take_loot(0, "0/part/0", 1.0)
 			game._action("service")
 			game.hud._service_tabs.current_tab = 1
+	if "--drive-trails" in OS.get_cmdline_user_args():
+		game.run.engine_running = true
+		game.vehicle.controls_enabled = true
+		Input.action_press("throttle", 1.0)
+		for frame in 180:
+			await physics_frame
+			await process_frame
+		Input.action_release("throttle")
+		print("PHYSICAL TYRE TRAILS count=", game.effects._count, " x=", game.vehicle.position.x)
+		assert(game.effects._count > 4)
+		game.vehicle.park()
+		game._update_camera(1, true)
+	if "--trails" in OS.get_cmdline_user_args():
+		for step in 70:
+			var x: float = game.vehicle.position.x - step * 0.65
+			var direction := Vector3(1, 0, (game.world.center_at(x + 0.5) - game.world.center_at(x - 0.5))).normalized()
+			for side: float in [-0.68, 0.68]:
+				var p := Vector3(x, 0, game.world.center_at(x) + side)
+				game.effects._stamp(p, direction, game.world.terrain.sample(p.x, p.z))
+	if "--trails" in OS.get_cmdline_user_args(): print("TRACK CAPTURE count=", game.effects._count, " aabb=", game.effects._tracks.get_aabb(), " sample=", game.effects._tracks.multimesh.get_instance_transform(0))
 	for frame in 30:
 		await process_frame
 	await RenderingServer.frame_post_draw

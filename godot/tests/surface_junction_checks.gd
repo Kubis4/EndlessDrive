@@ -108,7 +108,7 @@ func _run() -> void:
 	effects.world = world
 	world.add_child(effects)
 	for family in 4:
-		var bank: Dictionary = effects._surface_pools[0][family]
+		var bank: Dictionary = effects.ensure_particle_bank(0, family)
 		check(bank.dust.material_override is ShaderMaterial and bank.grit.mesh is SphereMesh and bank.clumps != null, "Spray family %d has procedural powder, 3D grains and clumps" % family)
 		var color: Color = bank.dust.material_override.get_shader_parameter("powder_tint")
 		for next in range(5, -1, -1): effects.select_particle_bank(0, next)

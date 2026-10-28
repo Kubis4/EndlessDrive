@@ -1,5 +1,8 @@
 extends Node3D
 
+signal startup_finished
+var startup_ready := false
+
 const Locale = preload("res://scripts/localization.gd")
 
 @export_group("Desert overview camera")
@@ -32,11 +35,12 @@ var _had_save := false
 var _camera_preference := 1.0
 var _volume_preference := 0.8
 var _language_preference := 0
-var _quality_preference := 1 if OS.has_feature("mobile") else 2
+var _quality_preference := 1
 var _fps_preference := 30 if OS.has_feature("mobile") else 60
 var _paint_materials: Array[ShaderMaterial] = []
 var weather: DriveWeather
 var effects: DriveEffects
+var road_leaves: Node3D
 var winch: Node3D
 var profile: DriveProfile
 var route_decisions_enabled := true
@@ -48,6 +52,7 @@ var origin_rebasing_enabled := true
 const ORIGIN_STEP := 2048.0
 var _last_mechanical_events := 0
 var _renderer_primer: SubViewport
+var _renderer_primer_revision := 0
 
 
 func _ready() -> void:
@@ -69,6 +74,24 @@ func _ready() -> void:
 	elif not _ephemeral:
 		run.world_seed = DriveTerrain.new_journey_seed()
 		profile.prepare_run(run)
+	menu = get_node_or_null("MainMenu") as DriveMenu
+	if menu == null:
+		menu = load("res://scenes/ui/main_menu.tscn").instantiate() as DriveMenu
+		add_child(menu)
+	menu.requested.connect(_menu_action)
+	menu.setting_changed.connect(_settings_changed)
+	# Read quality before creating terrain/materials, rather than rebuilding
+	# their shader configuration after the whole initial world was generated.
+	_load_settings()
+	if not _ephemeral:
+		var parked := get_node_or_null("Vehicle")
+		if parked != null: parked.process_mode = Node.PROCESS_MODE_DISABLED
+		menu.show_menu(_had_save, run.distance)
+		menu.set_loading(0.08)
+		get_tree().paused = true
+		# Let the actual menu render before any scenery generation/GPU warmup.
+		await get_tree().process_frame
+		await get_tree().process_frame
 	_setup_lighting()
 	world = DriveWorld.new()
 	world.graphics_quality = _quality_preference
@@ -85,12 +108,14 @@ func _ready() -> void:
 		pose = Vector3(saved.vehicle.x, saved.vehicle.y, saved.vehicle.z)
 		heading = float(saved.vehicle.heading)
 	pose = world.safe_position(pose)
-	world.update_stream(pose.x)
+	if _ephemeral: world.update_stream(pose.x)
+	else: await _prepare_starting_terrain(pose.x)
 	vehicle = get_node_or_null("Vehicle") as DriveVehicle
 	var new_vehicle := vehicle == null
 	if new_vehicle: vehicle = load("res://scenes/vehicle.tscn").instantiate() as DriveVehicle
 	vehicle.run = run
 	vehicle.world = world
+	vehicle.configure_vehicle(run.vehicle_id)
 	vehicle.position = pose
 	vehicle.position.y = world.height_at(pose.x, pose.z) + 0.6
 	vehicle.heading = heading
@@ -123,18 +148,15 @@ func _ready() -> void:
 	hud.requested.connect(_action)
 	hud.touch_changed.connect(vehicle.set_touch)
 	hud.visible = true
-	menu = get_node_or_null("MainMenu") as DriveMenu
-	if menu == null:
-		menu = load("res://scenes/ui/main_menu.tscn").instantiate() as DriveMenu
-		add_child(menu)
-	menu.requested.connect(_menu_action)
-	menu.setting_changed.connect(_settings_changed)
 	menu.hide_menu()
-	_load_settings()
 	effects = DriveEffects.new()
 	effects.vehicle = vehicle
 	effects.world = world
 	add_child(effects)
+	road_leaves = load("res://assets/effects/road_leaves.tscn").instantiate() as Node3D
+	road_leaves.world = world
+	road_leaves.vehicle = vehicle
+	add_child(road_leaves)
 	weather = DriveWeather.new()
 	weather.run = run
 	weather.vehicle = vehicle
@@ -156,30 +178,64 @@ func _ready() -> void:
 		run.day_time = 0.82
 		run.headlights = true
 	if not _ephemeral:
+		vehicle.process_mode = Node.PROCESS_MODE_INHERIT
+		menu.set_loading(1.0)
 		_open_menu(false)
 		if DisplayServer.get_name() != "headless":
-			var light_primer := preload("res://scripts/light_primer.gd").new()
-			light_primer.vehicle = vehicle
-			light_primer.environment = environment
-			add_child(light_primer)
-			_prime_renderer()
+			await _prime_renderer()
+	startup_ready = true
+	startup_finished.emit()
+
+
+func _prepare_starting_terrain(x: float) -> void:
+	# The opaque loading menu hides the world. Avoid drawing every partial
+	# terrain/scenery update, and use more of the frame for publication here.
+	var viewport := get_viewport()
+	var previous_disable_3d := viewport.disable_3d
+	var previous_budget := world.publication_budget_usec
+	viewport.disable_3d = true
+	world.publication_budget_usec = 8000
+	world.prepare_startup(x)
+	while not world.startup_complete():
+		# Pump only publication jobs while the tree is paused. Making the
+		# world ALWAYS would also wake inherited train/zombie/rigid-body physics.
+		world._process(0.0)
+		var ready_chunks := 0
+		for chunk: Node3D in world.chunks.values():
+			if chunk.get_meta("terrain_ready", false): ready_chunks += 1
+		menu.set_loading(0.18 + minf(ready_chunks / 3.0, 1.0) * 0.64)
+		await get_tree().process_frame
+	world.publication_budget_usec = previous_budget
+	viewport.disable_3d = previous_disable_3d
+	menu.set_loading(0.92, "Pripravujem vozidlo…")
 
 
 func _prime_renderer() -> void:
 	if _ephemeral or DisplayServer.get_name() == "headless": return
+	_renderer_primer_revision += 1
+	var revision := _renderer_primer_revision
 	if is_instance_valid(_renderer_primer): _renderer_primer.queue_free()
 	_renderer_primer = load("res://scripts/render_warmup.gd").new() as SubViewport
 	_renderer_primer.environment_template = environment
 	_renderer_primer.vehicle_template = vehicle._visual
 	add_child(_renderer_primer)
+	# Do not let a fast Continue/New click move shader preparation into the
+	# first driven frames. The already visible menu owns this short phase.
+	if _in_menu:
+		var primer := _renderer_primer
+		while is_instance_valid(primer) and not primer.is_queued_for_deletion() and revision == _renderer_primer_revision:
+			menu.set_loading(0.95 + clampf(float(primer.get("_frames")) / float(primer.total_frames), 0.0, 1.0) * 0.04, "Pripravujem zobrazenie…")
+			await get_tree().process_frame
+		if revision == _renderer_primer_revision: menu.set_loading(1.0)
 
 
 func _process(dt: float) -> void:
+	if not startup_ready: return
 	_finish_auto_save()
 	_rebase_world()
 	if run.mechanical_events > _last_mechanical_events:
 		_last_mechanical_events = run.mechanical_events
-		hud.toast(run.last_mechanical_event)
+		hud.toast(run.last_mechanical_event, 1)
 	if route_decisions_enabled:
 		var choice := world.choose_route(vehicle.position)
 		if not choice.is_empty():
@@ -204,7 +260,8 @@ func _action(action: String) -> void:
 		"menu":
 			_open_menu()
 		"engine":
-			hud.toast(run.toggle_engine())
+			var engine_message := run.toggle_engine()
+			hud.toast(engine_message, 0 if run.engine_running or engine_message == "Motor vypnutý." else 1)
 			if not run.engine_running: vehicle.cancel_cruise()
 		"lights":
 			if not run.headlights:
@@ -271,6 +328,7 @@ func _action(action: String) -> void:
 		"save":
 			_save(true)
 		"new", "restart":
+			var reuse_prepared := not _ephemeral and not _had_save and not _session_started and startup_ready and action == "new"
 			_finish_auto_save(true)
 			winch.disconnect_cable()
 			_in_menu = false
@@ -284,14 +342,33 @@ func _action(action: String) -> void:
 			if not _ephemeral: profile.store()
 			run = DriveRun.new()
 			_last_mechanical_events = 0
-			run.world_seed = previous_seed if action == "restart" else DriveTerrain.new_journey_seed(previous_seed)
+			run.world_seed = previous_seed if action == "restart" or reuse_prepared else DriveTerrain.new_journey_seed(previous_seed)
 			if not _ephemeral: profile.prepare_run(run)
 			active_building_id = -1
-			world.async_streaming = false
-			world.configure(run.world_seed)
-			world.update_stream(0)
+			if not reuse_prepared:
+				if _ephemeral:
+					world.async_streaming = false
+					world.configure(run.world_seed)
+					world.update_stream(0)
+				else:
+					startup_ready = false
+					vehicle.controls_enabled = false
+					get_tree().paused = true
+					hud.visible = false
+					menu.show_menu(false, 0)
+					menu.set_loading(0.08)
+					await get_tree().process_frame
+					world.configure(run.world_seed)
+					await _prepare_starting_terrain(0)
+					menu.set_loading(1.0)
+					menu.hide_menu()
+					hud.visible = true
+					get_tree().paused = false
 			world.async_streaming = not _ephemeral
 			vehicle.run = run
+			vehicle.configure_vehicle(run.vehicle_id)
+			_paint_materials.clear()
+			_collect_paint(vehicle._visual)
 			weather.run = run
 			weather.reset_weather()
 			_apply_paint()
@@ -301,13 +378,16 @@ func _action(action: String) -> void:
 			vehicle.position = Vector3(0, world.height_at(0, start_z) + 0.55, start_z)
 			vehicle.reset_physics_interpolation()
 			effects.reset_trails()
+			if road_leaves != null: road_leaves.reset_particles()
 			vehicle.controls_enabled = true
 			hud.run = run
 			hud.show_modal("")
 			_rebase_world(true)
 			_update_camera(1.0, true)
 			_save(false)
-			hud.toast(tr("Cesta reštartovaná.") if action == "restart" else tr("Nová cesta. Motor čaká na teba."))
+			startup_ready = true
+			startup_finished.emit()
+			hud.toast(tr("Jazda reštartovaná.") if action == "restart" else tr("Nová jazda · motor vypnutý."))
 		"quit":
 			if _save(true):
 				get_tree().quit()
@@ -435,6 +515,16 @@ func _open_menu(save_before: bool = true) -> void:
 
 
 func _menu_action(action: String) -> void:
+	if not startup_ready: return
+	if not menu._loading_buttons.is_empty(): return
+	if action.begins_with("vehicle:"):
+		var id := action.trim_prefix("vehicle:")
+		if id not in ["izh", "jeep"]: return
+		var previous := profile.selected_vehicle
+		profile.selected_vehicle = id
+		if not _ephemeral and profile.store() != OK: profile.selected_vehicle = previous
+		_show_upgrades()
+		return
 	if action == "deposit":
 		_deposit_scrap()
 		return
@@ -474,6 +564,9 @@ func _load_settings() -> void:
 		if (language is float or language is int) and is_finite(float(language)): _language_preference = clampi(int(language), 0, 1)
 		if (quality is float or quality is int) and is_finite(float(quality)): _quality_preference = clampi(int(quality), 0, 2)
 		if (fps is float or fps is int) and is_finite(float(fps)) and int(fps) in [0, 30, 60]: _fps_preference = int(fps)
+	if not _ephemeral and not config.get_value("view", "notebook_profile_v2", false):
+		var adapter := RenderingServer.get_video_adapter_name().to_lower()
+		if "intel" in adapter or "radeon graphics" in adapter: _quality_preference = mini(_quality_preference, 1)
 	Locale.configure(_language_preference)
 	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(_volume_preference, 0.0001)))
 	menu.set_settings(_volume_preference, _camera_preference)
@@ -490,7 +583,8 @@ func _apply_video_settings() -> void:
 
 func _show_upgrades() -> void:
 	menu.show_panel("upgrades")
-	menu._upgrade_bank.text = Locale.translate("ŠROT V GARÁŽI: %d\nVylepšenia sa použijú pri NOVEJ jazde. Aktuálne auto si zachová svoj stav." % profile.bank)
+	menu.set_vehicle_selection(profile.selected_vehicle)
+	menu._upgrade_bank.text = tr("Šrot: %d") % profile.bank
 	var available := maxi(0, mini(int(run.inventory.scrap), run.found_scrap - run.deposited_scrap))
 	menu._deposit_button.text = Locale.translate("ODLOŽIŤ NAJDENÝ ŠROT Z JAZDY: %d" % available)
 	menu._deposit_button.disabled = available <= 0
@@ -554,6 +648,7 @@ func _settings_changed(key: String, value: float) -> void:
 	config.set_value("view", "camera", _camera_preference)
 	config.set_value("language", "index", _language_preference)
 	config.set_value("view", "quality", _quality_preference)
+	config.set_value("view", "notebook_profile_v2", true)
 	config.set_value("view", "fps", _fps_preference)
 	var result := config.save("user://preferences.cfg")
 	if result != OK: hud.toast("Nastavenia sa nepodarilo uložiť.")
@@ -574,6 +669,9 @@ func _apply_paint() -> void:
 
 
 func _notification(what: int) -> void:
+	if not startup_ready:
+		if what == NOTIFICATION_WM_CLOSE_REQUEST: get_tree().quit()
+		return
 	if vehicle == null or hud == null:
 		return
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
@@ -680,6 +778,7 @@ func _rebase_world(force: bool = false) -> void:
 	world.set_route_origin(route_origin)
 	vehicle.reset_physics_interpolation()
 	if effects != null: effects.reset_particles()
+	if road_leaves != null: road_leaves.reset_particles()
 	if weather != null: weather.reset_particles()
 	# Camera focus/zoom are logical route coordinates too. Keep the current
 	# follow lag and lens through a rebase instead of snapping back to the car.

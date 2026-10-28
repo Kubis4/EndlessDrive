@@ -8,7 +8,7 @@ var state: DriveRun
 
 class TestTerrain extends DriveTerrain:
 	var test_water_depth := 0.0
-	func sample(_x: float, _z: float, _include_water: bool = true) -> Dictionary:
+	func sample(_x: float, _z: float, _include_water: bool = true, _visual_blend: bool = false) -> Dictionary:
 		return {"road": 1.0, "grip": 1.0, "drag": 0.0, "roughness": 0.0, "paved": 1.0, "label": "Asfalt", "water": test_water_depth}
 class TestWorld extends DriveWorld:
 	func _ready() -> void: pass

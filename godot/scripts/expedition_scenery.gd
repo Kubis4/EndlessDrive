@@ -6,6 +6,9 @@ static var _scenes: Dictionary = {}
 
 static func warmup() -> void:
 	for label: String in MODELS:
+		# Kept as editable art references, but gameplay now uses the supplied
+		# tree scene bank. Avoid loading the old layered crowns at every startup.
+		if label in ["mountain_pine", "alpine_pine", "juniper", "woodland_tree", "wetland_tree", "dead_tree"]: continue
 		if not _scenes.has(label): _scenes[label] = load(DIRECTORY + label + ".tscn")
 
 static func instance(label: String) -> Node3D:

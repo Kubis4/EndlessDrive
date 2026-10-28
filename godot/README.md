@@ -4,7 +4,24 @@ This is a playable migration slice, targeting Godot **4.7.2**, with a new
 desert art set and a high, fixed oblique overview camera.
 The original Android Studio application remains at the repository root.
 
-## V5 — current Godot version
+## V6 — current Godot version
+
+The main menu combines a native paper navigation column with the illustrated
+cream van on an open road. Continue/New journey highlighting, localization,
+loading guards and existing modal screens remain functional. See the
+[menu artwork and verification notes](assets/ui/menu/README.md).
+
+The notebook update adds vehicle selection, a default front-driven IZH van,
+20-second storm warnings, visible guide tyre tracks, larger physical potholes
+and a local mountain cutaway that reveals the tunnel road. See
+[NOTEBOOK_UPDATE.md](NOTEBOOK_UPDATE.md) for quality, packaging and validation.
+
+The latest local scenery update uses the supplied trees throughout the world,
+14 m crown spacing, sparse shadowless grass, new natural ground/rock materials,
+solid mountains around hollow tunnels and a compact button-only home menu.
+See [SCENERY_REFRESH.md](SCENERY_REFRESH.md) for assets, prompts and measured
+streaming/render checks. Refresh all eleven saved geometry previews without
+overwriting authored wrappers with `tools/godot.ps1 RefreshPreview -CacheOnly`.
 
 V5 adds photographic-style material textures, restrained surface relief,
 rounded boulders and broad mountain crowns. Physical ruts still share their
@@ -12,6 +29,27 @@ geometry with collision; their compressed soil is easier to read. Generated
 editor previews now reload changed geometry and external meshes instead of
 retaining old pointed silhouettes. All nine terrain showcases are refreshed.
 See [materials, provenance and validation](assets/textures/NATURAL_MATERIALS_V2.md).
+
+V6 also adds quieter cracked asphalt, faded road paint,
+physical potholes, fallen trees, rusted wrecks, rockfalls and concrete barriers.
+Sparse seeded sites preserve a checked shoulder bypass and clear nearby scenery.
+Fallen trunks now have neighbouring tree stands; off-road detours may contain
+mud and shallow water. Forest density is modestly increased without overlapping
+crowns. Scattered road leaves/twigs and one local wind/car leaf effect add detail
+with bounded mesh and particle budgets.
+All road families now use irregular seeded verges, quiet patchy wear and
+world-locked deposits instead of mirrored grain, parallel shoulder bands or a
+concrete slab grid. Chunk-edge lighting is continuous. See the
+[road surface materials](assets/textures/ROAD_SURFACES.md).
+Roadside grass, sand, soil and snow now use quiet seamless tiles and continuous
+material transitions. An integer noise hash removes large colour panels; tiny
+normal detail is reserved for close cameras. See the
+[roadside terrain notes](assets/textures/GROUND_SURFACES.md).
+Roadside fences share single grounded join posts across chunk seams. Five textured
+rock shapes form irregular physical barriers on both map edges through forests,
+wetlands, bends and mountain grades. See [fences and map edges](TRACK_EDGES.md).
+The native models are editable in `assets/models/obstacles/`; see
+[road wear and obstacle notes](assets/models/obstacles/README.md).
 
 ## V4
 
@@ -22,7 +60,7 @@ and [the vegetation notes](assets/models/vegetation/README.md) for details.
 
 **APK generation is temporarily paused.** The user reports that the existing
 APKs do not work. Successful packaging/signing checks below do not establish
-that the game runs on Android. Run V5 in the Godot editor; fixing Android
+that the game runs on Android. Run V6 in the Godot editor; fixing Android
 runtime/export issues is still pending.
 
 ## V3 — terrain, visibility and frame pacing
@@ -263,7 +301,7 @@ Use F5 for these source changes; an already exported 0.5.0 APK does not update i
 
 ### Jeep Cherokee vehicle asset
 
-The active car is now the user-supplied Jeep Cherokee, in
+The garage offers the default front-driven IZH-2715 and the user-supplied Jeep Cherokee, in
 `assets/models/jeep/jeep_cherokee.tscn`. The original single-mesh GLB is retained.
 An offline conversion separated all four existing tyre islands without removing or
 duplicating any original triangles, preserving UVs and the albedo/ORM/normal maps.
@@ -355,7 +393,10 @@ pending. `tools/godot.ps1 Test` runs the complete suite; `Balance` runs the plan
 ## Open and play
 
 Import `godot/project.godot` into Godot, open it, and press **F5**.
-The entry scene is `scenes/main.tscn`.
+F5 starts `scenes/boot.tscn`, a small branded screen shown before loading the
+gameplay scene. Continue editing `scenes/main.tscn` for the
+vehicle, camera, lighting and UI; both startup paths use that same authored scene.
+See [STARTUP.md](STARTUP.md) for the loading stages and measurements.
 
 ## Editing scenes visually
 
@@ -369,7 +410,9 @@ endless terrain remain procedural. See [EDITOR.md](EDITOR.md) for the Slovak
 editing guide, scene locations and the distinction between preview and runtime assets.
 
 The generated country-road preview in `scenes/world/editor_terrain.tscn` is linked
-from the main scene. Select **EditorTerrainPreview**, set **Preview Seed** and
+from the main scene and loaded only inside the editor. It no longer loads and
+immediately discards the full snapshot during game startup. The saved editable
+geometry is `scenes/world/generated/editor_terrain.scn`. Select **EditorTerrainPreview**, set **Preview Seed** and
 **Preview Distance**, then click **Obnoviť terén zo skriptov**. Baking runs in a
 separate headless process and replaces only that generated geometry. Shared
 texture/shader edits already update without rebuilding geometry. Standalone

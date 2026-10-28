@@ -6,11 +6,11 @@ extends CanvasLayer
 signal requested(action: String)
 signal touch_changed(action: String, pressed: bool, source: int)
 
-const INK := Color("101923")
-const PANEL := Color("1b2831")
-const CREAM := Color("f5f4e9")
-const MUTED := Color("9eafb7")
-const GOLD := Color("ffc66b")
+const INK := Color("191d18")
+const PANEL := Color("30372c")
+const CREAM := Color("f5ecd7")
+const MUTED := Color("b9baa9")
+const GOLD := Color("e9ba68")
 const GREEN := Color("7cd6ae")
 const RED := Color("fa846e")
 const Locale = preload("res://scripts/localization.gd")
@@ -646,9 +646,10 @@ func _update_road_assist() -> void:
 	if _assist_panel != null: _assist_panel.hide()
 
 
-func toast(text: String) -> void:
+func toast(text: String, priority: int = 0) -> void:
 	_message.text = Locale.translate(text)
 	_message_time = 5.0
+	_message.set_meta("priority", priority)
 
 
 func show_modal(kind: String) -> void:

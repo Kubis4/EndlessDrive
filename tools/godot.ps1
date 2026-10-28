@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Play', 'SandLab', 'SandBench', 'Editor', 'Import', 'Test', 'Balance', 'Capture', 'Android', 'BuildArt', 'BuildExpeditionArt', 'BuildPeaks', 'BuildRocks', 'BuildPlants', 'TextureExpeditionArt', 'RefreshPreview')]
+    [ValidateSet('Play', 'SandLab', 'SandBench', 'Editor', 'Import', 'Test', 'Balance', 'Capture', 'Android', 'BuildArt', 'BuildExpeditionArt', 'BuildPeaks', 'BuildRocks', 'BuildPlants', 'BuildRoadArt', 'BuildGroundArt', 'BuildBoundaryRocks', 'TextureExpeditionArt', 'RefreshPreview')]
     [string]$Action = 'Play',
     [string]$GodotPath = '',
     [string[]]$Suites = @(),
@@ -66,9 +66,12 @@ Invoke-GodotChecked -Arguments @('--headless', '--editor', '--import') -LogName 
 switch ($Action) {
     'RefreshPreview' {
         if ($CacheOnly) {
-            foreach ($preview in @(@('editor_terrain', '1000003', '0'), @('bridge', '24601', '2664'), @('alpine', '1000005', '180'))) {
+            # Refresh geometry only; retain authored wrapper/camera/UI edits.
+            foreach ($preview in @(@('editor_terrain', '1000003', '0'), @('bridge', '24601', '2664'), @('alpine', '1000005', '180'), @('forest', '1000004', '180'), @('canyon', '1000002', '180'), @('swamp', '1000006', '120'), @('mountain', '24601', '3200'), @('rail', '24601', '744'), @('tunnel', '24601', '1704'))) {
                 Invoke-GodotChecked -Arguments @('--headless', '--script', 'res://tests/refresh_editor_preview.gd', '--', "--seed=$($preview[1])", "--distance=$($preview[2])", "--output=res://scenes/world/generated/$($preview[0]).scn") -LogName "godot-refresh-$($preview[0]).log"
             }
+            Invoke-GodotChecked -Arguments @('--headless', '--script', 'res://tests/build_deformation_preview.gd') -LogName 'godot-refresh-deformation.log'
+            Invoke-GodotChecked -Arguments @('--headless', '--script', 'res://tests/junction_gallery.gd') -LogName 'godot-refresh-junctions.log'
         } else {
             Invoke-GodotChecked -Arguments @('--headless', '--script', 'res://tests/refresh_editor_preview.gd', '--', '--showcases') -LogName 'godot-refresh-preview.log'
         }
@@ -77,6 +80,7 @@ switch ($Action) {
         Invoke-GodotChecked -Arguments @('--headless', '--script', 'res://tests/build_art.gd') -LogName 'godot-build-art.log'
     }
     'BuildPlants' {
+        # Imported, user-supplied plant textures and normalized meshes.
         & python (Join-Path $PSScriptRoot 'prepare_supplied_plants.py')
         if ($LASTEXITCODE -ne 0) { throw 'Plant texture preparation failed.' }
         Invoke-GodotChecked -Arguments @('--headless', '--editor', '--import') -LogName 'godot-import-plants.log'
@@ -84,6 +88,22 @@ switch ($Action) {
     }
     'BuildExpeditionArt' {
         Invoke-GodotChecked -Arguments @('--headless', '--script', 'res://tests/build_expedition_art.gd') -LogName 'godot-build-expedition-art.log'
+    }
+    'BuildRoadArt' {
+        & python (Join-Path $PSScriptRoot 'build_road_weathering.py')
+        if ($LASTEXITCODE -ne 0) { throw 'Road weathering preparation failed.' }
+        & python (Join-Path $PSScriptRoot 'build_weathered_asphalt.py')
+        if ($LASTEXITCODE -ne 0) { throw 'Asphalt texture preparation failed.' }
+        Invoke-GodotChecked -Arguments @('--headless', '--editor', '--import') -LogName 'godot-import-road-art.log'
+        Invoke-GodotChecked -Arguments @('--headless', '--script', 'res://tests/build_road_obstacles.gd') -LogName 'godot-build-road-obstacles.log'
+    }
+    'BuildGroundArt' {
+        & python (Join-Path $PSScriptRoot 'build_ground_surfaces.py')
+        if ($LASTEXITCODE -ne 0) { throw 'Ground surface preparation failed.' }
+        Invoke-GodotChecked -Arguments @('--headless', '--editor', '--import') -LogName 'godot-import-ground-art.log'
+    }
+    'BuildBoundaryRocks' {
+        Invoke-GodotChecked -Arguments @('--headless', '--script', 'res://tests/build_boundary_rocks.gd') -LogName 'godot-build-boundary-rocks.log'
     }
     'BuildPeaks' {
         Invoke-GodotChecked -Arguments @('--headless', '--script', 'res://tests/build_expedition_art.gd', '--', '--only-peaks') -LogName 'godot-build-peaks.log'
@@ -110,8 +130,15 @@ switch ($Action) {
             }
             if ('vegetation_checks' -notin $Suites -and -not $PSBoundParameters.ContainsKey('Suites')) { $Suites = @('vegetation_checks') + $Suites }
             if (-not $PSBoundParameters.ContainsKey('Suites')) { $Suites += 'preview_geometry_checks' }
+            if ('road_obstacle_checks' -notin $Suites -and -not $PSBoundParameters.ContainsKey('Suites')) { $Suites = @('road_obstacle_checks') + $Suites }
+            if ('forest_detail_checks' -notin $Suites -and -not $PSBoundParameters.ContainsKey('Suites')) { $Suites = @('forest_detail_checks') + $Suites }
+            if ('vehicle_outline_checks' -notin $Suites -and -not $PSBoundParameters.ContainsKey('Suites')) { $Suites = @('vehicle_outline_checks') + $Suites }
+            if (-not $PSBoundParameters.ContainsKey('Suites')) { $Suites += 'road_surface_checks' }
+            if (-not $PSBoundParameters.ContainsKey('Suites')) { $Suites += 'ground_surface_checks' }
+            if (-not $PSBoundParameters.ContainsKey('Suites')) { $Suites += 'track_edge_checks', 'vehicle_selection_checks', 'save_checks' }
             foreach ($suite in $Suites) {
-                if ($suite -notmatch '^[a-z_]+$') { throw "Invalid suite: $suite" }
+                # Suite identifiers may include version digits (e.g. v3_world_checks).
+                if ($suite -notmatch '^[a-z][a-z0-9_]*$') { throw "Invalid suite: $suite" }
                 $env:APPDATA = Join-Path $buildPath $(if ($suite -eq 'menu_save_exit_checks') { 'menu-flow-user' } else { 'godot-tests-profile' })
                 try {
                     Invoke-GodotChecked -Arguments @('--headless', '--fixed-fps', '60', '--script', "res://tests/$suite.gd", '--', '--test-session') -LogName "godot-$suite.log"

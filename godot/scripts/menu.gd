@@ -1,7 +1,7 @@
 @tool
 class_name DriveMenu
 extends CanvasLayer
-## Native overlay: the caller keeps its 3D scene behind this CanvasLayer.
+## Native controls over the paper/road menu artwork.
 ## show_menu distance is in METRES, matching DriveRun.distance.
 ## The caller owns pausing/input, saving, applying settings and handling actions.
 ## Nothing here starts a run, writes a save, adjusts audio or quits the process.
@@ -66,8 +66,12 @@ var _panels: Dictionary = {}
 var _upgrade_bank: Label
 var _deposit_button: Button
 var _upgrade_buttons: Dictionary = {}
+var _vehicle_choices: HBoxContainer
 var _confirmation_distance: Label
 var _vehicle_button: Button
+var _loading_buttons: Dictionary = {}
+var _loading_backdrop: ColorRect
+var _loading_modal_title := ""
 @export_enum("Menu", "Nastavenia", "Ako hrať", "Auto", "Nová jazda", "Ukončenie", "Vylepšenia") var editor_view: int = 0:
 	set(value):
 		editor_view = value
@@ -76,9 +80,11 @@ var _vehicle_button: Button
 
 func _ready() -> void:
 	_ensure_built()
-	preload("res://scripts/hud_skin.gd").polish(_root)
+	if _vehicle_choices != null:
+		_vehicle_choices.vehicle_selected.connect(func(id: String) -> void: requested.emit("vehicle:" + id))
 	_setup_language_control()
 	_setup_video_controls()
+	preload("res://scripts/menu_skin.gd").polish(_root)
 	_layout()
 	if Engine.is_editor_hint(): _preview_layout()
 
@@ -89,15 +95,54 @@ func show_menu(has_save: bool, distance: float) -> void:
 	_distance = maxf(0.0, distance) if is_finite(distance) else 0.0
 	_has_ride = has_save or _distance > 0.0
 	_continue_button.disabled = not has_save
+	preload("res://scripts/menu_skin.gd").set_primary(_continue_button, has_save)
+	preload("res://scripts/menu_skin.gd").set_primary(_new_button, not has_save)
 	_continue_button.tooltip_text = tr("Vráť sa k svojej jazde.") if has_save else tr("Zatiaľ nemáš uloženú jazdu. Vyber Nová jazda.")
 	_card_status.text = tr("ROZJAZDENÁ CESTA") if has_save else tr("ĎALŠIA VÝPRAVA")
-	_distance_label.text = ("%.1f" % (_distance / 1000.0)).replace(".", ",") + "  km" if _has_ride else tr("Cesta čaká.")
-	_journey_label.text = tr("Rekord %.1f km · Prejdi čo najďalej.\nHľadaj zásoby a udrž auto v chode.") % (best_distance / 1000.0)
+	_card_status.hide()
+	_distance_label.text = ("%.1f" % (_distance / 1000.0)).replace(".", ",") + "  km" if _has_ride else tr("VÝPRAVA")
+	_journey_label.text = tr("Rekord %.1f km") % (best_distance / 1000.0)
+	_distance_label.hide()
+	_journey_label.hide()
 	menu_open = true
 	visible = true
 	_root.show()
 	_close_panel()
 	_layout()
+
+
+func set_loading(progress: float, message: String = "Pripravujem cestu…") -> void:
+	# Menu-only status; driving HUD geometry is untouched. Block starting a
+	# journey until its collision, hazards and nearby scenery are published.
+	if progress < 1.0:
+		_card_status.show()
+		if not is_instance_valid(_loading_backdrop):
+			_loading_backdrop = ColorRect.new()
+			_loading_backdrop.name = "LoadingBackdrop"
+			_loading_backdrop.color = INK
+			_loading_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_root.add_child(_loading_backdrop)
+			_root.move_child(_loading_backdrop, 0)
+			_loading_backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_loading_backdrop.show()
+		if _loading_buttons.is_empty():
+			for button: BaseButton in _root.find_children("*", "BaseButton", true, false):
+				_loading_buttons[button] = button.disabled
+				button.disabled = true
+		_card_status.text = "%s  %d %%" % [tr(message), roundi(progress * 100)]
+		if _modal.visible:
+			if _loading_modal_title.is_empty(): _loading_modal_title = _modal_title.text
+			_modal_title.text = _card_status.text
+	else:
+		_card_status.hide()
+		if not _loading_modal_title.is_empty():
+			_modal_title.text = _loading_modal_title
+			_loading_modal_title = ""
+		if is_instance_valid(_loading_backdrop): _loading_backdrop.hide()
+		for button: BaseButton in _loading_buttons:
+			if is_instance_valid(button): button.disabled = _loading_buttons[button]
+		_loading_buttons.clear()
+		_card_status.text = tr("ROZJAZDENÁ CESTA") if _has_save else tr("ĎALŠIA VÝPRAVA")
 
 
 func show_panel(kind: String) -> void:
@@ -144,6 +189,7 @@ func show_panel(kind: String) -> void:
 		"quit": _build_confirmation(true)
 		"upgrades": _build_upgrades()
 	_close_button.grab_focus()
+	preload("res://scripts/menu_skin.gd").polish(_modal_body)
 	_layout()
 
 
@@ -219,8 +265,9 @@ func _fps_changed(index: int) -> void:
 
 func set_language(index: int) -> void:
 	if is_instance_valid(_language_select): _language_select.select(clampi(index, 0, 1))
-	if _root != null and _has_ride:
-		_journey_label.text = tr("Rekord %.1f km · Prejdi čo najďalej.\nHľadaj zásoby a udrž auto v chode.") % (best_distance / 1000.0)
+	if _root != null:
+		_journey_label.text = tr("Rekord %.1f km") % (best_distance / 1000.0)
+		if not _has_ride: _distance_label.text = tr("VÝPRAVA")
 	if _modal_title != null and not _panel_kind.is_empty():
 		_modal_title.text = tr({"settings": tr("NASTAVENIA"), "howto": tr("AKO HRAŤ"), "garage": tr("GARÁŽ / TVOJE AUTO"), "new": tr("ZAČAŤ NOVÚ JAZDU?"), "quit": tr("UKONČIŤ HRU?"), "upgrades": tr("GARÁŽ / AUTO PRE NOVÚ VÝPRAVU")}.get(_panel_kind, ""))
 	if _diagram != null and _panel_kind == "garage": _select_part(_diagram.selected_slot)
@@ -276,15 +323,19 @@ func _ensure_built() -> void:
 	add_child(_root)
 	_root.resized.connect(_layout)
 	var dim := ColorRect.new()
-	dim.color = Color(0.035, 0.045, 0.038, 0.18)
+	dim.color = Color("131610")
 	_full_decor(dim)
-	_add_veil(PackedFloat32Array([0.0, 0.36, 0.57, 1.0]), PackedColorArray([Color(0.04, 0.06, 0.05, 0.88), Color(0.04, 0.06, 0.05, 0.42), Color(0.04, 0.06, 0.05, 0.02), Color(0.04, 0.06, 0.05, 0.48)]), false)
-	_add_veil(PackedFloat32Array([0.0, 0.35, 0.68, 1.0]), PackedColorArray([Color(0.04, 0.06, 0.05, 0.28), Color.TRANSPARENT, Color.TRANSPARENT, Color(0.04, 0.06, 0.05, 0.83)]), true)
 	_stage = Control.new()
 	_stage.name = "LandscapeLayout"
 	_stage.size = DESIGN
 	_stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_stage)
+	var artwork := TextureRect.new()
+	artwork.name = "PaperRoad"
+	artwork.texture = preload("res://assets/ui/menu/paper-road.png")
+	artwork.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	artwork.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_place(_stage, artwork, Vector2.ZERO, DESIGN)
 	_build_home()
 	_build_modal_shell()
 	_root.hide()
@@ -327,58 +378,43 @@ func _build_home() -> void:
 	_home = Control.new()
 	_home.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_place(_stage, _home, Vector2.ZERO, DESIGN)
-	_place(_home, _label(tr("OTVORENÁ CESTA  /  TVOJ PRÍBEH"), 15, GOLD), Vector2(64, 90), Vector2(540, 26))
 	var line := ColorRect.new()
-	line.color = GOLD
+	line.color = Color(0.25, 0.25, 0.20, 0.75)
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_place(_home, line, Vector2(66, 138), Vector2(62, 3))
-	var title := _label("ENDLESS\nDRIVE", 112)
+	_place(_home, line, Vector2(66, 310), Vector2(380, 1))
+	var title := _label("ENDLESS\nDRIVE", 88, Color("131610"))
 	var display_font := SystemFont.new()
 	display_font.font_names = PackedStringArray(["Bahnschrift", "Arial", "Noto Sans"])
 	display_font.font_weight = 800
 	title.add_theme_font_override("font", display_font)
-	title.add_theme_constant_override("line_spacing", -17)
-	title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.35))
-	title.add_theme_constant_override("shadow_offset_x", 3)
-	title.add_theme_constant_override("shadow_offset_y", 5)
-	_place(_home, title, Vector2(58, 162), Vector2(630, 280))
-	_place(_home, _label(tr("UDRŽ MOTOR PRI ŽIVOTE."), 19, GOLD), Vector2(66, 456), Vector2(540, 30))
-	_place(_home, _label(tr("Jedno auto. Nekonečno možností.\nKaždý kilometer si musíš zaslúžiť."), 19, CREAM), Vector2(66, 512), Vector2(500, 66))
-	var stops := _row(12)
-	for entry: Array in [["gas", tr("ZÁSOBY")], ["repair", tr("OPRAVY")], ["home", tr("OBJAVOVANIE")]]:
-		var item := _row(7)
-		item.add_child(_icon(entry[0], 24))
-		item.add_child(_label(entry[1], 12, MUTED))
-		stops.add_child(item)
-	_place(_home, stops, Vector2(66, 669), Vector2(560, 38))
-	_place(_home, _label(tr("CESTA NEMÁ KONIEC. LEN ĎALŠIU ZASTÁVKU."), 12, MUTED), Vector2(66, 741), Vector2(700, 24))
-	var card := Panel.new()
-	card.add_theme_stylebox_override("panel", _style(Color(0.085, 0.11, 0.09, 0.94), Color("626457"), 16))
-	_place(_home, card, Vector2(948, 90), Vector2(436, 630))
+	title.add_theme_constant_override("line_spacing", -24)
+	_place(_home, title, Vector2(62, 76), Vector2(396, 220))
 	var content := Control.new()
-	_place(card, content, Vector2(28, 26), Vector2(380, 580))
-	_card_status = _label(tr("ĎALŠIA VÝPRAVA"), 13, GOLD)
-	_place(content, _card_status, Vector2.ZERO, Vector2(380, 22))
-	_place(content, _label(tr("Cesta ťa volá."), 29), Vector2(0, 30), Vector2(380, 42))
-	_distance_label = _label(tr("Cesta čaká."), 46)
-	_place(content, _distance_label, Vector2(0, 80), Vector2(380, 65))
-	_journey_label = _label(tr("Nájdi zásoby. Udrž motor pri živote."), 16, MUTED)
-	_place(content, _journey_label, Vector2(0, 149), Vector2(380, 30))
-	_continue_button = _button(tr("POKRAČOVAŤ"), _request.bind("continue"), true)
+	content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_place(_home, content, Vector2(66, 338), Vector2(380, 420))
+	_card_status = _label(tr("ĎALŠIA VÝPRAVA"), 15, Color("404033"))
+	_card_status.hide()
+	_place(content, _card_status, Vector2(0, 402), Vector2(400, 26))
+	_distance_label = _label("", 46)
+	_distance_label.hide()
+	content.add_child(_distance_label)
+	_journey_label = _label("", 16, MUTED)
+	_journey_label.hide()
+	content.add_child(_journey_label)
+	_continue_button = _button(tr("POKRAČOVAŤ"), _request.bind("continue"))
 	_continue_button.name = "Continue"
 	_continue_button.disabled = true
-	_place(content, _continue_button, Vector2(0, 200), Vector2(380, 60))
 	_new_button = _button(tr("NOVÁ JAZDA"), show_panel.bind("new"))
-	_place(content, _new_button, Vector2(0, 272), Vector2(380, 52))
-	_garage_button = _button(tr("GARÁŽ / VYLEPŠENIA"), _request.bind("upgrades"))
-	_garage_button.icon = Icons.texture("workshop")
-	_place(content, _garage_button, Vector2(0, 336), Vector2(380, 52))
-	_place(content, _button(tr("NASTAVENIA"), show_panel.bind("settings")), Vector2(0, 400), Vector2(184, 48))
-	_place(content, _button(tr("AKO HRAŤ"), show_panel.bind("howto")), Vector2(196, 400), Vector2(184, 48))
-	_place(content, _button(tr("UKONČIŤ HRU"), show_panel.bind("quit")), Vector2(0, 460), Vector2(380, 42))
-	var hint := _label(tr("Pomalá jazda. Pozorné rozhodnutia.\nZásoby nikdy nie sú samozrejmosť."), 13, MUTED)
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_place(content, hint, Vector2(0, 524), Vector2(380, 48))
+	_garage_button = _button(tr("GARÁŽ"), _request.bind("upgrades"))
+	var actions: Array[Button] = [_continue_button, _new_button, _garage_button,
+		_button(tr("NASTAVENIA"), show_panel.bind("settings")),
+		_button(tr("AKO HRAŤ"), show_panel.bind("howto")),
+		_button(tr("UKONČIŤ"), show_panel.bind("quit"))]
+	for index in actions.size():
+		var button := actions[index]
+		button.set_meta("paper_menu", true)
+		button.set_meta("menu_primary", button == _new_button)
+		_place(content, button, Vector2(0, index * 64), Vector2(380, 58))
 
 
 func _build_modal_shell() -> void:
@@ -554,6 +590,9 @@ func _close_panel() -> void:
 func _input(event: InputEvent) -> void:
 	if Engine.is_editor_hint(): return
 	if not menu_open: return
+	if not _loading_buttons.is_empty():
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
 		if not _panel_kind.is_empty(): _close_panel()
 		elif _has_save: requested.emit("continue")
@@ -650,6 +689,8 @@ func _setting_changed(current: float, key: String) -> void:
 
 
 func _build_upgrades() -> void:
+	_vehicle_choices = (load("res://scenes/ui/vehicle_choices.tscn") as PackedScene).instantiate()
+	_modal_body.add_child(_vehicle_choices)
 	_upgrade_bank = _paragraph(tr("ŠROT V GARÁŽI: 0\nVylepšenia sa použijú pri NOVEJ jazde. Aktuálne auto si zachová svoj stav."), 18)
 	_modal_body.add_child(_upgrade_bank)
 	_deposit_button = _button(tr("ODLOŽIŤ NAJDENÝ ŠROT Z JAZDY"), _request.bind("deposit"))
@@ -662,10 +703,14 @@ func _build_upgrades() -> void:
 	for slot: String in DriveRun.PART_NAMES:
 		var button := _button(DriveRun.PART_NAMES[slot] + tr(" · ÚROVEŇ 0/3\n10 ŠROTU · LEPŠÍ ŠTART"), _request.bind("upgrade:" + slot))
 		button.icon = Icons.texture(slot)
-		button.custom_minimum_size = Vector2(340, 74)
+		button.custom_minimum_size = Vector2(340, 52)
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		grid.add_child(button)
 		_upgrade_buttons[slot] = button
+
+
+func set_vehicle_selection(id: String) -> void:
+	if _vehicle_choices != null: _vehicle_choices.select(id)
 
 
 func _preview_layout() -> void:

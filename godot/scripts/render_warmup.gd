@@ -1,6 +1,9 @@
 extends SubViewport
 ## Render representative structure materials before driving. Invisible/offscreen
 ## viewports still submit real draws, unlike hidden nodes culled by the renderer.
+const TOTAL_FRAMES := 62
+var total_frames := TOTAL_FRAMES
+var _tier := 1
 var _frames := 0
 var _point_lights: Array[OmniLight3D] = []
 var environment_template: Environment
@@ -11,7 +14,10 @@ var vehicle_template: Node3D
 var _headlights: Array[SpotLight3D] = []
 var _warm_environment: Environment
 var _world: DriveWorld
+var _mountain_cover: Array[Node3D] = []
 func _ready() -> void:
+	_tier = int(get_parent().get_viewport().get_meta("terrain_detail_tier", 1))
+	if _tier < 2: total_frames = 16
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	size = Vector2i(32, 32)
 	own_world_3d = true
@@ -35,6 +41,7 @@ func _ready() -> void:
 	for i in 3:
 		var light := OmniLight3D.new()
 		_point_lights.append(light)
+		light.visible = _tier == 2
 		light.position = Vector3((i - 1) * 2, 3, 4)
 		light.omni_range = 20
 		add_child(light)
@@ -42,8 +49,8 @@ func _ready() -> void:
 	directional.rotation_degrees = Vector3(-35, -25, 0)
 	var tier: int = get_parent().get_viewport().get_meta("terrain_detail_tier", 2)
 	directional.shadow_enabled = tier > 0
-	directional.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
-	directional.directional_shadow_max_distance = [55.0, 85.0, 120.0][tier]
+	directional.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL if tier < 2 else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	directional.directional_shadow_max_distance = [45.0, 65.0, 120.0][tier]
 	add_child(directional)
 	var plain := BiomeModels.material(Color("77786c"))
 	var double_sided := plain.duplicate() as StandardMaterial3D
@@ -80,17 +87,32 @@ func _ready() -> void:
 	_world = world
 	add_child(world)
 	world.configure(24601)
-	var tunnel := RouteHazard.new()
-	tunnel.world = world
-	tunnel.kind = "tunnel"
-	tunnel.feature_x = 1704
-	world.add_child(tunnel)
-	tunnel.build()
-	for child in tunnel.get_children():
-		if child is OmniLight3D:
-			_tunnel_lights.append(child)
-			child.visible = false
 	_tunnel_center = Vector3(1704, world.height_at(1704, world.center_at(1704)), world.center_at(1704))
+	# Warm the real material/vertex formats without rebuilding a collidable
+	# mountain and its Jolt bodies in a second world during every startup.
+	var tunnel := RouteHazard.new()
+	world.add_child(tunnel)
+	var faces := PackedVector3Array()
+	for offset: Vector3 in [Vector3(-10, 0, -9), Vector3(30, 0, -9), Vector3(-10, 9, -9), Vector3(30, 0, -9), Vector3(30, 9, -9), Vector3(-10, 9, -9)]: faces.append(_tunnel_center + offset)
+	tunnel._shell("WarmTunnelArch", faces, RouteHazard.rock_material())
+	var cutaway_stone := RouteHazard.rock_material().duplicate() as ShaderMaterial
+	cutaway_stone.set_shader_parameter("cutaway_amount", 1.0)
+	var peak := preload("res://scripts/expedition_scenery.gd").instance("rocky_peak")
+	peak.position = _tunnel_center + Vector3(16, 0, 6)
+	peak.scale = Vector3.ONE * 0.7
+	for mesh: MeshInstance3D in peak.find_children("*", "MeshInstance3D", true, false):
+		mesh.material_override = cutaway_stone
+		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	world.add_child(peak)
+	for i in 3:
+		var light := OmniLight3D.new()
+		light.position = _tunnel_center + Vector3((i - 1) * 18, 3.8, 0)
+		light.light_energy = 2.0
+		light.omni_range = 18
+		light.visible = false
+		world.add_child(light)
+		_tunnel_lights.append(light)
+
 	_warm_terrain_patch(world)
 	var water_faces := PackedVector3Array()
 	for corner: Vector2 in [Vector2(8, 3), Vector2(16, 3), Vector2(8, 9), Vector2(16, 3), Vector2(16, 9), Vector2(8, 9)]:
@@ -111,7 +133,12 @@ func _ready() -> void:
 	world._place_model(world, "mesa_rock", _tunnel_center + Vector3(20, 0, 5))
 	world._place_model(world, "road_delineator", _tunnel_center + Vector3(15, 0, -5))
 	preload("res://scripts/canyon_scenery.gd").wall(world, world, _tunnel_center.x + 12.0, 1.0)
-	BiomeModels.tree(world, _tunnel_center + Vector3(22, 0, -7), 0.7, false, false)
+	var grove := Node3D.new()
+	world.add_child(grove)
+	BiomeModels.tree(grove, _tunnel_center + Vector3(22, 0, -7), 0.7, false, false)
+	# Gameplay trees are MultiMeshes, which select an instanced shader format.
+	# Warming an ordinary MeshInstance left first forest contact unprepared.
+	for child in grove.get_children(): world._batch_visuals(child, grove)
 	var stop := (load("res://scenes/world/start_camp.tscn") as PackedScene).instantiate() as Node3D
 	stop.position = _tunnel_center + Vector3(25, 0, 10)
 	world.add_child(stop)
@@ -127,7 +154,7 @@ func _ready() -> void:
 	# Prime actual immutable surface banks, including the new grain/clump
 	# vertex format and procedural veil, before the first off-road contact.
 	for family in 6:
-		var bank: Dictionary = effects._surface_pools[0][family]
+		var bank: Dictionary = effects.ensure_particle_bank(0, family)
 		for key in ["dust", "grit", "clumps"]:
 			var emitter: CPUParticles3D = bank.get(key)
 			if emitter == null: continue
@@ -169,8 +196,10 @@ func _warm_terrain_patch(parent: Node3D) -> void:
 	var material := ShaderMaterial.new()
 	material.shader = DriveWorld.GROUND_SHADERS[int(get_parent().get_viewport().get_meta("terrain_detail_tier", 2))]
 	material.set_shader_parameter("surface_data_enabled", true)
-	material.set_shader_parameter("surface_atlas", load("res://assets/textures/surface-albedo-atlas.png"))
-	material.set_shader_parameter("micro_height", load("res://assets/textures/surface-microheight-2k.png"))
+	material.set_shader_parameter("surface_atlas", load("res://assets/textures/ground-surfaces.png"))
+	material.set_shader_parameter("weathered_asphalt", load("res://assets/textures/weathered-asphalt.png"))
+	material.set_shader_parameter("road_weathering", load("res://assets/textures/road-weathering.png"))
+	material.set_shader_parameter("micro_height", load("res://assets/textures/surface-microheight-2k.png") if int(get_parent().get_viewport().get_meta("terrain_detail_tier", 1)) == 2 else null)
 	var ground := MeshInstance3D.new()
 	ground.mesh = mesh
 	ground.material_override = material
@@ -178,38 +207,57 @@ func _warm_terrain_patch(parent: Node3D) -> void:
 	parent.add_child(ground)
 func _process(_dt: float) -> void:
 	_frames += 1
-	# Fog/sky, sun shadows and 0–3 overlapping tunnel lights select different
-	# Compatibility shader variants. Prime the actual gameplay combinations.
-	if _frames in [4, 8, 12]: _point_lights[_frames / 4 - 1].visible = false
-	if _frames == 16:
+	if _tier < 2:
+		# Balanced tunnels use their road guides and ambient light. Prepare only
+		# real outdoor/headlight/reversing formats instead of every unused
+		# overlapping omni/spotlight permutation on integrated GPUs.
 		_camera.size = 53
 		_camera.position = _tunnel_center + Vector3(-36, 52, 44)
 		_camera.look_at(_tunnel_center)
-	if _frames in [20, 24, 28]: _tunnel_lights[(_frames - 20) / 4].visible = true
-	if _frames == 32:
+		for i in _headlights.size(): _headlights[i].visible = _frames >= 2 + i * 2 and _frames < 12
+		if _warm_environment != null:
+			_warm_environment.fog_enabled = _frames in [10, 11]
+			_warm_environment.fog_density = 0.008
+		if _frames >= total_frames: queue_free()
+		return
+	var phase := _frames * 2
+	# Fog/sky, sun shadows and 0–3 overlapping tunnel lights select different
+	# Compatibility shader variants. Prime the actual gameplay combinations.
+	if phase in [4, 8, 12]: _point_lights[phase / 4 - 1].visible = false
+	if phase == 16:
+		# The gameplay mountain is now solid above the arch. Temporarily expose
+		# this PRIVATE interior, otherwise it culls the terrain/car programs
+		# that warmup is meant to submit before the first real tunnel entrance.
+		for cover in _mountain_cover: cover.hide()
+		_camera.size = 53
+		_camera.position = _tunnel_center + Vector3(-36, 52, 44)
+		_camera.look_at(_tunnel_center)
+	if phase in [20, 24, 28]: _tunnel_lights[(phase - 20) / 4].visible = true
+	if phase == 32:
 		for light in _tunnel_lights: light.visible = false
-	if _frames == 36 and _headlights.size() > 0: _headlights[0].visible = true
-	if _frames == 40 and _headlights.size() > 1: _headlights[1].visible = true
+	if phase == 36 and _headlights.size() > 0: _headlights[0].visible = true
+	if phase == 40 and _headlights.size() > 1: _headlights[1].visible = true
 	# Then cover the mixed case: entering a lit tunnel at night.
-	if _frames in [44, 48, 52]: _tunnel_lights[(_frames - 44) / 4].visible = true
+	if phase in [44, 48, 52]: _tunnel_lights[(phase - 44) / 4].visible = true
 	# Reverse lamps can overlap both headlights. Dust visibility also enables
 	# a fog program; prime it privately, never by changing the live environment.
-	if _frames == 54 and _headlights.size() > 2: _headlights[2].visible = true
-	if _frames == 56 and _headlights.size() > 3: _headlights[3].visible = true
-	if _frames == 60 and _warm_environment != null:
+	if phase == 54 and _headlights.size() > 2: _headlights[2].visible = true
+	if phase == 56 and _headlights.size() > 3: _headlights[3].visible = true
+	if phase == 60 and _warm_environment != null:
 		_warm_environment.fog_enabled = true
 		_warm_environment.fog_density = 0.008
 	# Entering/leaving the portal selects different light/shadow combinations
 	# than a camera sitting in the middle of the tunnel. Prime those views too,
 	# at the selected rendering scale, while the player is still in the menu.
-	if _frames == 72:
+	if phase == 72:
+		for cover in _mountain_cover: cover.show()
 		for light in _headlights: light.visible = false
 		for light in _tunnel_lights: light.visible = true
 		if _warm_environment != null: _warm_environment.fog_enabled = false
-	if _frames >= 72 and _frames < 120 and _frames % 6 == 0:
-		var x: float = [1580, 1616, 1648, 1664, 1699, 1728, 1760, 1810][(_frames - 72) / 6]
+	if phase >= 72 and phase < 120 and phase % 6 == 0:
+		var x: float = [1580, 1616, 1648, 1664, 1699, 1728, 1760, 1810][(phase - 72) / 6]
 		var z := _world.center_at(x)
 		var focus := Vector3(x, _world.height_at(x, z), z)
 		_camera.position = focus + Vector3(-36, 52, 44)
 		_camera.look_at(focus)
-	if _frames >= 122: queue_free()
+	if _frames >= TOTAL_FRAMES: queue_free()

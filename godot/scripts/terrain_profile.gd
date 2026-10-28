@@ -5,6 +5,7 @@ extends RefCounted
 
 const Junctions = preload("res://scripts/route_junctions.gd")
 const Mountains = preload("res://scripts/mountain_route.gd")
+const RoadObstacles = preload("res://scripts/road_obstacle_layout.gd")
 const SECTION := 240.0
 const REGION := 960.0
 const VARIED_SEED_MIN := 1000001
@@ -39,6 +40,28 @@ var _events: Dictionary = {}
 var _shelter_sites: Dictionary = {}
 var _mountain_paths: Dictionary = {}
 var _mountain_rows: Dictionary = {}
+var _road_obstacles: Dictionary = {}
+var _road_edge_noise := FastNoiseLite.new()
+
+
+func _init() -> void:
+	_road_edge_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	_road_edge_noise.fractal_type = FastNoiseLite.FRACTAL_NONE
+	_road_edge_noise.frequency = 0.075
+
+
+func road_coverage(x: float, z: float, lateral: float) -> float:
+	# Two independent banks erode at different positions. The 6 m centre
+	# remains supported; only surface coverage changes, never mesh height.
+	# Use absolute route coordinates so neighbouring chunks share an edge.
+	var distance := absf(lateral)
+	if distance <= 3.0: return 1.0
+	if distance >= 8.0: return 0.0
+	if _road_edge_noise.seed != seed_value: _road_edge_noise.seed = seed_value
+	var broad := _road_edge_noise.get_noise_2d(x, z)
+	var chips := _road_edge_noise.get_noise_2d(x * 3.7 + 831.0, z * 3.7 - 257.0)
+	var edge := clampf(5.25 + broad * 1.50 + chips * 0.40, 4.05, 6.60)
+	return 1.0 - smoothstep(edge - 1.0, edge + 1.0, distance)
 
 
 func clear_caches() -> void:
@@ -59,6 +82,13 @@ func clear_caches() -> void:
 	_shelter_sites.clear()
 	_mountain_paths.clear()
 	_mountain_rows.clear()
+	_road_obstacles.clear()
+
+func obstacles_in_region(region: int) -> Array[Dictionary]:
+	if not _road_obstacles.has(region):
+		if _road_obstacles.size() > 64: _road_obstacles.clear()
+		_road_obstacles[region] = RoadObstacles.sites(self, region)
+	return _road_obstacles[region]
 
 
 func shelter_sites(region: int) -> Array[Dictionary]:
@@ -148,10 +178,12 @@ func junction_style(index: int) -> Dictionary:
 func road_event(section: int) -> Dictionary:
 	if _events.has(section): return _events[section]
 	var result := {}
-	if section > 0:
+	var introductory_asphalt := section == 0 and starting_biome(seed_value) == 2
+	if section > 0 or introductory_asphalt:
 		var rng := RandomNumberGenerator.new()
 		rng.seed = seed_value * 31337 + section * 104729
 		var x := section * SECTION + rng.randf_range(95.0, 160.0)
+		if introductory_asphalt: x = 174.0
 		if mountain_at(x).is_empty() and fork_at(x).is_empty() and road_centers(x).size() == 1 and feature_at(x).is_empty():
 			var protected := false
 			for chunk in range(floori((x - 24) / 96), floori((x + 24) / 96) + 1):
@@ -161,8 +193,11 @@ func road_event(section: int) -> Dictionary:
 				if absf(float(site.x) - x) < 22: protected = true
 			if not protected:
 				var kinds := ["mud", "rock_garden", "jump", "ditch", "potholes", "washout"]
+				if biome_at(x) == 2: kinds = ["potholes", "potholes", "rock_garden", "potholes", "washout"]
+				var kind: String = kinds[rng.randi_range(0, kinds.size() - 1)]
+				if introductory_asphalt: kind = "potholes"
 				result = {"x": x, "z": center_at(x) + rng.randf_range(-1.5, 1.5),
-					"kind": kinds[rng.randi_range(0, kinds.size() - 1)], "section": section,
+					"kind": kind, "section": section,
 					"strength": lerpf(0.22, 1.0, expedition_difficulty(x)), "length": rng.randf_range(32.0, 58.0), "seed": rng.seed}
 	if _events.size() > 1024: _events.clear()
 	_events[section] = result
@@ -176,6 +211,17 @@ func event_influence(event: Dictionary, x: float, z: float) -> float:
 	var lateral := road_distance(x, z) if mud else z - float(event.z)
 	var radius := Vector2((x - float(event.x)) / half_length, lateral / (4.7 if mud else 4.4)).length()
 	return 1.0 - smoothstep(0.1, 1.0, radius)
+
+func pothole_depth(event: Dictionary, x: float, z: float) -> float:
+	if event.get("kind", "") != "potholes": return 0.0
+	if absf(x - float(event.x)) > 11.0 or absf(z - float(event.z)) > 14.0: return 0.0
+	var depth := 0.0
+	for i in 3:
+		var hx := float(event.x) + (i - 1) * 6.2
+		var hz := center_at(hx) + (-1.4 if i % 2 == 0 else 1.4)
+		var radius := Vector2((x - hx) / (3.1 if i == 1 else 2.35), (z - hz) / (1.65 if i == 1 else 1.4)).length()
+		depth = maxf(depth, (1.0 - smoothstep(0.08, 1.0, radius)) * lerpf(0.28, 0.85 if i == 1 else 0.55, clampf(float(event.strength), 0, 1)))
+	return depth
 
 
 func center_at(x: float) -> float:
@@ -537,10 +583,9 @@ func dry_height(x: float, z: float) -> float:
 			"ditch": height -= influence * lerpf(0.16, 0.85, severity)
 			"washout": height -= influence * lerpf(0.20, 1.10, severity) * smoothstep(-2.0, 2.0, z - float(event.z))
 			"rock_garden": height += influence * (sin(x * 0.85 + z * 0.65) * 0.5 + 0.5) * lerpf(0.12, 0.42, severity)
-			"potholes":
-				for i in 3:
-					var hole := Vector2((x - float(event.x) - (i - 1) * 4.5) / 3.3, (z - float(event.z) - (-1.0 if i % 2 == 0 else 1.0)) / 2.0).length()
-					height -= (1.0 - smoothstep(0.0, 1.0, hole)) * lerpf(0.16, 0.85, severity)
+	# Hole centres follow bends independently of the broad event envelope.
+	# The exact same depth drives both collision and the broken-asphalt tint.
+	height -= pothole_depth(event, x, z)
 	# Broad paired wheel channels have real geometry, with tapered entrances and
 	# exits. Keep the tutorial, forks and access yards clear; no vertical rut lips.
 	var mountain := mountain_at(x)
@@ -717,13 +762,13 @@ func ground_height_at(x: float, z: float) -> float:
 	return height
 
 
-func sample(x: float, z: float, include_water: bool = true) -> Dictionary:
+func sample(x: float, z: float, include_water: bool = true, visual_blend: bool = false) -> Dictionary:
 	var blend := blend_at(x)
 	var a := int(blend.from)
 	var b := int(blend.to)
 	var t := float(blend.amount)
 	var lateral := road_distance(x, z)
-	var road := 1.0 - smoothstep(4.0, 6.5, absf(lateral))
+	var road := road_coverage(x, z, lateral)
 	var ground: Color = GROUND[a].lerp(GROUND[b], t)
 	var color: Color = ROAD[a].lerp(ROAD[b], t)
 	var grip := lerpf(GRIP[a], GRIP[b], t)
@@ -868,8 +913,19 @@ func sample(x: float, z: float, include_water: bool = true) -> Dictionary:
 	soil_color = soil_color.lerp(Color("675741"), minf(side_rut * 0.85, 0.5))
 	var weights := PackedFloat32Array()
 	weights.resize(14)
-	weights[int(palette_a.material)] += (1.0 - t) * (1.0 - road)
-	weights[int(palette_b.material)] += t * (1.0 - road)
+	for side in 2:
+		var palette: Dictionary = palette_a if side == 0 else palette_b
+		var contribution := (1.0 - t if side == 0 else t) * (1.0 - road)
+		if visual_blend:
+			# These layers are baked for rendering only. Tyre physics retains its
+			# existing physical surface sample, including exceptional deep peat.
+			var top := float(palette.overlay_amount)
+			var mix_amount := float(palette.amount)
+			weights[int(palette.primary)] += contribution * (1.0 - top) * (1.0 - mix_amount)
+			weights[int(palette.secondary)] += contribution * (1.0 - top) * mix_amount
+			weights[int(palette.overlay)] += contribution * top
+		else:
+			weights[int(palette.material)] += contribution
 	weights[int(ROAD_MATERIALS[a])] += (1.0 - t) * road * (1.0 - branch_amount)
 	weights[int(ROAD_MATERIALS[b])] += t * road * (1.0 - branch_amount)
 	if branch_material >= 0:
@@ -892,6 +948,15 @@ func sample(x: float, z: float, include_water: bool = true) -> Dictionary:
 			paved *= 1.0 - event_amount
 		if event_amount > 0.5: material = event_material
 	var structure := feature_at(x)
+	var hole := pothole_depth(event, x, z)
+	if hole > 0.005:
+		var broken := smoothstep(0.005, 0.14, hole)
+		for layer in weights.size(): weights[layer] *= 1.0 - broken * 0.65
+		weights[SurfaceKind.GRAVEL] += broken * 0.65
+		color = color.lerp(Color("51564f"), broken * 0.8)
+		paved *= 1.0 - broken * 0.65
+		grip = lerpf(grip, 0.82, broken)
+		if broken > 0.65: material = SurfaceKind.GRAVEL
 	var solid_deck := not structure.is_empty() and str(structure.kind) == "bridge" and absf(x - float(structure.x)) <= 28.0 and absf(lateral) < 5.4
 	var solid_rail := not structure.is_empty() and str(structure.kind) == "rail" and absf(x - float(structure.x)) <= 2.6
 	if solid_deck or solid_rail:
@@ -912,28 +977,52 @@ func sample(x: float, z: float, include_water: bool = true) -> Dictionary:
 func _ground_palette(biome: int, patch: float, moisture: float, snowy: float) -> Dictionary:
 	var material: int = GROUND_MATERIALS[biome]
 	var color: Color = GROUND[biome]
+	var primary := material
+	var secondary := material
+	var amount := 0.0
+	var overlay := material
+	var overlay_amount := 0.0
 	match biome:
 		0:
-			if patch > 0.74: material = SurfaceKind.SALT; color = GROUND[0].lerp(Color("b9b7a9"), smoothstep(0.66, 0.90, patch))
+			if patch > 0.74: material = SurfaceKind.SALT
+			secondary = SurfaceKind.SALT
+			amount = smoothstep(0.66, 0.90, patch)
+			color = GROUND[0].lerp(Color("b9b7a9"), amount)
 		1:
 			material = SurfaceKind.CLAY if patch > 0.56 else SurfaceKind.ROCK
-			color = Color("a98b70") if material == SurfaceKind.CLAY else Color("a79a85")
+			secondary = SurfaceKind.CLAY
+			amount = smoothstep(0.36, 0.76, patch)
+			color = Color("a79a85").lerp(Color("a98b70"), amount)
 		2:
-			if patch < 0.32: material = SurfaceKind.DIRT; color = Color("93816b")
+			if patch < 0.32: material = SurfaceKind.DIRT
+			secondary = SurfaceKind.DIRT
+			amount = 1.0 - smoothstep(0.14, 0.50, patch)
+			color = GROUND[biome].lerp(Color("93816b"), amount)
 		3:
 			material = SurfaceKind.MUD if moisture > 0.65 else (SurfaceKind.LEAVES if patch > 0.35 else SurfaceKind.GRASS)
-			# Physical material selection stays intact, but colour crosses patches
-			# gradually instead of drawing hard brown/green pixel-like borders.
-			color = GROUND[biome].lerp(Color("817961"), smoothstep(0.25, 0.62, patch))
-			color = color.lerp(Color("716b59"), smoothstep(0.50, 0.85, moisture))
+			primary = SurfaceKind.GRASS
+			secondary = SurfaceKind.LEAVES
+			amount = smoothstep(0.16, 0.64, patch)
+			overlay = SurfaceKind.MUD
+			overlay_amount = smoothstep(0.42, 0.88, moisture)
+			color = GROUND[biome].lerp(Color("817961"), amount).lerp(Color("716b59"), overlay_amount)
 		4:
 			material = SurfaceKind.SNOW if snowy > 0.45 else SurfaceKind.ROCK
+			primary = SurfaceKind.ROCK
+			secondary = SurfaceKind.SNOW
+			amount = clampf(snowy, 0.0, 1.0)
 			color = Color("858d80").lerp(Color("aebbb9"), snowy)
-			if snowy > 0.75 and patch > 0.76: material = SurfaceKind.ICE; color = Color("91a6b4")
+			if snowy > 0.75 and patch > 0.76: material = SurfaceKind.ICE
+			overlay = SurfaceKind.ICE
+			overlay_amount = smoothstep(0.65, 0.90, snowy) * smoothstep(0.66, 0.91, patch)
+			color = color.lerp(Color("91a6b4"), overlay_amount)
 		5:
-			color = Color("736951")
-			if patch > 0.80: material = SurfaceKind.PEAT; color = Color("4c4938")
-	return {"material": material, "color": color}
+			if patch > 0.80: material = SurfaceKind.PEAT
+			secondary = SurfaceKind.PEAT
+			amount = smoothstep(0.68, 0.94, patch)
+			color = Color("736951").lerp(Color("4c4938"), amount)
+	return {"material": material, "color": color, "primary": primary, "secondary": secondary,
+		"amount": amount, "overlay": overlay, "overlay_amount": overlay_amount}
 
 
 static func _road_color(material: int) -> Color:

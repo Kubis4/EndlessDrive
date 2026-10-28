@@ -5,7 +5,7 @@ signal action_requested(action: String)
 signal controls_changed
 const FanButton = preload("res://scripts/fan_button.gd")
 const DashboardSkin = preload("res://scripts/hud_skin.gd")
-const GOLD := Color("ffc66b")
+const GOLD := Color("e9ba68")
 @export var preview_equipment := false:
 	set(value):
 		preview_equipment = value
@@ -25,6 +25,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	if not has_node("Trip"): _build()
+	if not has_node("Status"): _label("Status", "", 17).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	for entry: Array in [["lights", "headlights"], ["camera", "camera"], ["brake", "brake"], ["handbrake", "handbrake"], ["throttle", "accelerator"], ["left", "chevron_left"], ["right", "chevron_right"], ["pause", "pause"], ["Tools", "tools"], ["engine", "power"], ["service", "tools"], ["cruise", "cruise"], ["InputMode", "input_mode"]]:
 		var button := get_node(entry[0]) as Button
 		button.icon = load("res://assets/ui/" + entry[1] + ".svg")
@@ -49,7 +50,7 @@ func _ready() -> void:
 		var button: Button = actions[key]
 		button.pressed.connect(func() -> void: action_requested.emit(key))
 	$Tools.pressed.connect(func() -> void: set_equipment_open(not equipment_open))
-	var hub_style := _style(Color("101923f5"), 42)
+	var hub_style := _style(Color("191d18f5"), 42)
 	hub_style.border_color = GOLD
 	$Tools.add_theme_stylebox_override("normal", hub_style)
 	$AlertIcon.z_index = 1
@@ -92,7 +93,7 @@ func _apply_skin() -> void:
 			child.add_theme_color_override("icon_normal_color", Color.WHITE)
 			child.add_theme_color_override("icon_hover_color", Color.WHITE)
 			child.add_theme_color_override("icon_pressed_color", GOLD)
-			child.add_theme_color_override("icon_disabled_color", Color("6c7c88"))
+			child.add_theme_color_override("icon_disabled_color", Color("7d856f"))
 	$Trip.add_theme_stylebox_override("panel", DashboardSkin.style())
 	$AlertPlate.add_theme_stylebox_override("panel", DashboardSkin.style("danger"))
 
@@ -101,7 +102,7 @@ func _style(color: Color, radius := 14) -> StyleBoxFlat:
 	style.bg_color = color
 	style.set_corner_radius_all(radius)
 	style.set_border_width_all(2)
-	style.border_color = Color("537184")
+	style.border_color = Color("70735e")
 	style.shadow_color = Color(0, 0, 0, 0.28)
 	style.shadow_size = 5
 	style.shadow_offset = Vector2(0, 3)
@@ -112,8 +113,8 @@ func _label(key: String, text: String, font_size: int) -> Label:
 	node.name = key
 	node.text = text
 	node.add_theme_font_size_override("font_size", font_size)
-	node.add_theme_color_override("font_color", Color("f5f4e9"))
-	node.add_theme_color_override("font_shadow_color", Color("081019"))
+	node.add_theme_color_override("font_color", Color("f5ecd7"))
+	node.add_theme_color_override("font_shadow_color", Color("10150e"))
 	node.add_theme_constant_override("shadow_outline_size", 4)
 	node.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(node)
@@ -126,17 +127,17 @@ func _button(key: String, text: String, toggle := false) -> Button:
 	node.toggle_mode = toggle
 	node.focus_mode = Control.FOCUS_NONE
 	node.add_theme_font_size_override("font_size", 20)
-	node.add_theme_stylebox_override("normal", _style(Color("101923e8")))
-	node.add_theme_stylebox_override("hover", _style(Color("253743")))
+	node.add_theme_stylebox_override("normal", _style(Color("191d18e8")))
+	node.add_theme_stylebox_override("hover", _style(Color("424b37")))
 	node.add_theme_stylebox_override("pressed", _style(Color("695538")))
-	node.add_theme_stylebox_override("disabled", _style(Color("101923aa")))
+	node.add_theme_stylebox_override("disabled", _style(Color("191d18aa")))
 	add_child(node)
 	return node
 
 func _build() -> void:
 	var trip := Panel.new()
 	trip.name = "Trip"
-	trip.add_theme_stylebox_override("panel", _style(Color("101923e8")))
+	trip.add_theme_stylebox_override("panel", _style(Color("191d18e8")))
 	trip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(trip)
 	_label("Distance", "8.43 km", 34)
@@ -171,7 +172,7 @@ func _build() -> void:
 	$throttle.add_theme_stylebox_override("pressed", gas_pressed)
 	for key: String in ["left", "right"]:
 		for state: String in ["normal", "hover", "pressed"]:
-			var steering := _style(Color("101923ee") if state == "normal" else Color("304350"), 46)
+			var steering := _style(Color("191d18ee") if state == "normal" else Color("49503d"), 46)
 			if key == "left":
 				steering.corner_radius_top_right = 0
 				steering.corner_radius_bottom_right = 0
@@ -252,7 +253,9 @@ func _layout() -> void:
 	$Alert.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	$Alert.clip_text = true
 	$Alert.add_theme_font_size_override("font_size", 16)
-	_rect("Weather", Vector2(w * 0.5 - 210, 82), Vector2(420, 28))
+	_rect("Status", Vector2(w * 0.5 - 250, 78), Vector2(500, 28))
+	_rect("Weather", Vector2(w * 0.5 - 250, 78), Vector2(500, 28))
+	$Weather.add_theme_font_size_override("font_size", 17)
 	_rect("left", Vector2(margin, h - 124), Vector2(172, 94))
 	_rect("right", Vector2(margin + 172, h - 124), Vector2(172, 94))
 	_rect("brake", Vector2(w - margin - 246, h - 146), Vector2(120, 116))
@@ -285,7 +288,7 @@ func _layout() -> void:
 	_rect("search", Vector2(w * 0.5 - 130, 123), Vector2(260, 64))
 	_rect("VehicleSummary", Vector2(w * 0.5 - 260, h - 418), Vector2(520, 32))
 	$VehicleSummary.add_theme_font_size_override("font_size", 16)
-	for key: String in ["Trip", "TripIcon", "Distance", "Region", "Fuel", "Temperature", "FuelIcon", "TempIcon", "FuelText", "TempText", "lights", "camera", "pause", "AlertPlate", "AlertIcon", "Alert", "Weather", "search"]:
+	for key: String in ["Trip", "TripIcon", "Distance", "Region", "Fuel", "Temperature", "FuelIcon", "TempIcon", "FuelText", "TempText", "lights", "camera", "pause", "AlertPlate", "AlertIcon", "Alert", "Status", "Weather", "search"]:
 		get_node(key).position.y += top
 
 func set_equipment_open(value: bool) -> void:
@@ -336,6 +339,8 @@ func refresh(hud: DriveHUD) -> void:
 	$winch/Caption.text = tr("NAVIJAK")
 	$drive_mode.set_pressed_no_signal(run.four_wheel_drive)
 	$differential.set_pressed_no_signal(run.differential_locked)
+	$drive_mode.visible = equipment_open and not vehicle.is_front_drive()
+	$differential.visible = equipment_open and not vehicle.is_front_drive()
 	var state := str(vehicle.get_meta("winch_state", "idle"))
 	$winch.set_pressed_no_signal(state != "idle")
 	$winch_pull.visible = state != "idle"
@@ -359,14 +364,24 @@ func refresh(hud: DriveHUD) -> void:
 	if run.water_ingress >= 1.0: $Alert.text = tr("Motor nasal vodu")
 	elif run.water_ingress > 0.25: $Alert.text = tr("Voda v nasávaní")
 	var diagnostic := vehicle.motion_diagnostic()
-	if not diagnostic.is_empty() and run.temperature <= 110 and run.water_ingress < 1.0:
+	var informational := diagnostic.begins_with("Motor je vypnutý") or diagnostic.begins_with("Brzdíš") or diagnostic.begins_with("Ručná brzda")
+	if not informational and not diagnostic.is_empty() and run.temperature <= 110 and run.water_ingress < 1.0:
 		$Alert.text = tr(diagnostic)
 	$Alert.tooltip_text = tr(diagnostic)
+	var transient := hud._message.text if hud._message_time > 0 else ""
+	var is_error := int(hud._message.get_meta("priority", 0)) > 0
+	if $Alert.text.is_empty() and is_error: $Alert.text = transient
+	$Status.text = transient if not is_error and not transient.is_empty() else (tr(diagnostic) if informational else tr("Motor beží" if run.engine_running else "Motor vypnutý"))
+	$Status.modulate = Color("ddd4bd")
+	hud._toast_panel.hide()
 	$AlertPlate.visible = not $Alert.text.is_empty()
 	$AlertIcon.visible = $AlertPlate.visible
-	$Weather.text = tr("V ÚKRYTE SI V BEZPEČÍ") if hud.weather != null and hud.weather.sheltered else (tr("Piesočná búrka") if hud.weather != null and hud.weather.storm_visibility > 0.20 else "")
+	$Weather.text = tr("V úkryte") if hud.weather != null and hud.weather.sheltered and hud.weather.storm_active else (tr("Piesočná búrka") if hud.weather != null and hud.weather.storm_visibility > 0.20 else "")
 	if hud.weather != null and hud.weather.storm_active and hud.weather.storm_warning > 0 and not hud.weather.sheltered:
 		$Weather.text = tr("Búrka za %d s · vyhľadaj prístrešok") % ceili(hud.weather.storm_warning)
+	# Weather takes the informational row while relevant; keep the existing
+	# Search button position and never stack two labels over its hit area.
+	$Status.visible = $Weather.text.is_empty()
 	$VehicleSummary.text = tr("Olej %.1f l · Chladenie %.1f l · Batéria %d %%") % [run.oil, run.coolant, roundi(run.battery * 100)]
 	$search.visible = not hud.world.nearest_building(vehicle.position).is_empty()
 	$search.disabled = absf(vehicle.speed) > 0.5

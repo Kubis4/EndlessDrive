@@ -13,11 +13,12 @@ var checks := 0
 var baseline := false
 var telemetry: FileAccess
 var ticks := 0
+var selected_vehicle := "jeep"
 
 
 class FlatTerrain extends DriveTerrain:
 	var friction := 1.0
-	func sample(_x: float, _z: float, _include_water: bool = true) -> Dictionary:
+	func sample(_x: float, _z: float, _include_water: bool = true, _visual_blend: bool = false) -> Dictionary:
 		return {"road": 1.0, "grip": friction, "drag": 0.0, "roughness": 0.0, "paved": 1.0, "label": "Asfalt", "water": 0.0}
 
 
@@ -35,6 +36,8 @@ func _initialize() -> void:
 		quit(2)
 		return
 	baseline = "--baseline" in OS.get_cmdline_user_args()
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--vehicle="): selected_vehicle = arg.trim_prefix("--vehicle=")
 	Engine.physics_ticks_per_second = 60
 	call_deferred("_run")
 
@@ -74,6 +77,8 @@ func _run() -> void:
 	world.configure(24601)
 	world.update_stream(0.0)
 	state = DriveRun.new()
+	state.vehicle_id = selected_vehicle
+	if selected_vehicle == "izh": state.four_wheel_drive = false
 	state.fuel = 40.0
 	state.engine_running = true
 	state.parts.engine = 1.0
@@ -333,6 +338,8 @@ func _braking() -> void:
 	floor_body.add_child(collision)
 	world.add_child(floor_body)
 	state = DriveRun.new()
+	state.vehicle_id = selected_vehicle
+	if selected_vehicle == "izh": state.four_wheel_drive = false
 	car = DriveVehicle.new()
 	car.world = world
 	car.run = state

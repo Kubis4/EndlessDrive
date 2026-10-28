@@ -7,8 +7,12 @@ const BAND_ROWS := 8
 const BAND_COUNT := ROWS / BAND_ROWS
 const MATERIAL_FORMAT := (Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT) | (Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM1_SHIFT) | (Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM2_SHIFT) | (Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM3_SHIFT)
 
-static func bake(profile: DriveTerrain, index: int) -> Dictionary:
+static func bake(profile: DriveTerrain, index: int, include_obstacles: bool = false) -> Dictionary:
 	var started := Time.get_ticks_usec()
+	var obstacle_regions := {}
+	if include_obstacles:
+		for region in range(floori((index * 96.0 - 35) / 960), floori(((index + 1) * 96.0 + 35) / 960) + 1):
+			obstacle_regions[region] = profile.obstacles_in_region(region)
 	var offsets := PackedFloat32Array([-144, -120, -104])
 	# Both fork lanes remain in the detailed grid even when 84 m apart. Follow
 	# the continuous chosen road, never the corridor midpoint which jumps at exits.
@@ -30,13 +34,17 @@ static func bake(profile: DriveTerrain, index: int) -> Dictionary:
 		var x := index * 96.0 + xi * STEP
 		for lateral: float in offsets:
 			var z := profile.corridor_center(x) + lateral
-			var data := profile.sample(x, z, false)
+			var data := profile.sample(x, z, false, true)
 			var height := profile.ground_height_at(x, z)
 			vertices.append(Vector3(x, height, z))
 			rest_heights.append(height + profile.deformation.depth_at(x, z))
 			# Existing wheel channels are shallow physical depressions. A small
 			# baked soil tint makes their compacted bottom readable from above.
-			colors.append((data.color as Color).darkened(minf(profile.authored_rut_depth(x, z) * 1.4, 0.20)))
+			var tint := (data.color as Color).darkened(minf(profile.authored_rut_depth(x, z) * 0.35, 0.065))
+			# Alpha carries road coverage, not transparency. Refined soil vertices
+			# interpolate it with RGB, keeping road wear fixed during excavation.
+			tint.a = float(data.road)
+			colors.append(tint)
 			# World position supplies texture coordinates. UV carries the shared
 			# physical material ID and moisture for the surface shader instead.
 			uvs.append(Vector2(float(data.get("material", 2)), float(data.get("soil_moisture", 0))))
@@ -62,6 +70,14 @@ static func bake(profile: DriveTerrain, index: int) -> Dictionary:
 			right.y = rest_heights[xi * width + mini(width - 1, zi + 1)]
 			before.y = rest_heights[maxi(0, xi - 1) * width + zi]
 			after.y = rest_heights[mini(ROWS, xi + 1) * width + zi]
+			# The neighbouring chunk sees the same central difference. Clamping
+			# normals to each chunk's end drew a lit seam across every road.
+			if xi == 0 or xi == ROWS:
+				var nx := index * 96.0 + (xi - 1 if xi == 0 else xi + 1)
+				var nz := profile.corridor_center(nx) + offsets[zi]
+				var adjacent := Vector3(nx, profile.ground_height_at(nx, nz) + profile.deformation.depth_at(nx, nz), nz)
+				if xi == 0: before = adjacent
+				else: after = adjacent
 			normals.append((right - left).cross(after - before).normalized())
 	var indices := PackedInt32Array()
 	var faces := PackedVector3Array()
@@ -135,7 +151,11 @@ static func bake(profile: DriveTerrain, index: int) -> Dictionary:
 		if px >= index * 96.0 - 1.0 and px <= (index + 1) * 96.0 + 1.0:
 			for strip in range(floori((px - 0.001) / BAND_ROWS), floori((px + 0.001) / BAND_ROWS) + 1):
 				soil_bands[clampi(strip - index * BAND_COUNT, 0, BAND_COUNT - 1)] = true
-	return {"index": index, "soil_bands": soil_bands.keys(), "render_bands": render_bands, "arrays": arrays, "rest_heights": rest_heights, "faces": faces, "collision_bands": bands, "width": width, "water": water, "water_depths": water_depths, "deck": deck, "stop_access": access, "worker_ms": (Time.get_ticks_usec() - started) / 1000.0}
+	var tunnel_mountain := {}
+	var feature := profile.feature_at(index * 96.0 + 48.0)
+	if include_obstacles and not feature.is_empty() and feature.kind == "tunnel" and floori(float(feature.x) / 96.0) == index:
+		tunnel_mountain = preload("res://scripts/tunnel_geology.gd").bake(profile, float(feature.x))
+	return {"index": index, "tunnel_mountain": tunnel_mountain, "obstacle_regions": obstacle_regions, "soil_bands": soil_bands.keys(), "render_bands": render_bands, "arrays": arrays, "rest_heights": rest_heights, "faces": faces, "collision_bands": bands, "width": width, "water": water, "water_depths": water_depths, "deck": deck, "stop_access": access, "worker_ms": (Time.get_ticks_usec() - started) / 1000.0}
 
 
 static func band_arrays(source: Array, width: int, band: int) -> Array:

@@ -3,11 +3,15 @@ extends RefCounted
 const PATH := "user://garage-profile.json"
 var bank := 0
 var best_distance := 0.0
+var selected_vehicle := "izh"
 var upgrades: Dictionary = {"engine": 0, "tires": 0, "brakes": 0, "suspension": 0, "radiator": 0, "alternator": 0}
 var receipts: Dictionary = {}
 
 
 func prepare_run(run: DriveRun) -> void:
+	run.vehicle_id = selected_vehicle
+	run.four_wheel_drive = selected_vehicle == "jeep"
+	run.differential_locked = false
 	var base := {"engine": 0.36, "tires": 0.42, "brakes": 0.35, "suspension": 0.30, "radiator": 0.40, "alternator": 0.35}
 	for slot: String in upgrades:
 		var level := int(upgrades[slot])
@@ -48,7 +52,7 @@ func deposit(run: DriveRun) -> int:
 func store(path: String = PATH) -> Error:
 	var file := FileAccess.open(path + ".tmp", FileAccess.WRITE)
 	if file == null: return FileAccess.get_open_error()
-	file.store_string(JSON.stringify({"bank": bank, "best_distance": best_distance, "upgrades": upgrades, "receipts": receipts}))
+	file.store_string(JSON.stringify({"bank": bank, "best_distance": best_distance, "selected_vehicle": selected_vehicle, "upgrades": upgrades, "receipts": receipts}))
 	file.flush()
 	var error := file.get_error()
 	file.close()
@@ -85,5 +89,7 @@ static func restore(path: String = PATH) -> DriveProfile:
 		if valid:
 			profile.bank = int(money)
 			profile.best_distance = float(record)
+			var selected: Variant = data.get("selected_vehicle", "izh")
+			profile.selected_vehicle = selected if selected is String and selected in ["izh", "jeep"] else "izh"
 			return profile
 	return DriveProfile.new()

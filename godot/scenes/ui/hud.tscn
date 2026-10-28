@@ -18,12 +18,12 @@ content_margin_left = 12.0
 content_margin_top = 8.0
 content_margin_right = 12.0
 content_margin_bottom = 8.0
-bg_color = Color(0.106, 0.145, 0.180, 0.96)
+bg_color = Color(0.098, 0.114, 0.094, 0.96)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
 border_width_bottom = 1
-border_color = Color(0.220, 0.298, 0.349, 1)
+border_color = Color(0.188, 0.216, 0.173, 1.0)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -34,7 +34,7 @@ content_margin_left = 12.0
 content_margin_top = 8.0
 content_margin_right = 12.0
 content_margin_bottom = 8.0
-bg_color = Color(0.106, 0.157, 0.192, 1)
+bg_color = Color(0.098, 0.114, 0.094, 1.0)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
@@ -55,7 +55,7 @@ border_width_left = 1
 border_width_top = 1
 border_width_right = 1
 border_width_bottom = 1
-border_color = Color(0.220, 0.298, 0.349, 1)
+border_color = Color(0.188, 0.216, 0.173, 1.0)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -66,12 +66,12 @@ content_margin_left = 12.0
 content_margin_top = 8.0
 content_margin_right = 12.0
 content_margin_bottom = 8.0
-bg_color = Color(0.106, 0.157, 0.192, 1)
+bg_color = Color(0.098, 0.114, 0.094, 1.0)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
 border_width_bottom = 1
-border_color = Color(0.220, 0.298, 0.349, 1)
+border_color = Color(0.188, 0.216, 0.173, 1.0)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -98,7 +98,7 @@ content_margin_left = 8.0
 content_margin_top = 7.0
 content_margin_right = 8.0
 content_margin_bottom = 7.0
-bg_color = Color(0.063, 0.098, 0.137, 0.96)
+bg_color = Color(0.098, 0.114, 0.094, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -109,7 +109,7 @@ content_margin_left = 10.0
 content_margin_top = 10.0
 content_margin_right = 10.0
 content_margin_bottom = 10.0
-bg_color = Color(0.063, 0.098, 0.137, 0.96)
+bg_color = Color(0.098, 0.114, 0.094, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -120,7 +120,7 @@ content_margin_left = 20.0
 content_margin_top = 10.0
 content_margin_right = 20.0
 content_margin_bottom = 10.0
-bg_color = Color(0.106, 0.157, 0.192, 1)
+bg_color = Color(0.098, 0.114, 0.094, 1.0)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -131,7 +131,7 @@ content_margin_left = 20.0
 content_margin_top = 10.0
 content_margin_right = 20.0
 content_margin_bottom = 10.0
-bg_color = Color(0.063, 0.098, 0.137, 0.96)
+bg_color = Color(0.098, 0.114, 0.094, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -164,15 +164,15 @@ content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-bg_color = Color(0.063, 0.098, 0.137, 0.96)
+bg_color = Color(0.098, 0.114, 0.094, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
 corner_radius_bottom_left = 10
 
 border_width_top = 2
-border_color = Color(0.42, 0.60, 0.65, 0.8)
-shadow_color = Color(0.01, 0.02, 0.03, 0.25)
+border_color = Color(0.46, 0.49, 0.4, 0.8)
+shadow_color = Color(0.098, 0.114, 0.094, 0.25)
 shadow_size = 5
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_65nxt"]
@@ -180,7 +180,7 @@ content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-bg_color = Color(0.063, 0.098, 0.137, 0.96)
+bg_color = Color(0.098, 0.114, 0.094, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -301,7 +301,7 @@ content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-bg_color = Color(0.063, 0.098, 0.137, 0.96)
+bg_color = Color(0.098, 0.114, 0.094, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -312,7 +312,7 @@ content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-bg_color = Color(0.063, 0.098, 0.137, 0.96)
+bg_color = Color(0.098, 0.114, 0.094, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -323,15 +323,15 @@ content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-bg_color = Color(0.063, 0.098, 0.137, 0.96)
+bg_color = Color(0.098, 0.114, 0.094, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
 corner_radius_bottom_left = 10
 
 border_width_top = 2
-border_color = Color(0.42, 0.60, 0.65, 0.8)
-shadow_color = Color(0.01, 0.02, 0.03, 0.25)
+border_color = Color(0.46, 0.49, 0.4, 0.8)
+shadow_color = Color(0.098, 0.114, 0.094, 0.25)
 shadow_size = 5
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_kfdjh"]
@@ -339,15 +339,15 @@ content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-bg_color = Color(0.063, 0.098, 0.137, 0.96)
+bg_color = Color(0.098, 0.114, 0.094, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
 corner_radius_bottom_left = 10
 
 border_width_top = 2
-border_color = Color(0.42, 0.60, 0.65, 0.8)
-shadow_color = Color(0.01, 0.02, 0.03, 0.25)
+border_color = Color(0.46, 0.49, 0.4, 0.8)
+shadow_color = Color(0.098, 0.114, 0.094, 0.25)
 shadow_size = 5
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_xdlig"]
@@ -355,7 +355,7 @@ content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-bg_color = Color(0.063, 0.098, 0.137, 0.96)
+bg_color = Color(0.098, 0.114, 0.094, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -366,7 +366,7 @@ content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-bg_color = Color(0.063, 0.098, 0.137, 0.96)
+bg_color = Color(0.098, 0.114, 0.094, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -377,7 +377,7 @@ content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-bg_color = Color(0.106, 0.157, 0.192, 1)
+bg_color = Color(0.098, 0.114, 0.094, 1.0)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -432,7 +432,7 @@ content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-bg_color = Color(0.063, 0.098, 0.137, 0.96)
+bg_color = Color(0.098, 0.114, 0.094, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -443,7 +443,7 @@ content_margin_left = 12.0
 content_margin_top = 9.0
 content_margin_right = 12.0
 content_margin_bottom = 9.0
-bg_color = Color(0.106, 0.157, 0.192, 1)
+bg_color = Color(0.098, 0.114, 0.094, 1.0)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -488,7 +488,7 @@ content_margin_left = 12.0
 content_margin_top = 9.0
 content_margin_right = 12.0
 content_margin_bottom = 9.0
-bg_color = Color(0.106, 0.157, 0.192, 1)
+bg_color = Color(0.098, 0.114, 0.094, 1.0)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -533,7 +533,7 @@ content_margin_left = 12.0
 content_margin_top = 9.0
 content_margin_right = 12.0
 content_margin_bottom = 9.0
-bg_color = Color(0.106, 0.157, 0.192, 1)
+bg_color = Color(0.098, 0.114, 0.094, 1.0)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -578,7 +578,7 @@ content_margin_left = 12.0
 content_margin_top = 9.0
 content_margin_right = 12.0
 content_margin_bottom = 9.0
-bg_color = Color(0.106, 0.157, 0.192, 1)
+bg_color = Color(0.098, 0.114, 0.094, 1.0)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -623,7 +623,7 @@ content_margin_left = 12.0
 content_margin_top = 9.0
 content_margin_right = 12.0
 content_margin_bottom = 9.0
-bg_color = Color(0.106, 0.157, 0.192, 1)
+bg_color = Color(0.098, 0.114, 0.094, 1.0)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -668,7 +668,7 @@ content_margin_left = 12.0
 content_margin_top = 9.0
 content_margin_right = 12.0
 content_margin_bottom = 9.0
-bg_color = Color(0.106, 0.157, 0.192, 1)
+bg_color = Color(0.098, 0.114, 0.094, 1.0)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -713,7 +713,7 @@ content_margin_left = 14.0
 content_margin_top = 12.0
 content_margin_right = 14.0
 content_margin_bottom = 12.0
-bg_color = Color(0.106, 0.157, 0.192, 1)
+bg_color = Color(0.098, 0.114, 0.094, 1.0)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -736,7 +736,7 @@ content_margin_left = 14.0
 content_margin_top = 12.0
 content_margin_right = 14.0
 content_margin_bottom = 12.0
-bg_color = Color(0.106, 0.157, 0.192, 1)
+bg_color = Color(0.098, 0.114, 0.094, 1.0)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -759,7 +759,7 @@ content_margin_left = 14.0
 content_margin_top = 12.0
 content_margin_right = 14.0
 content_margin_bottom = 12.0
-bg_color = Color(0.106, 0.157, 0.192, 1)
+bg_color = Color(0.098, 0.114, 0.094, 1.0)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -782,7 +782,7 @@ content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-bg_color = Color(0.063, 0.098, 0.137, 0.96)
+bg_color = Color(0.098, 0.114, 0.094, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -793,7 +793,7 @@ content_margin_left = 18.0
 content_margin_top = 14.0
 content_margin_right = 18.0
 content_margin_bottom = 14.0
-bg_color = Color(0.063, 0.098, 0.137, 0.96)
+bg_color = Color(0.098, 0.114, 0.094, 0.96)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -868,7 +868,7 @@ theme_override_constants/separation = 2
 
 [node name="Region" type="Label" parent="Root/PanelContainer/HBoxContainer/VBoxContainer" unique_id=75078751]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
+theme_override_colors/font_color = Color(0.725, 0.729, 0.663, 1.0)
 theme_override_font_sizes/font_size = 13
 text = "PRAŠNÁ KOTLINA"
 metadata/layout_bindings = ["_region"]
@@ -917,7 +917,7 @@ theme_override_constants/separation = 5
 
 [node name="VozidloZásoby" type="Label" parent="Root/PanelContainer2/VBoxContainer" unique_id=406261399]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
+theme_override_colors/font_color = Color(0.725, 0.729, 0.663, 1.0)
 theme_override_font_sizes/font_size = 12
 text = "STAV EXPEDÍCIE"
 
@@ -940,7 +940,7 @@ stretch_mode = 5
 [node name="Palivo" type="Label" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer/HBoxContainer" unique_id=252020839]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
+theme_override_colors/font_color = Color(0.725, 0.729, 0.663, 1.0)
 theme_override_font_sizes/font_size = 14
 text = "Palivo"
 
@@ -980,7 +980,7 @@ stretch_mode = 5
 [node name="Olej" type="Label" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer2/HBoxContainer" unique_id=97549896]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
+theme_override_colors/font_color = Color(0.725, 0.729, 0.663, 1.0)
 theme_override_font_sizes/font_size = 14
 text = "Olej"
 
@@ -1020,7 +1020,7 @@ stretch_mode = 5
 [node name="Chladenie" type="Label" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer3/HBoxContainer" unique_id=2144316930]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
+theme_override_colors/font_color = Color(0.725, 0.729, 0.663, 1.0)
 theme_override_font_sizes/font_size = 14
 text = "Chladenie"
 
@@ -1060,7 +1060,7 @@ stretch_mode = 5
 [node name="Batéria" type="Label" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer4/HBoxContainer" unique_id=186994778]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
+theme_override_colors/font_color = Color(0.725, 0.729, 0.663, 1.0)
 theme_override_font_sizes/font_size = 14
 text = "Batéria"
 
@@ -1100,7 +1100,7 @@ stretch_mode = 5
 [node name="Teplota" type="Label" parent="Root/PanelContainer2/VBoxContainer/VBoxContainer5/HBoxContainer" unique_id=115097817]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
+theme_override_colors/font_color = Color(0.725, 0.729, 0.663, 1.0)
 theme_override_font_sizes/font_size = 14
 text = "Teplota"
 
@@ -1206,7 +1206,7 @@ offset_bottom = 105.0
 horizontal_alignment = 1
 [node name="KmH" type="Label" parent="Root/PanelContainer4/HBoxContainer/Instrument" unique_id=1694591688]
 layout_mode = 0
-theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
+theme_override_colors/font_color = Color(0.725, 0.729, 0.663, 1.0)
 theme_override_font_sizes/font_size = 11
 text = "KM/H"
 
@@ -1240,7 +1240,7 @@ metadata/layout_bindings = ["_engine"]
 [node name="CruiseStatus" type="Label" parent="Root/PanelContainer4/HBoxContainer/VBoxContainer" unique_id=1156166068]
 visible = false
 layout_mode = 2
-theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
+theme_override_colors/font_color = Color(0.725, 0.729, 0.663, 1.0)
 theme_override_font_sizes/font_size = 12
 text = "Tempomat vypnutý"
 metadata/layout_bindings = ["_cruise_status"]
@@ -1304,9 +1304,9 @@ metadata/layout_bindings = ["_pedals/throttle"]
 theme_override_styles/normal = SubResource("ThrottleNormal")
 theme_override_styles/hover = SubResource("ThrottlePressed")
 theme_override_styles/pressed = SubResource("ThrottlePressed")
-theme_override_colors/font_color = Color(0.07, 0.12, 0.16, 1)
-theme_override_colors/font_hover_color = Color(0.07, 0.12, 0.16, 1)
-theme_override_colors/font_pressed_color = Color(0.07, 0.12, 0.16, 1)
+theme_override_colors/font_color = Color(0.098, 0.114, 0.094, 1.0)
+theme_override_colors/font_hover_color = Color(0.098, 0.114, 0.094, 1.0)
+theme_override_colors/font_pressed_color = Color(0.098, 0.114, 0.094, 1.0)
 [node name="EngineButton" type="Button" parent="Root" unique_id=1868794376]
 layout_mode = 0
 anchor_top = 1.0
@@ -1390,7 +1390,7 @@ metadata/layout_bindings = ["_weather_panel"]
 
 [node name="NextStop" type="Label" parent="Root/WeatherPanel" unique_id=235889284]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
+theme_override_colors/font_color = Color(0.725, 0.729, 0.663, 1.0)
 theme_override_font_sizes/font_size = 14
 autowrap_mode = 3
 metadata/layout_bindings = ["_next_stop"]
@@ -1543,7 +1543,7 @@ metadata/layout_bindings = ["_loot_capacity"]
 
 [node name="Hmotnosť" type="Label" parent="Root/Loot/VBoxContainer/HBoxContainer3/PanelContainer/SummaryScroll/VBoxContainer" unique_id=1745084104]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
+theme_override_colors/font_color = Color(0.725, 0.729, 0.663, 1.0)
 theme_override_font_sizes/font_size = 11
 text = "HMOTNOSŤ"
 
@@ -1560,7 +1560,7 @@ metadata/layout_bindings = ["_loot_weight"]
 
 [node name="ÚložnéMiesta" type="Label" parent="Root/Loot/VBoxContainer/HBoxContainer3/PanelContainer/SummaryScroll/VBoxContainer" unique_id=257122276]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
+theme_override_colors/font_color = Color(0.725, 0.729, 0.663, 1.0)
 theme_override_font_sizes/font_size = 11
 text = "ÚLOŽNÉ MIESTA"
 
@@ -1594,7 +1594,7 @@ metadata/layout_bindings = ["_loot_diagram"]
 [node name="LootDetail" type="Label" parent="Root/Loot/VBoxContainer/HBoxContainer3/PanelContainer/SummaryScroll/VBoxContainer" unique_id=867073047]
 custom_minimum_size = Vector2(310, 100)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
+theme_override_colors/font_color = Color(0.725, 0.729, 0.663, 1.0)
 theme_override_font_sizes/font_size = 14
 text = "Klikni na ikonu nálezu. Zobrazí sa jeho význam a porovnanie s autom.
 
@@ -1663,7 +1663,7 @@ text = "ZAVRIEŤ  ESC"
 
 [node name="CargoInfo" type="Label" parent="Root/Service/VBoxContainer" unique_id=163569195]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
+theme_override_colors/font_color = Color(0.725, 0.729, 0.663, 1.0)
 theme_override_font_sizes/font_size = 15
 text = "KUFOR · zásoby a náhradné diely aktuálnej jazdy"
 metadata/layout_bindings = ["_cargo_info"]
@@ -1724,7 +1724,7 @@ theme_override_constants/separation = 9
 
 [node name="NamontovanéDiely" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer2" unique_id=2137583649]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
+theme_override_colors/font_color = Color(0.725, 0.729, 0.663, 1.0)
 theme_override_font_sizes/font_size = 13
 text = "NAMONTOVANÉ DIELY"
 
@@ -1993,7 +1993,7 @@ theme_override_constants/separation = 12
 
 [node name="KvapalinyAZásoby" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer3" unique_id=28506432]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
+theme_override_colors/font_color = Color(0.725, 0.729, 0.663, 1.0)
 theme_override_font_sizes/font_size = 13
 text = "KVAPALINY A ZÁSOBY"
 
@@ -2024,7 +2024,7 @@ text = "Palivo"
 
 [node name="FluidInfoFuel" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer3/PanelContainer/VBoxContainer" unique_id=1484171563]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
+theme_override_colors/font_color = Color(0.725, 0.729, 0.663, 1.0)
 theme_override_font_sizes/font_size = 14
 metadata/layout_bindings = ["_fluid_info/fuel"]
 
@@ -2060,7 +2060,7 @@ text = "Motorový olej"
 
 [node name="FluidInfoOil" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer3/PanelContainer2/VBoxContainer" unique_id=1483648073]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
+theme_override_colors/font_color = Color(0.725, 0.729, 0.663, 1.0)
 theme_override_font_sizes/font_size = 14
 metadata/layout_bindings = ["_fluid_info/oil"]
 
@@ -2096,7 +2096,7 @@ text = "Chladiaca voda"
 
 [node name="FluidInfoCoolant" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Auto · údržba/VBoxContainer3/PanelContainer3/VBoxContainer" unique_id=1465799011]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
+theme_override_colors/font_color = Color(0.725, 0.729, 0.663, 1.0)
 theme_override_font_sizes/font_size = 14
 metadata/layout_bindings = ["_fluid_info/coolant"]
 
@@ -2151,7 +2151,7 @@ metadata/layout_bindings = ["_shop_buttons/repair"]
 
 [node name="LakKarosérie1AutolakVKufriAlebo" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Prevádzka · lak" unique_id=1639329227]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
+theme_override_colors/font_color = Color(0.725, 0.729, 0.663, 1.0)
 theme_override_font_sizes/font_size = 14
 text = "LAK KAROSÉRIE / 1 AUTOLAK V KUFRI ALEBO 4 ŠROTU V LAKOVNI"
 
@@ -2187,7 +2187,7 @@ metadata/layout_bindings = ["_paint_buttons/547660"]
 custom_minimum_size = Vector2(150, 80)
 layout_mode = 2
 focus_mode = 0
-theme_override_colors/font_color = Color(0.53882354, 0.6403922, 0.69803923, 1)
+theme_override_colors/font_color = Color(0.725, 0.729, 0.663, 1.0)
 text = "Modrá"
 metadata/layout_bindings = ["_paint_buttons/577c91"]
 
@@ -2209,7 +2209,7 @@ metadata/layout_bindings = ["_paint_buttons/a54e43"]
 
 [node name="ZásobyZoSkriniekVBudoveAPlatenéSl" type="Label" parent="Root/Service/VBoxContainer/ServiceTabs/Prevádzka · lak" unique_id=1959531026]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
+theme_override_colors/font_color = Color(0.725, 0.729, 0.663, 1.0)
 theme_override_font_sizes/font_size = 16
 text = "Zásoby zo skriniek v budove a platené služby sú oddelené.
 Stojany majú konečnú zásobu; opravy ani lakovanie nie sú zadarmo."
@@ -2240,7 +2240,7 @@ text = "CESTA POČKÁ."
 
 [node name="PostupSaPriPauzeAutomatickyUloží" type="Label" parent="Root/Pause/VBoxContainer" unique_id=1162875420]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.620, 0.686, 0.718, 1)
+theme_override_colors/font_color = Color(0.725, 0.729, 0.663, 1.0)
 theme_override_font_sizes/font_size = 16
 text = "Postup sa pri pauze automaticky uloží."
 

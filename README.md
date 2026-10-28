@@ -2,6 +2,11 @@
 
 ## Active project: Godot 3D
 
+**V6** adds the default front-driven IZH-2715, garage vehicle selection,
+notebook optimisations, visible tyre trails, a readable tunnel cutaway,
+20-second storm warnings, larger potholes and a redesigned main menu.
+See [V6 changes and verification](godot/NOTEBOOK_UPDATE.md).
+
 **V5** adds natural surface materials, rounded rocks and mountains, clearer
 physical tyre channels, and refreshed editor geometry. See the
 [V5 material notes](godot/assets/textures/NATURAL_MATERIALS_V2.md). APK generation is

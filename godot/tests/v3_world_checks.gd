@@ -41,13 +41,17 @@ func _run() -> void:
 		world.configure(seed)
 		world._create_chunk(1)
 		var chunk: Node3D = world.chunks[1]
-		var trees := chunk.find_children("*Pine*", "Node3D", true, false).size() + chunk.find_children("*WetlandTree*", "Node3D", true, false).size()
+		# Count actual planted roots; old name-based counts included crown meshes
+		# and predated the user's reduction of overlapping trees in V4/V5.
+		var sites: Array = chunk.get_meta("tree_sites", [])
+		var cells := {}
+		for site: Dictionary in sites: cells[preload("res://scripts/tree_scatter.gd").cell(site.position)] = true
 		if seed == 1000002:
 			check(chunk.find_children("SandstoneWall*", "MeshInstance3D", true, false).size() == 24, "Copper canyon has continuous sandstone strata instead of repeated cliff blocks")
 			var z := world.center_at(150)
 			check(world.height_at(150, z + 31) > world.height_at(150, z) + 9, "Canyon floor rises through eroded sandstone benches")
 		else:
-			check(trees > 70, "Biome %d contains a dense stand of real trees" % world.biome_at(150))
+			check(not sites.is_empty() and sites.size() <= world.woodland_scenery_attempts + 8 and cells.size() == sites.size(), "Biome %d contains bounded, non-overlapping planted trees" % world.biome_at(150))
 			var batches: Dictionary = chunk.get_meta("prop_batches", {})
 			check(batches.size() < 70, "Dense trees share instanced meshes instead of per-tree draw calls")
 			if seed == 1000006:

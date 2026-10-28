@@ -20,6 +20,7 @@ func _run() -> void:
 	var detail := load("res://assets/textures/surface-microheight-2k.png") as Texture2D
 	var dust := load("res://assets/textures/dust-plume-512.png") as Texture2D
 	var albedo := load("res://assets/textures/surface-albedo-atlas.png") as TextureLayered
+	var ground_atlas := load("res://assets/textures/ground-surfaces.png") as TextureLayered
 	check(albedo != null and albedo.get_layers() == 4 and albedo.get_width() == 627 and albedo.has_mipmaps(), "Four independently mipmapped albedo layers cannot bleed across material boundaries")
 	check(detail.get_size() == Vector2(2048, 2048) and detail.get_image().has_mipmaps(), "Native 2K detail map has mipmaps for distant terrain")
 	check(dust.get_size() == Vector2(512, 512) and dust.get_image().has_mipmaps(), "512px dust plume has mipmaps")
@@ -41,7 +42,7 @@ func _run() -> void:
 			if node is MeshInstance3D and node.name == "SandAndTracks":
 				grounds += 1
 				var material := node.material_override as ShaderMaterial
-				bound_textures = bound_textures and material.get_shader_parameter("surface_data_enabled") == true and material.get_shader_parameter("surface_atlas") != null and material.get_shader_parameter("micro_height") != null
+				bound_textures = bound_textures and material.get_shader_parameter("surface_data_enabled") == true and material.get_shader_parameter("surface_atlas") == ground_atlas and material.get_shader_parameter("micro_height") != null and material.get_shader_parameter("road_weathering") != null and material.get_shader_parameter("weathered_asphalt") != null
 		check(collision_free and grounds == 3 and bound_textures, "Saved %s preview contains current textured terrain and no gameplay colliders" % label)
 		check(native_meshes > 100 and batches == 0, "Saved %s preview preserves visible native rocks, fences and pole geometry" % label)
 		geometry.free()

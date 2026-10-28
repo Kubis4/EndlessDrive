@@ -1,0 +1,176 @@
+[gd_scene format=3]
+
+[ext_resource type="Shader" path="res://shaders/prop_surface.gdshader" id="1_x0fop"]
+[ext_resource type="CompressedTexture2DArray" path="res://assets/textures/surface-albedo-atlas.png" id="2_imq4h"]
+[ext_resource type="CompressedTexture2DArray" path="res://assets/textures/world-materials-atlas.png" id="3_lep80"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_wihco"]
+resource_name = "Detailed_2"
+render_priority = 0
+shader = ExtResource("1_x0fop")
+shader_parameter/world_atlas = ExtResource("3_lep80")
+shader_parameter/terrain_atlas = ExtResource("2_imq4h")
+shader_parameter/tint = Color(0.6509804, 0.43137255, 0.2627451, 1)
+shader_parameter/surface_kind = 2
+shader_parameter/roughness_value = 0.68
+shader_parameter/metallic_value = 0.25
+
+[sub_resource type="BoxMesh" id="BoxMesh_0wopp"]
+size = Vector3(4.6, 0.7, 1.95)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_04x3a"]
+resource_name = "Detailed_2"
+render_priority = 0
+shader = ExtResource("1_x0fop")
+shader_parameter/world_atlas = ExtResource("3_lep80")
+shader_parameter/terrain_atlas = ExtResource("2_imq4h")
+shader_parameter/tint = Color(0.39215687, 0.41568628, 0.3764706, 1)
+shader_parameter/surface_kind = 2
+shader_parameter/roughness_value = 0.68
+shader_parameter/metallic_value = 0.25
+
+[sub_resource type="BoxMesh" id="BoxMesh_l54og"]
+size = Vector3(2.7, 0.85, 1.8)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_p1rri"]
+resource_name = "Desert_glass"
+albedo_color = Color(0.20784314, 0.29803923, 0.3137255, 1)
+roughness = 0.9
+
+[sub_resource type="BoxMesh" id="BoxMesh_xsmmd"]
+size = Vector3(2.1, 0.46, 0.025)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1ahnj"]
+resource_name = "Desert_rubber"
+albedo_color = Color(0.14117648, 0.15294118, 0.1254902, 1)
+roughness = 0.9
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_hhic8"]
+top_radius = 0.34
+bottom_radius = 0.34
+height = 0.24
+radial_segments = 8
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_m1nrt"]
+top_radius = 0.34
+bottom_radius = 0.34
+height = 0.24
+radial_segments = 8
+
+[sub_resource type="BoxMesh" id="BoxMesh_kyb4s"]
+size = Vector3(2.1, 0.46, 0.025)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_g1pnu"]
+top_radius = 0.34
+bottom_radius = 0.34
+height = 0.24
+radial_segments = 8
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_1r82a"]
+top_radius = 0.34
+bottom_radius = 0.34
+height = 0.24
+radial_segments = 8
+
+[sub_resource type="BoxMesh" id="BoxMesh_dvvyx"]
+size = Vector3(0.025, 0.48, 1.45)
+
+[sub_resource type="BoxMesh" id="BoxMesh_jmrjb"]
+size = Vector3(1.25, 0.09, 1.8)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_n8jsu"]
+resource_name = "Detailed_0"
+render_priority = 0
+shader = ExtResource("1_x0fop")
+shader_parameter/world_atlas = ExtResource("3_lep80")
+shader_parameter/terrain_atlas = ExtResource("2_imq4h")
+shader_parameter/tint = Color(0.4117647, 0.3254902, 0.22745098, 1)
+shader_parameter/surface_kind = 0
+shader_parameter/roughness_value = 0.9
+shader_parameter/metallic_value = 0.0
+
+[sub_resource type="BoxMesh" id="BoxMesh_kqelq"]
+size = Vector3(0.44, 0.24, 0.035)
+
+[sub_resource type="BoxMesh" id="BoxMesh_7a2bn"]
+size = Vector3(0.44, 0.24, 0.035)
+
+[sub_resource type="BoxMesh" id="BoxMesh_dy7su"]
+size = Vector3(0.44, 0.24, 0.035)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_l2jeh"]
+size = Vector3(4.6, 1.55, 1.95)
+
+[node name="Wreck" type="Node3D" unique_id=644102090]
+metadata/obstacle_kind = "wreck"
+
+[node name="RustedChassis" type="MeshInstance3D" parent="." unique_id=115414025]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
+material_override = SubResource("ShaderMaterial_wihco")
+mesh = SubResource("BoxMesh_0wopp")
+
+[node name="Cabin" type="MeshInstance3D" parent="." unique_id=328091489]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.35, 1.32, 0)
+material_override = SubResource("ShaderMaterial_04x3a")
+mesh = SubResource("BoxMesh_l54og")
+
+[node name="BrokenSideGlass" type="MeshInstance3D" parent="." unique_id=511546682]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 1.42, -0.915)
+material_override = SubResource("StandardMaterial3D_p1rri")
+mesh = SubResource("BoxMesh_xsmmd")
+
+[node name="FlatTyre" type="MeshInstance3D" parent="." unique_id=1352374516]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, -1.55, 0.34, -0.94)
+material_override = SubResource("StandardMaterial3D_1ahnj")
+mesh = SubResource("CylinderMesh_hhic8")
+
+[node name="FlatTyre2" type="MeshInstance3D" parent="." unique_id=2099506300]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 1.5, 0.34, -0.94)
+material_override = SubResource("StandardMaterial3D_1ahnj")
+mesh = SubResource("CylinderMesh_m1nrt")
+
+[node name="BrokenSideGlass2" type="MeshInstance3D" parent="." unique_id=1913108976]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.3, 1.42, 0.915)
+material_override = SubResource("StandardMaterial3D_p1rri")
+mesh = SubResource("BoxMesh_kyb4s")
+
+[node name="FlatTyre3" type="MeshInstance3D" parent="." unique_id=1912076910]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, -1.55, 0.34, 0.94)
+material_override = SubResource("StandardMaterial3D_1ahnj")
+mesh = SubResource("CylinderMesh_g1pnu")
+
+[node name="FlatTyre4" type="MeshInstance3D" parent="." unique_id=380247749]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 1.5, 0.34, 0.94)
+material_override = SubResource("StandardMaterial3D_1ahnj")
+mesh = SubResource("CylinderMesh_1r82a")
+
+[node name="ShatteredWindscreen" type="MeshInstance3D" parent="." unique_id=784554993]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.02, 1.43, 0)
+material_override = SubResource("StandardMaterial3D_p1rri")
+mesh = SubResource("BoxMesh_dvvyx")
+
+[node name="BuckledHood" type="MeshInstance3D" parent="." unique_id=1140095446]
+transform = Transform3D(0.990216, 0.13954312, 0, -0.13954312, 0.990216, 0, 0, 0, 1, 1.65, 1.08, 0)
+material_override = SubResource("ShaderMaterial_wihco")
+mesh = SubResource("BoxMesh_jmrjb")
+
+[node name="ExposedMetal" type="MeshInstance3D" parent="." unique_id=329465375]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.7, 0.72, 0.99)
+material_override = SubResource("ShaderMaterial_n8jsu")
+mesh = SubResource("BoxMesh_kqelq")
+
+[node name="ExposedMetal2" type="MeshInstance3D" parent="." unique_id=883030389]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6, 0.72, 0.99)
+material_override = SubResource("ShaderMaterial_n8jsu")
+mesh = SubResource("BoxMesh_7a2bn")
+
+[node name="ExposedMetal3" type="MeshInstance3D" parent="." unique_id=1067738478]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0.72, 0.99)
+material_override = SubResource("ShaderMaterial_n8jsu")
+mesh = SubResource("BoxMesh_dy7su")
+
+[node name="Collision" type="StaticBody3D" parent="." unique_id=1485755133]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.97, 0)
+
+[node name="@CollisionShape3D@7" type="CollisionShape3D" parent="Collision" unique_id=1050561561]
+shape = SubResource("BoxShape3D_l2jeh")
