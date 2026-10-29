@@ -1,5 +1,19 @@
 # Endless Drive
 
+## Desert tech demo — Sirocco
+
+A playable Godot showcase with the **Jeep Cherokee and IZH-2715 from Endless Drive**,
+rolling dunes, progressively deformable sand, tyre tracks and layered dust.
+Includes the game's repair buildings and desert rock models, a cinematic aerial
+camera and manual driving without a HUD.
+
+![Desert tech demo](design/desert-battlefield/preview.png)
+
+**[Launch instructions, controls and credits → TECH_DEMO.md](TECH_DEMO.md)**
+
+On Windows with Godot 4.7.2 installed: `./tools/desert-battlefield.ps1 Play`.
+The demo has its own scene; the main game's startup scene remains unchanged.
+
 ## Active project: Godot 3D
 
 **V6** adds the default front-driven IZH-2715, garage vehicle selection,
