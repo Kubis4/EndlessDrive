@@ -27,11 +27,12 @@ const TINT := [Color(1, 1, 1), Color(0.96, 0.94, 0.9), Color(0.7, 0.7, 0.7), Col
 ## where the tyres went (and asphalt, gravel, rock and water show nothing).
 const TRACKED := [false, false, false, false, false, false, false, false, false, false, false, false]
 ## Fraction of the vehicle's top speed reachable on each ground: the engine
-## stops pushing beyond it, and soft ground (factor < 0.7) actively bogs an
-## overspeeding car down towards it.
+## stops pushing beyond it, and a car arriving faster is slowed towards it
+## (soft ground bogs it down hard, rough ground such as gravel, rock or grass
+## shakes speed off more gently, ice lets it slide on).
 ## Mud is slow and treacherous: a car arriving fast is dragged down hard and
 ## can dig itself in (see vehicle.gd sinkage).
-const SPEED := [0.85, 0.92, 1.0, 0.8, 0.72, 0.22, 0.28, 0.5, 0.6, 1.0, 0.75, 1.0]
+const SPEED := [0.75, 0.85, 1.0, 0.62, 0.55, 0.22, 0.28, 0.4, 0.45, 0.55, 0.6, 0.85]
 
 ## Test course east of the dunes: Vector4(x0, z0, x1, z1). Lanes run along X;
 ## each starts at the east end, so the car drives west (yaw = PI / 2).

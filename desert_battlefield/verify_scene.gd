@@ -102,7 +102,7 @@ func run() -> void:
 	vehicles[0].place_on_ground(Vector3(0, 0, 80), 0.0)
 	vehicles[0].velocity = -vehicles[0].body.basis.z * 6.0
 	var key := InputEventKey.new()
-	key.keycode = KEY_SPACE
+	key.keycode = KEY_TAB
 	key.pressed = true
 	game._unhandled_key_input(key)
 	if not game.driving or not vehicles[0].manual: failures.append("Manual control toggle failed")

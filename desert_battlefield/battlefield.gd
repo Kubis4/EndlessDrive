@@ -1,5 +1,5 @@
 extends Node3D
-## Starts as an uninterrupted, HUD-free moving diorama. Space enables player driving.
+## Starts as an uninterrupted, HUD-free moving diorama. Tab enables player driving.
 const Surface = preload("res://desert_battlefield/terrain.gd")
 const PROFILES := ["notebook", "reference", "low"]
 const PROFILE_NAMES := {"notebook": "Notebook", "reference": "Referenčná", "low": "Nízka"}
@@ -136,13 +136,13 @@ func _create_driving_readout() -> void:
 	help.add_theme_font_size_override("font_size", 21)
 	help.add_theme_color_override("font_color", Color("f3e4c8"))
 	var lines := PackedStringArray([
-		"MEDZERNÍK  jazda / kinematický pohľad",
+		"TAB  jazda / kinematický pohľad",
 		"W A S D / šípky  plyn, brzda, zatáčanie",
-		"SHIFT  ručná brzda      R  späť na štart",
+		"SHIFT / MEDZERNÍK  ručná brzda      R  späť na štart",
 		"C  kamera   + − / koliesko  priblíženie",
 		"Orbit / Voľná kamera: ťahaj myšou      P  pauza",
 		"V  ďalšie auto      Q  kvalita grafiky      F11  celá obrazovka",
-		"G  pohon 4x4 / 4x2 (Jeep)      L  uzávierka diferenciálu",
+		"G  pohon 4x4 / 4x2 (Jeep)      L  uzávierka diferenciálu      F  svetlá",
 		"T / Shift+T  ďalší / predošlý test,  1–9, 0  priamo:"])
 	for i in test_spots.size(): lines.append("   %s  %s" % [str(i + 1) if i < 9 else ("0" if i == 9 else "T"), test_spots[i][0]])
 	lines.append("H  skryť pomoc      ESC  kinematický pohľad")
@@ -206,6 +206,9 @@ func _apply_render_profile(profile: String) -> void:
 		environment.volumetric_fog_enabled = false
 		viewport.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
 		viewport.scaling_3d_scale = 0.85
+	# Headlight shadows are a Reference-only extra (four shadowed spot lights).
+	for car in vehicles():
+		for beam: SpotLight3D in car.headlights: beam.shadow_enabled = profile == "reference" and not OS.has_feature("mobile")
 	profile_scale = viewport.scaling_3d_scale
 	for argument in OS.get_cmdline_user_args():
 		if argument.begins_with("--render-scale="):
@@ -456,13 +459,18 @@ func toggle_drive() -> void:
 	lead.four_wheel_drive = not lead.four_wheel_drive
 	toast_time = 2.5
 
+func toggle_lights() -> void:
+	var on: bool = not lead.lights_on
+	for car in vehicles(): car.lights_on = on
+	toast_time = 2.5
+
 func toggle_diff() -> void:
 	lead.diff_locked = not lead.diff_locked
 	toast_time = 2.5
 
 func drivetrain_text() -> String:
 	var drive := "4x2 predný" if lead.front_drive else ("4x4" if lead.four_wheel_drive else "4x2 zadný")
-	return "%s · dif. %s" % [drive, "zamknutý" if lead.diff_locked else "otvorený"]
+	return "%s · dif. %s" % [drive, "zamknutý · max %d km/h" % roundi(lead.DIFF_LOCK_SPEED * 3.6) if lead.diff_locked else "otvorený"]
 
 func teleport_to_test(index: int) -> void:
 	current_spot = posmod(index, test_spots.size())
@@ -499,7 +507,7 @@ func _release_lead() -> void:
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not event.is_pressed() or event.is_echo(): return
 	var key: int = event.keycode
-	if key == KEY_SPACE:
+	if key == KEY_TAB:
 		driving = not driving
 		lead.manual = driving
 		if not driving: _release_lead()
@@ -527,6 +535,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if key == KEY_V: _switch_vehicle()
 	if key == KEY_G: toggle_drive()
 	if key == KEY_L: toggle_diff()
+	if key == KEY_F: toggle_lights()
 	if key == KEY_Q:
 		_apply_render_profile(PROFILES[(PROFILES.find(render_profile) + 1) % PROFILES.size()])
 		toast_time = 2.5

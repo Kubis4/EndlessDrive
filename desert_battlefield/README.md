@@ -22,10 +22,10 @@ the launcher adds the quality profile and a separate shader cache.
 
 ## Controls
 
-- **Space** switches between the autonomous cinematic view and driving the lead scout.
+- **Tab** switches between the autonomous cinematic view and driving the lead scout.
 - **W / up** accelerates; **S / down** brakes, then reverses once stopped.
 - **A/D / left/right** steers, with speed-dependent steering travel.
-- **Shift** reduces tyre grip for a handbrake slide.
+- **Shift** or **Space** pulls the handbrake: the rear wheels lock and slide.
 - **Escape** returns to the cinematic patrol (a car left on a test ground is put
   back on its route).
 - **R** restarts the current test, or places the car back on its patrol route.

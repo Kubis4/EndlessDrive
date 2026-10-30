@@ -40,7 +40,7 @@ func _ready() -> void:
 	canvas.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	canvas.draw.connect(_draw_controls)
 	add_child(canvas)
-	for item in [["JAZDA / KAMERA", KEY_SPACE], ["POHĽAD", KEY_C], ["TEST", KEY_T], ["POHON", KEY_G], ["RESET AUTA", KEY_R], ["AUTO", KEY_V], ["PAUZA", KEY_P], ["DIFERENCIÁL", KEY_L]]:
+	for item in [["JAZDA / KAMERA", KEY_TAB], ["POHĽAD", KEY_C], ["TEST", KEY_T], ["POHON", KEY_G], ["RESET AUTA", KEY_R], ["AUTO", KEY_V], ["PAUZA", KEY_P], ["DIFERENCIÁL", KEY_L], ["SVETLÁ", KEY_F]]:
 		var button := Button.new()
 		button.text = item[0]
 		button.focus_mode = Control.FOCUS_NONE
@@ -89,15 +89,15 @@ func _layout() -> void:
 	var button_size := BUTTON_SIZE * clampf(s, 0.75, 1.3)
 	for child in get_children():
 		if child is Button:
-			# Two rows of four in the top-right corner, clear of the speed
+			# Two rows of five in the top-right corner, clear of the speed
 			# readout on the left and of the pedals below.
-			var column := index % 4
-			var row := index / 4
+			var column := index % 5
+			var row := index / 5
 			child.custom_minimum_size = button_size
 			child.size = button_size
 			# Text grows with the button, legible on 1440p phones and tablets.
 			child.add_theme_font_size_override("font_size", roundi(button_size.y * 0.36))
-			child.position = Vector2(size.x - margin_x * 0.5 - inset.z - (button_size.x + 10.0) * (4 - column), 14.0 * s + inset.y + row * (button_size.y + 10.0))
+			child.position = Vector2(size.x - margin_x * 0.5 - inset.z - (button_size.x + 10.0) * (5 - column), 14.0 * s + inset.y + row * (button_size.y + 10.0))
 			index += 1
 	canvas.queue_redraw()
 

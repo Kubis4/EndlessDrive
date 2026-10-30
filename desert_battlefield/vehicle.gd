@@ -40,6 +40,12 @@ var front_drive := false
 ## up to its own grip).
 var four_wheel_drive := true
 var diff_locked := false
+## Handbrake: kinetic share of tyre grip on the locked rear wheels.
+const LOCKED_FRICTION := 0.8
+## Locked differential: extra rolling loss per unit of steering lock (tyre scrub).
+const LOCKED_SCRUB := 0.12
+## Handbrake held during the last tick (rear wheels shown standing still).
+var handbrake_on := false
 ## 0..1 share of each wheel's drive torque that only spins the tyre.
 var drive_slip: Array[float] = [0.0, 0.0, 0.0, 0.0]
 var manual := false
@@ -187,7 +193,109 @@ func _ready() -> void:
 	for wheel: Node3D in $Body/Wheels.get_children():
 		wheels.append(wheel)
 		wheel_indices.append((2 if wheel.position.x > 0 else 0) + (0 if wheel.get_meta("front", false) else 1))
+	_build_lights()
 	reset_to_route()
+
+## Headlights, tail/brake lights and a reversing light, hung on the lamp markers
+## and lenses both Endless Drive models carry (+X is forward in the rig).
+var lights_on := true:
+	set(value):
+		lights_on = value
+		for light in headlights: light.visible = value
+		for glow in headlight_glows: glow.visible = value
+var headlights: Array[SpotLight3D] = []
+var headlight_glows: Array[MeshInstance3D] = []
+var tail_lights: Array[OmniLight3D] = []
+var tail_lens: StandardMaterial3D
+var reversing_light: OmniLight3D
+## Tail lamp glow: parked/driving with lights, braking.
+const TAIL_GLOW := Vector2(0.9, 4.0)
+## Painted headlight lens per model, measured from the lamp markers in an
+## orthographic front and side views: [offset (forward, up, outward), lens
+## size, round].
+const HEADLAMPS := {
+	"jeep": [Vector3(-0.06, 0.087, 0.017), Vector2(0.2, 0.13), false],
+	"izh": [Vector3(0.05, -0.1, -0.127), Vector2(0.19, 0.19), true],
+}
+
+func _build_lights() -> void:
+	var headlamp: Array = HEADLAMPS.get(body.get_meta("endless_drive_model", "jeep"), HEADLAMPS["jeep"])
+	var glow_material := ShaderMaterial.new()
+	glow_material.shader = preload("res://desert_battlefield/lamp_glow.gdshader")
+	glow_material.set_shader_parameter("round_lens", headlamp[2])
+	var quad := QuadMesh.new()
+	quad.size = headlamp[1]
+	quad.material = glow_material
+	for marker: Marker3D in body.find_children("Headlight*", "Marker3D", true, false):
+		var centre: Vector3 = headlamp[0]
+		centre.z *= signf(marker.position.z)
+		var glow := MeshInstance3D.new()
+		glow.name = "Lens"
+		glow.mesh = quad
+		glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# The quad faces +Z; turn it to face forward (+X).
+		glow.basis = Basis(Vector3.UP, PI * 0.5)
+		glow.position = centre
+		marker.add_child(glow)
+		headlight_glows.append(glow)
+		var beam := SpotLight3D.new()
+		beam.name = "Beam"
+		# Spot lights shine along -Z: turn it to +X and dip it slightly.
+		beam.basis = Basis(Vector3.UP, -PI * 0.5) * Basis(Vector3.RIGHT, deg_to_rad(-5.0))
+		beam.position = centre + Vector3(0.05, 0.0, 0.0)
+		beam.light_color = Color(1.0, 0.93, 0.8)
+		beam.light_energy = 5.0
+		beam.spot_range = 32.0
+		beam.spot_angle = 26.0
+		beam.spot_angle_attenuation = 0.6
+		beam.spot_attenuation = 0.8
+		beam.light_specular = 0.4
+		# Shadows follow the quality profile (battlefield.gd), never on phones.
+		beam.shadow_enabled = false
+		beam.distance_fade_enabled = true
+		beam.distance_fade_begin = 70.0
+		beam.distance_fade_length = 20.0
+		marker.add_child(beam)
+		headlights.append(beam)
+	var rear_centre := Vector3.ZERO
+	var lamps: Array = body.find_children("BrakeLamp*", "MeshInstance3D", true, false)
+	if not lamps.is_empty():
+		# Own lens material per car, so one car braking does not light the other.
+		tail_lens = (lamps[0].material_override as StandardMaterial3D).duplicate()
+		tail_lens.emission_energy_multiplier = TAIL_GLOW.x
+	for lamp: MeshInstance3D in lamps:
+		lamp.material_override = tail_lens
+		var glow := OmniLight3D.new()
+		glow.name = "TailGlow"
+		glow.light_color = Color(1.0, 0.08, 0.03)
+		glow.light_energy = 0.15
+		glow.omni_range = 2.6
+		glow.light_specular = 0.2
+		# 15 cm behind the lens (rig -X), expressed in the lamp's own frame.
+		glow.position = lamp.basis.inverse() * Vector3(-0.15, 0.0, 0.0)
+		lamp.add_child(glow)
+		tail_lights.append(glow)
+		rear_centre += body.to_local(lamp.global_position) / lamps.size()
+	reversing_light = OmniLight3D.new()
+	reversing_light.name = "ReversingLight"
+	reversing_light.light_color = Color(1.0, 0.97, 0.9)
+	reversing_light.light_energy = 0.0
+	reversing_light.omni_range = 5.0
+	reversing_light.position = rear_centre + Vector3(0.0, 0.0, 0.3)
+	reversing_light.visible = false
+	body.add_child(reversing_light)
+
+## Brake lamps follow the brake pedal, the reversing light reverse gear.
+func _update_lights(brake: float, throttle: float) -> void:
+	# A parked car holding its brake keeps the lamps dark.
+	var braking := brake > 0.05 and grounded_wheels > 0 and absf(speed) > 0.2
+	if tail_lens != null:
+		tail_lens.emission_energy_multiplier = TAIL_GLOW.y if braking else (TAIL_GLOW.x if lights_on else 0.0)
+	for glow in tail_lights:
+		glow.light_energy = 1.1 if braking else (0.15 if lights_on else 0.0)
+	var reversing := throttle < -0.05 and speed < 0.5
+	reversing_light.visible = reversing
+	reversing_light.light_energy = 0.9 if reversing else 0.0
 
 func chassis_basis() -> Basis:
 	return attitude
@@ -298,7 +406,7 @@ func _physics_process(delta: float) -> void:
 		# Keys steer digitally; the touch steering zone is analog (action strength).
 		turn = clampf(float(Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT)) - float(Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT))
 			+ _touch_strength("left") - _touch_strength("right"), -1.0, 1.0)
-		handbrake = Input.is_physical_key_pressed(KEY_SHIFT) or _touch("handbrake")
+		handbrake = Input.is_physical_key_pressed(KEY_SHIFT) or Input.is_physical_key_pressed(KEY_SPACE) or _touch("handbrake")
 	else:
 		var nearest := route_phase
 		var distance := INF
@@ -364,6 +472,7 @@ func steering_limit() -> float:
 func simulate(delta: float, throttle: float, brake: float, turn: float, handbrake: bool) -> void:
 	if delta <= 0.0: return
 	last_throttle = clampf(throttle, -1.0, 1.0)
+	handbrake_on = handbrake
 	var steps := maxi(1, ceili(delta / MAX_STEP))
 	var dt := delta / steps
 	# The previous substep already sampled its final pose. Refresh once for
@@ -375,6 +484,7 @@ func simulate(delta: float, throttle: float, brake: float, turn: float, handbrak
 	if absf(position.x) > 125 or absf(position.z) > 125 or not position.is_finite():
 		reset_to_route()
 	_update_visuals(delta)
+	_update_lights(brake, throttle)
 	_update_tracks(delta)
 	dust_clock += delta
 	_update_dust(Vector3(-sin(heading), 0, -cos(heading)), Vector3(cos(heading), 0, -sin(heading)))
@@ -521,7 +631,8 @@ func _integrate(dt: float, throttle: float, brake: float, handbrake: bool) -> vo
 			load = maxf(0.0, (spring_rate * compressions[i] + bar - damping * normal_speed / alignment) / alignment)
 		wheel_loads[i] = load
 		wheel_grounded[i] = load > 5.0
-		if wheel_grounded[i] and is_driven(i): driven_load += load
+		# Rear wheels held by the handbrake take no share of the engine torque.
+		if wheel_grounded[i] and is_driven(i) and not (handbrake and i % 2 == 1): driven_load += load
 	# Traction of each tyre, for the open differentials below.
 	var traction := PackedFloat32Array([0, 0, 0, 0])
 	for i in 4:
@@ -529,7 +640,7 @@ func _integrate(dt: float, throttle: float, brake: float, handbrake: bool) -> vo
 	for i in 4:
 		drive_slip[i] = 0.0
 		# Open diff: a lifted driven wheel takes all the torque and just spins.
-		if is_driven(i) and not wheel_grounded[i] and not diff_locked and wheel_grounded[(i + 2) % 4] and absf(motor) > 1.0:
+		if is_driven(i) and not wheel_grounded[i] and not diff_locked and wheel_grounded[(i + 2) % 4] and absf(motor) > 1.0 and not (handbrake and i % 2 == 1):
 			drive_slip[i] = 1.0
 	var roll_arm := lerpf(ROLL_ARM_LOW, 1.0, smoothstep(ROLLOVER_SPEED_START, ROLLOVER_SPEED_FULL, absf(speed)))
 	for i in 4:
@@ -550,12 +661,28 @@ func _integrate(dt: float, throttle: float, brake: float, handbrake: bool) -> vo
 		var ground := wheel_surface[i]
 		var grip: float = Surface.GRIP[ground]
 		var capacity := load * grip
-		var braking_force := brake * 13500.0 * 0.25 + (3400.0 if handbrake and not front else 0.0)
+		if handbrake and not front:
+			# Handbrake: the rear wheel is locked. It takes no drive torque and
+			# its contact patch slides, so kinetic friction acts against the
+			# slide in any direction: it brakes and loses side grip together.
+			var slide := Vector2(longitudinal_speed, lateral_speed)
+			var sliding := slide.length()
+			if sliding > 0.001:
+				var friction := minf(capacity * LOCKED_FRICTION, sliding * mass_kg * 0.25 / dt) / sliding
+				var locked_force := tyre_forward * (-slide.x * friction) + tyre_right * (-slide.y * friction)
+				force += locked_force
+				torque += arm.cross(locked_force)
+			maximum_slip = maxf(maximum_slip, clampf(sliding / 3.0, 0.0, 1.0))
+			continue
+		var braking_force := brake * 13500.0 * 0.25
 		# Loose sand keeps the tuned default; other grounds scale it by their rolling loss.
 		var rolling: float = rolling_resistance * float(Surface.ROLLING[ground]) / float(Surface.ROLLING[Surface.SAND])
 		# Sinkage: in mud and the ford bed the deeper the rut, the harder the
 		# tyre ploughs. A spinning, digging car can bury itself.
 		if ground == Surface.MUD: rolling *= 1.0 + soil.depth_at(wheel_contacts[i].x, wheel_contacts[i].z) * 5.0
+		# A locked axle cannot let its wheels turn at different speeds: in a bend
+		# the tyres scrub, which drags the car (more the sharper the turn).
+		if diff_locked and is_driven(i): rolling += LOCKED_SCRUB * absf(steer) / 0.55 * grip
 		var resistance := minf(braking_force + load * rolling, absf(longitudinal_speed) * mass_kg * 0.25 / dt)
 		var longitudinal := 0.0
 		if is_driven(i) and driven_load > 0.0:
@@ -579,7 +706,6 @@ func _integrate(dt: float, throttle: float, brake: float, handbrake: bool) -> vo
 		longitudinal -= signf(longitudinal_speed) * resistance
 		longitudinal = clampf(longitudinal, -capacity, capacity)
 		var lateral_limit := sqrt(maxf(0.0, capacity * capacity - longitudinal * longitudinal))
-		if handbrake and not front: lateral_limit *= 0.28
 		var cornering := curb_mass_kg * 13.0 * sqrt(grip / 0.85)
 		var lateral_force := clampf(-lateral_speed * cornering / maxf(absf(longitudinal_speed), 3.0), -lateral_limit, lateral_limit)
 		var side_force := tyre_right * lateral_force
@@ -646,7 +772,8 @@ func _integrate(dt: float, throttle: float, brake: float, handbrake: bool) -> vo
 	speed = velocity.dot(-attitude.z)
 	distance_travelled += Vector2(position.x - old_position.x, position.z - old_position.z).length()
 
-## Average reachable speed over the loaded tyres' grounds (m/s).
+## Average reachable speed over the loaded tyres' grounds (m/s). A locked
+## differential binds the driveline, so the car is held to crawling speeds.
 func ground_speed_limit() -> float:
 	var factor := 0.0
 	var count := 0
@@ -654,25 +781,35 @@ func ground_speed_limit() -> float:
 		if wheel_grounded[i] or wheel_gaps[i] < droop:
 			factor += Surface.SPEED[wheel_surface[i]]
 			count += 1
-	return top_speed * (factor / count if count > 0 else 1.0)
+	var limit := top_speed * (factor / count if count > 0 else 1.0)
+	return minf(limit, DIFF_LOCK_SPEED) if diff_locked else limit
 
-## Mud, water and clay drag an overspeeding car down to their limit within a
-## few seconds instead of letting it coast across at road speed.
+## Highest speed the engine pushes to with a locked differential (30 km/h).
+const DIFF_LOCK_SPEED := 30.0 / 3.6
+
+## Slows a car that is faster than its ground allows, instead of letting it
+## coast across at road speed: mud, water, clay and snow bog it down within a
+## few seconds, rough ground (gravel, rock, grass) shakes speed off more gently,
+## and a locked differential binds the driveline. Ice lets the car slide on.
 func _bog_down_force(limit: float) -> Vector3:
 	if not grounded: return Vector3.ZERO
-	var softness := 0.0
-	var count := 0
-	for i in 4:
-		if wheel_grounded[i]:
-			# Only yielding ground bogs a car down; rock is merely slow to drive.
-			if Surface.DEFORM[wheel_surface[i]] >= 0.5:
-				softness += clampf((0.75 - float(Surface.SPEED[wheel_surface[i]])) / 0.45, 0.0, 1.0)
-			count += 1
-	if count == 0 or softness <= 0.0: return Vector3.ZERO
 	var horizontal := Vector3(velocity.x, 0.0, velocity.z)
 	var excess := horizontal.length() - limit
 	if excess <= 0.0: return Vector3.ZERO
-	return -horizontal.normalized() * mass_kg * minf(excess * 1.8, 8.0) * softness / count
+	var deceleration := 0.0
+	var count := 0
+	for i in 4:
+		if not wheel_grounded[i]: continue
+		count += 1
+		var ground := wheel_surface[i]
+		if float(Surface.GRIP[ground]) < 0.2: continue
+		var slowness := clampf((0.95 - float(Surface.SPEED[ground])) / 0.5, 0.0, 1.0)
+		if Surface.DEFORM[ground] >= 0.5: deceleration += minf(excess * 1.8, 8.0) * slowness
+		else: deceleration += minf(excess * 0.9, 3.5) * slowness
+	if count == 0: return Vector3.ZERO
+	deceleration /= count
+	if diff_locked: deceleration = maxf(deceleration, minf(excess * 0.8, 3.0))
+	return -horizontal.normalized() * mass_kg * deceleration
 
 ## Wading: hydrodynamic drag on the submerged body and partial (leaky) buoyancy,
 ## both applied through the centre of mass. Zero outside the ford.
@@ -699,6 +836,10 @@ func _update_visuals(dt: float) -> void:
 		# progress (stuck in mud/sand, climbing) the wheels keep turning.
 		var rate := speed / wheel_radius
 		var driven := is_driven(index)
+		if handbrake_on and index % 2 == 1:
+			# The handbrake holds the rear wheels: they slide without turning.
+			wheel_spin_rate[index] = 0.0
+			continue
 		if driven and absf(last_throttle) > 0.15 and (wheel_grounded[index] or water_submersion > 0.0 or drive_slip[index] > 0.0):
 			var slip_rate := last_throttle * 14.0 * (1.0 - clampf(absf(speed) / 6.0, 0.0, 1.0))
 			# Torque the ground cannot take (open diff, ice, a lifted wheel) spins it.

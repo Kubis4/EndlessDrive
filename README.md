@@ -67,10 +67,15 @@ Use Forward+ for the full lighting, fog and dust presentation.
 
 ## Controls
 
-- **Space:** take control of the lead Jeep / return to cinematic mode.
+- **Tab:** take control of the lead Jeep / return to cinematic mode.
 - **W / up:** accelerate. **S / down:** brake; hold after stopping to reverse.
 - **A/D or left/right:** steer, with a smaller steering angle at high speed.
-- **Shift:** handbrake drift.
+- **Shift or Space:** handbrake: locks the rear wheels (they slide and lose side
+  grip, the front keeps steering and, in 4×4 or on the van, driving).
+- **G / L:** 4×4 or 4×2 (Jeep) / lock the differentials: more traction, but the
+  car is held to 30 km/h and the tyres scrub in bends.
+- **F:** headlights on/off (tail lights brighten when braking, a white light
+  shows in reverse).
 - **Escape:** return to autonomous patrol.
 - **R:** reset the car — to the start of the current test, otherwise to its route.
 - **P:** pause vehicles and particles (the orbit camera still moves).
