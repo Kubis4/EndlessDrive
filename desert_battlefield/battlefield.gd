@@ -49,7 +49,9 @@ var base_environment: Environment
 @onready var lead: CharacterBody3D = $Patrol/Scout01
 
 func _ready() -> void:
+	_fit_window()
 	_configure_quality()
+	get_window().size_changed.connect(_on_window_resized)
 	soil.configure(self)
 	_configure_test_grounds()
 	_create_driving_readout()
@@ -70,11 +72,12 @@ func vehicles() -> Array:
 	return $Patrol.get_children().filter(func(node): return node is CharacterBody3D)
 
 func _configure_test_grounds() -> void:
-	# The dune material hides the authored mesh beneath both flattened grounds.
+	# The dune material hides the authored mesh beneath the test grounds.
 	for material in [($SculptedDunes as MeshInstance3D).material_override, soil.fine_material]:
 		material.set_shader_parameter("test_hole_a", Surface.COURSE)
 		material.set_shader_parameter("test_hole_b", Surface.PAD)
 		material.set_shader_parameter("test_hole_c", Surface.ROCKS)
+		material.set_shader_parameter("test_hole_d", Surface.CIRCUIT)
 	test_grounds = preload("res://desert_battlefield/test_course.gd").new()
 	add_child(test_grounds)
 	test_grounds.build(self)
@@ -138,7 +141,7 @@ func _create_driving_readout() -> void:
 		"SHIFT  ručná brzda      R  späť na štart",
 		"C  kamera   + − / koliesko  priblíženie",
 		"Orbit / Voľná kamera: ťahaj myšou      P  pauza",
-		"V  ďalšie auto      Q  kvalita grafiky",
+		"V  ďalšie auto      Q  kvalita grafiky      F11  celá obrazovka",
 		"G  pohon 4x4 / 4x2 (Jeep)      L  uzávierka diferenciálu",
 		"T / Shift+T  ďalší / predošlý test,  1–9, 0  priamo:"])
 	for i in test_spots.size(): lines.append("   %s  %s" % [str(i + 1) if i < 9 else ("0" if i == 9 else "T"), test_spots[i][0]])
@@ -146,6 +149,7 @@ func _create_driving_readout() -> void:
 	help.text = "\n".join(lines)
 	help_card.add_child(help)
 	help_card.hide()
+	_layout_hud.call_deferred()
 
 func _configure_quality() -> void:
 	var requested := quality.to_lower()
@@ -202,11 +206,78 @@ func _apply_render_profile(profile: String) -> void:
 		environment.volumetric_fog_enabled = false
 		viewport.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
 		viewport.scaling_3d_scale = 0.85
+	profile_scale = viewport.scaling_3d_scale
 	for argument in OS.get_cmdline_user_args():
 		if argument.begins_with("--render-scale="):
 			viewport.scaling_3d_scale = clampf(argument.trim_prefix("--render-scale=").to_float(), 0.5, 1.0)
 			viewport.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR
+			profile_scale = -1.0
+	_fit_render_scale()
 	_apply_camera_environment()
+
+## 3D scale chosen by the profile (-1 when fixed with --render-scale).
+var profile_scale := 1.0
+## Internal 3D pixels each profile renders at most: above this (1440p and 4K
+## monitors, QHD phones) the scene is rendered smaller and upscaled, so frame
+## cost stays near that of the resolution the profile was tuned for. The UI
+## always stays at the native resolution (canvas_items stretch).
+const PIXEL_BUDGET := {"reference": 2560 * 1440, "notebook": 1920 * 1080, "low": 1600 * 900}
+const MOBILE_PIXEL_BUDGET := 1600 * 1000
+
+func _fit_render_scale() -> void:
+	if profile_scale < 0.0: return
+	var viewport := get_viewport()
+	var pixels := float(maxi(1, get_window().size.x * get_window().size.y))
+	var budget: float = MOBILE_PIXEL_BUDGET if OS.has_feature("android") else PIXEL_BUDGET[render_profile]
+	var scale := clampf(minf(profile_scale, sqrt(budget / pixels)), 0.5, 1.0)
+	viewport.scaling_3d_scale = snappedf(scale, 0.01)
+	# FSR sharpens the upscale on desktop; phones keep the cheaper bilinear pass.
+	if scale < 1.0 and not OS.has_feature("android"): viewport.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR
+
+func _on_window_resized() -> void:
+	_fit_render_scale()
+	_layout_hud()
+
+## Desktop windows open at 80 % of the monitor (16:9) instead of a fixed
+## 1280×720, unless a size was given on the command line.
+func _fit_window() -> void:
+	if OS.has_feature("mobile") or DisplayServer.get_name() == "headless": return
+	var arguments := OS.get_cmdline_args()
+	if "--resolution" in arguments or "-f" in arguments or "--fullscreen" in arguments: return
+	var window := get_window()
+	if window.mode != Window.MODE_WINDOWED: return
+	var screen := DisplayServer.screen_get_usable_rect(window.current_screen)
+	var size := Vector2(screen.size) * 0.8
+	size = Vector2(minf(size.x, size.y * 16.0 / 9.0), minf(size.y, size.x * 9.0 / 16.0))
+	window.size = Vector2i(size)
+	window.position = screen.position + (screen.size - window.size) / 2
+
+func toggle_fullscreen() -> void:
+	var window := get_window()
+	window.mode = Window.MODE_WINDOWED if window.mode in [Window.MODE_FULLSCREEN, Window.MODE_EXCLUSIVE_FULLSCREEN] else Window.MODE_FULLSCREEN
+
+## Screen-edge insets (left, top, right, bottom) in UI units that notches,
+## punch-hole cameras and rounded corners keep free on phones.
+func safe_insets() -> Vector4:
+	if not OS.has_feature("mobile"): return Vector4.ZERO
+	var window := get_window()
+	var screen := Vector2(DisplayServer.screen_get_size(window.current_screen))
+	var safe := DisplayServer.get_display_safe_area()
+	if safe.size.x <= 0 or screen.x <= 0.0: return Vector4.ZERO
+	var units := get_viewport().get_visible_rect().size / screen
+	return Vector4(safe.position.x * units.x, safe.position.y * units.y,
+		(screen.x - safe.end.x) * units.x, (screen.y - safe.end.y) * units.y)
+
+## Keeps the HUD clear of the screen edges and any notch.
+func _layout_hud() -> void:
+	if driving_card == null: return
+	var inset := safe_insets()
+	driving_card.position = Vector2(24 + inset.x, 24 + inset.y)
+	status_label.position.x = (26 if touch_ui else 24) + inset.x
+	# Anchored top-right and growing leftwards, so it stays aligned at any size.
+	help_card.offset_left = help_card.offset_left - (help_card.offset_right + 24 + inset.z)
+	help_card.offset_right = -24 - inset.z
+	help_card.offset_top = 24 + inset.y
 
 func _process(delta: float) -> void:
 	driving_card.visible = driving
@@ -459,5 +530,6 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if key == KEY_Q:
 		_apply_render_profile(PROFILES[(PROFILES.find(render_profile) + 1) % PROFILES.size()])
 		toast_time = 2.5
+	if key == KEY_F11 or (key == KEY_ENTER and event.alt_pressed): toggle_fullscreen()
 	if key == KEY_H or key == KEY_F1:
 		help_card.visible = not help_card.visible

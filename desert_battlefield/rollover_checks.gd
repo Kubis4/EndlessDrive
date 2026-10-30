@@ -87,7 +87,7 @@ func run() -> void:
 		deepest = minf(deepest, car.hull_clearance())
 	check(inverted, "Vehicle could not rotate onto its roof")
 	check(car.grounded, "Tumbled car did not land again")
-	if car.overturned: check(car.grounded_wheels == 0 and not car.dust.emitting, "Roof contact gave tyres traction or dust")
+	if car.overturned: check(car.grounded_wheels == 0 and not car.dust_emitting(), "Roof contact gave tyres traction or dust")
 	check(deepest > -0.01, "Roof or side penetrated the terrain")
 	check(car.velocity.length() < 0.2 and car.angular_velocity.length() < 0.2, "Roof landing did not settle")
 	print("ROLLOVER up=", car.attitude.y, " velocity=", car.velocity, " omega=", car.angular_velocity, " clearance=", deepest)

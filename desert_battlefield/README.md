@@ -67,6 +67,32 @@ discards its fragments over both grounds, and fine sand patches hidden entirely
 beneath a ground are never built. The authored dune mesh is unchanged; the builder
 now writes it from `Surface.dune_height` so a rebuild keeps the two consistent.
 
+## Mixed-surface circuit and persistent dust (v1.7)
+
+- **Circuit** (x −124…−24, z 62…124): `terrain.gd` draws a closed 8 m wide loop
+  through `CIRCUIT_CORNERS` as straights joined by fillet arcs and resolves any
+  point to its signed distance from the centreline and its arc length
+  (`circuit_coords`, about 6 µs). Ground sections (`CIRCUIT_SECTIONS`) start at
+  given points along the loop; the track follows two hills along its centreline
+  and stays level across, with features built into the height field per section
+  (speed bumps, tabletop jump, moguls, sunken mud, logs, raised snow, rock steps).
+  The platform mesh carries arc length and track distance per vertex (CUSTOM0,
+  full floats), so `course.gdshader` paints each section, edge lines, kerbs, the
+  jump lip, logs and the chequered start line from the same definition. Drums,
+  tyre walls and the gantry are static bodies built by `test_course.gd`;
+  `capture_circuit.gd` drives a lap on autopilot (about 42 s) and saves views.
+- **Dust no longer changes colour in the air.** A particle's colour, sprite and
+  size are read from its emitter's material every frame, so retinting the one
+  wake emitter on new ground repainted the whole six-second cloud behind the car.
+  Each emitter (wake cloud, specks, wheel dust, thrown grains) now gets a copy
+  per ground on first contact (`vehicle.gd` `_surface_emitter`); crossing onto
+  new ground only stops the old copy, whose cloud settles in its own colour,
+  while the copy tinted for the new ground takes over. Spawn parameters are
+  applied the same frame a copy takes over.
+- **Resolution:** the 3D view keeps within a per-profile pixel budget on large
+  windows (FSR upscaling), the desktop window opens at 80 % of the monitor,
+  F11 toggles fullscreen, and phone HUD and controls respect safe-area insets.
+
 ## Ground speed, rut timing and tread marks
 
 - Each ground caps the reachable speed as a fraction of the model's top speed

@@ -44,7 +44,6 @@ func _ready() -> void:
 		var button := Button.new()
 		button.text = item[0]
 		button.focus_mode = Control.FOCUS_NONE
-		button.add_theme_font_size_override("font_size", 20)
 		if item[1] == KEY_G: drive_button = button
 		if item[1] == KEY_L: diff_button = button
 		button.pressed.connect(func():
@@ -73,12 +72,16 @@ func _layout() -> void:
 	var s := ui_scale
 	# Left thumb zone: starts ~5 % in from the edge, covers the lower-left area.
 	var margin_x := maxf(size.x * 0.05, 48.0 * s)
-	var bottom := size.y - 36.0 * s
-	steer_rect = Rect2(margin_x, size.y * 0.42, size.x * 0.36, bottom - size.y * 0.42)
+	# Notches, punch-hole cameras and gesture bars keep their edges free.
+	var inset: Vector4 = game.safe_insets()
+	var margin_left := margin_x + inset.x
+	var margin_right := margin_x + inset.z
+	var bottom := size.y - 36.0 * s - inset.w
+	steer_rect = Rect2(margin_left, size.y * 0.42, size.x * 0.36, bottom - size.y * 0.42)
 	# Right cluster, inset from the edge: gas (tall), brake left of it,
 	# handbrake above the brake where the thumb pivots naturally.
 	var pedal := Vector2(128, 196) * s
-	var gas_x := size.x - margin_x - pedal.x
+	var gas_x := size.x - margin_right - pedal.x
 	pedal_rects["throttle"] = Rect2(gas_x, bottom - pedal.y, pedal.x, pedal.y)
 	pedal_rects["reverse"] = Rect2(gas_x - 20.0 * s - pedal.x, bottom - pedal.y * 0.72, pedal.x, pedal.y * 0.72)
 	pedal_rects["handbrake"] = Rect2(gas_x - 20.0 * s - pedal.x, bottom - pedal.y * 0.72 - 16.0 * s - 92.0 * s, pedal.x, 92.0 * s)
@@ -92,7 +95,9 @@ func _layout() -> void:
 			var row := index / 4
 			child.custom_minimum_size = button_size
 			child.size = button_size
-			child.position = Vector2(size.x - margin_x * 0.5 - (button_size.x + 10.0) * (4 - column), 14.0 * s + row * (button_size.y + 10.0))
+			# Text grows with the button, legible on 1440p phones and tablets.
+			child.add_theme_font_size_override("font_size", roundi(button_size.y * 0.36))
+			child.position = Vector2(size.x - margin_x * 0.5 - inset.z - (button_size.x + 10.0) * (4 - column), 14.0 * s + inset.y + row * (button_size.y + 10.0))
 			index += 1
 	canvas.queue_redraw()
 

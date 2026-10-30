@@ -8,6 +8,7 @@ instance uniform vec4 patch_bounds = vec4(-128.0, -128.0, 128.0, 128.0);
 uniform vec4 test_hole_a = vec4(62.0, -112.0, 120.0, -44.0);
 uniform vec4 test_hole_b = vec4(-102.0, -99.0, -54.0, -51.0);
 uniform vec4 test_hole_c = vec4(40.0, 68.0, 118.0, 120.0);
+uniform vec4 test_hole_d = vec4(-124.0, 62.0, -24.0, 124.0);
 varying vec3 world;
 
 void vertex() {
@@ -22,7 +23,8 @@ void fragment() {
 	vec2 p = world.xz;
 	if ((p.x >= test_hole_a.x && p.y >= test_hole_a.y && p.x < test_hole_a.z && p.y < test_hole_a.w)
 		|| (p.x >= test_hole_b.x && p.y >= test_hole_b.y && p.x < test_hole_b.z && p.y < test_hole_b.w)
-		|| (p.x >= test_hole_c.x && p.y >= test_hole_c.y && p.x < test_hole_c.z && p.y < test_hole_c.w)) { discard; }
+		|| (p.x >= test_hole_c.x && p.y >= test_hole_c.y && p.x < test_hole_c.z && p.y < test_hole_c.w)
+		|| (p.x >= test_hole_d.x && p.y >= test_hole_d.y && p.x < test_hole_d.z && p.y < test_hole_d.w)) { discard; }
 	if (fine_geometry && (p.x < patch_bounds.x || p.y < patch_bounds.y || p.x >= patch_bounds.z || p.y >= patch_bounds.w)) { discard; }
 	if (soil_enabled && !fine_geometry && max(abs(p.x), abs(p.y)) < 128.0 && texture(fine_tile_mask, (p + vec2(128.0)) / 256.0).r > 0.5) { discard; }
 	float broad = 0.5 + 0.24 * sin(p.x * 0.035 + p.y * 0.023) + 0.15 * sin(p.y * 0.11 - p.x * 0.064);

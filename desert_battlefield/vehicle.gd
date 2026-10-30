@@ -103,10 +103,15 @@ var track_material: ShaderMaterial
 var dust_clock := 0.0
 var dust_jets: Array[GPUParticles3D] = []
 var sand_grains: Array[GPUParticles3D] = []
-## Per-emitter grain sprite materials, base particle scale and current sprite.
-var grain_materials: Array[ShaderMaterial] = []
-var grain_scale: Array[Vector2] = []
-var grain_kind: Array[int] = [-1, -1, -1, -1]
+## Live particles take their colour, sprite and size from the emitter's material
+## every frame, so retinting one emitter would repaint dust already in the air.
+## Each emitter therefore gets a copy per ground (base -> {surface: emitter}):
+## crossing onto new ground stops the old copy, whose cloud settles unchanged,
+## while the copy made for the new surface takes over.
+var surface_emitters := {}
+var active_emitters := {}
+## Set when a surface copy took over during this dust update.
+var emitter_switched := false
 ## Wheel index of each grain emitter (rear left/right, front left/right).
 const GRAIN_WHEELS := [1, 3, 0, 2]
 ## Visual wheel rotation speed (rad/s) per wheel; driven tyres spin up when stuck.
@@ -171,13 +176,14 @@ func _ready() -> void:
 		add_child(copy)
 		sand_grains.append(copy)
 	for grains in sand_grains:
-		# Own mesh+material per emitter so each wheel can throw its surface's sprite.
+		# Own mesh+material per emitter so each wheel can throw its surface's
+		# sprite (the authored quad is shared with the airborne specks).
 		var quad := grains.draw_pass_1.duplicate() as QuadMesh
 		quad.material = quad.material.duplicate()
 		grains.draw_pass_1 = quad
-		grain_materials.append(quad.material)
+		# Surface copies rescale the authored grain size (terrain.gd SPRITE_SIZE).
 		var process := grains.process_material as ParticleProcessMaterial
-		grain_scale.append(Vector2(process.scale_min, process.scale_max))
+		grains.set_meta("base_scale", Vector2(process.scale_min, process.scale_max))
 	for wheel: Node3D in $Body/Wheels.get_children():
 		wheels.append(wheel)
 		wheel_indices.append((2 if wheel.position.x > 0 else 0) + (0 if wheel.get_meta("front", false) else 1))
@@ -754,9 +760,56 @@ func _update_tracks(dt: float) -> void:
 			trail.append(rear_center, body.basis.x)
 
 func _stop_emitters() -> void:
-	for emitter in [dust, specks, $WheelDustLeft, $WheelDustRight]:
-		emitter.emitting = false
-	for emitter in sand_grains: emitter.emitting = false
+	for emitter in find_children("*", "GPUParticles3D", false, false): emitter.emitting = false
+
+## The wake cloud is (still) being emitted, by whichever surface copy is active.
+func dust_emitting() -> bool:
+	return (active_emitters.get(dust, dust) as GPUParticles3D).emitting
+
+## Emitter standing in for `base` on `ground`. Stopping only clears `emitting`
+## (particles already alive finish their flight); switching ground stops the old
+## copy and starts, or first creates, the one tinted for the new surface.
+func _surface_emitter(base: GPUParticles3D, ground: int, emit: bool) -> GPUParticles3D:
+	var current: GPUParticles3D = active_emitters.get(base, base)
+	var copies: Dictionary = surface_emitters.get_or_add(base, {})
+	if not emit or copies.get(ground) == current:
+		current.emitting = emit and copies.get(ground) == current
+		return current
+	current.emitting = false
+	var emitter: GPUParticles3D = copies.get(ground)
+	if emitter == null:
+		# The authored node serves the first ground it meets; later grounds get copies.
+		emitter = base if copies.is_empty() else _copy_emitter(base, ground)
+		copies[ground] = emitter
+		_tint_emitter(emitter, base, ground)
+	active_emitters[base] = emitter
+	emitter.emitting = true
+	emitter_switched = true
+	return emitter
+
+func _copy_emitter(base: GPUParticles3D, ground: int) -> GPUParticles3D:
+	var copy := base.duplicate() as GPUParticles3D
+	copy.name = "%s_%s" % [base.name, ground]
+	copy.emitting = false
+	copy.process_material = base.process_material.duplicate()
+	if base in sand_grains:
+		var quad := base.draw_pass_1.duplicate() as QuadMesh
+		quad.material = quad.material.duplicate()
+		copy.draw_pass_1 = quad
+	add_child(copy)
+	copy.global_position = base.global_position
+	return copy
+
+## Fixed per copy: tint, and for thrown material its sprite and size.
+func _tint_emitter(emitter: GPUParticles3D, base: GPUParticles3D, ground: int) -> void:
+	var process := emitter.process_material as ParticleProcessMaterial
+	process.color = Surface.TINT[ground]
+	if base in sand_grains:
+		((emitter.draw_pass_1 as QuadMesh).material as ShaderMaterial).set_shader_parameter("sprite_kind", Surface.SPRITE[ground])
+		var size: float = Surface.SPRITE_SIZE[ground]
+		var authored: Vector2 = base.get_meta("base_scale")
+		process.scale_min = authored.x * size
+		process.scale_max = authored.y * size
 
 func _update_dust(forward: Vector3, right: Vector3) -> void:
 	var movement := Vector2(velocity.x, velocity.z).length()
@@ -765,45 +818,53 @@ func _update_dust(forward: Vector3, right: Vector3) -> void:
 	var cloud: float = Surface.DUST[surface_kind]
 	var spray: float = Surface.SPRAY[surface_kind]
 	var wake := (wheel_contacts[1] + wheel_contacts[3]) * 0.5 + Vector3.UP * 0.38
-	dust.global_position = wake
-	specks.global_position = wake
-	dust.emitting = (wheel_grounded[1] or wheel_grounded[3]) and movement > 1.4 and cloud > 0.01
-	specks.emitting = dust.emitting
-	var refresh := dust_clock >= 0.05
+	var raising := (wheel_grounded[1] or wheel_grounded[3]) and movement > 1.4 and cloud > 0.01
+	emitter_switched = false
+	var wake_cloud := _surface_emitter(dust, surface_kind, raising)
+	var wake_specks := _surface_emitter(specks, surface_kind, raising)
+	wake_cloud.global_position = wake
+	wake_specks.global_position = wake
+	var jets: Array[GPUParticles3D] = []
+	for i in 2:
+		var wheel := 1 if i == 0 else 3
+		var ground := wheel_surface[wheel]
+		var jet := _surface_emitter(dust_jets[i], ground, wheel_grounded[wheel] and (movement > 0.9 or wheelspin > 0.3) and Surface.DUST[ground] > 0.01)
+		jet.global_position = wheel_contacts[wheel] + Vector3.UP * 0.13
+		jets.append(jet)
+	var throwers: Array[GPUParticles3D] = []
+	for i in sand_grains.size():
+		var wheel: int = GRAIN_WHEELS[i]
+		var ground := wheel_surface[wheel]
+		var spinning := clampf(wheelspin + drive_slip[wheel] * absf(last_throttle), 0.0, 1.0)
+		var grains := _surface_emitter(sand_grains[i], ground, is_driven(wheel) and wheel_grounded[wheel] and (movement > 0.9 or spinning > 0.3) and Surface.SPRAY[ground] > 0.01)
+		grains.global_position = wheel_contacts[wheel] + Vector3.UP * 0.13
+		throwers.append(grains)
+	# Spawn parameters only shape new particles; a copy that just took over needs
+	# them at once, the others are refreshed at 20 Hz.
+	var refresh := dust_clock >= 0.05 or emitter_switched
 	var detail: float = game.dust_detail
 	if refresh:
 		dust_clock = 0.0
-		dust.amount_ratio = intensity * cloud * game.dust_density
-		specks.amount_ratio = intensity * detail * cloud
-		var wake_material := dust.process_material as ParticleProcessMaterial
-		wake_material.direction = (-forward * 0.5 + Vector3(0.35, 0.6, 0.12)).normalized()
-		wake_material.color = Surface.TINT[surface_kind]
-		(specks.process_material as ParticleProcessMaterial).color = Surface.TINT[surface_kind]
+		wake_cloud.amount_ratio = intensity * cloud * game.dust_density
+		wake_specks.amount_ratio = intensity * detail * cloud
+		(wake_cloud.process_material as ParticleProcessMaterial).direction = (-forward * 0.5 + Vector3(0.35, 0.6, 0.12)).normalized()
 	var heavy := 1.0 + (spray - 1.0) * 0.6 + water_submersion
 	for i in 2:
 		var side := -1.0 if i == 0 else 1.0
 		var wheel := 1 if i == 0 else 3
-		var jet := dust_jets[i]
-		var ground := wheel_surface[wheel]
-		var amount: float = Surface.DUST[ground]
-		jet.global_position = wheel_contacts[wheel] + Vector3.UP * 0.13
-		jet.emitting = wheel_grounded[wheel] and (movement > 0.9 or wheelspin > 0.3) and amount > 0.01
+		var jet := jets[i]
 		if not refresh: continue
-		jet.amount_ratio = clampf(intensity * amount * game.dust_density, 0.0, 1.0)
+		jet.amount_ratio = clampf(intensity * Surface.DUST[wheel_surface[wheel]] * game.dust_density, 0.0, 1.0)
 		var process := jet.process_material as ParticleProcessMaterial
 		process.direction = (-forward * 0.75 + right * side * (0.45 + slip_amount) + Vector3.UP * 0.65).normalized()
-		process.color = Surface.TINT[ground]
 		process.initial_velocity_min = (0.9 + movement * 0.08) * heavy
 		process.initial_velocity_max = (2.6 + movement * 0.12 + slip_amount * 3.5 + wheelspin * 3.0) * heavy
 	for i in sand_grains.size():
 		# Thrown material comes off the driven tyres, opposite to their rotation.
 		var wheel: int = GRAIN_WHEELS[i]
-		var grains := sand_grains[i]
-		var ground := wheel_surface[wheel]
-		var amount: float = Surface.SPRAY[ground]
+		var grains := throwers[i]
+		var amount: float = Surface.SPRAY[wheel_surface[wheel]]
 		var spinning := clampf(wheelspin + drive_slip[wheel] * absf(last_throttle), 0.0, 1.0)
-		grains.global_position = wheel_contacts[wheel] + Vector3.UP * 0.13
-		grains.emitting = is_driven(wheel) and wheel_grounded[wheel] and (movement > 0.9 or spinning > 0.3) and amount > 0.01
 		if not refresh or not grains.emitting: continue
 		var side := -1.0 if wheel < 2 else 1.0
 		var rotation_sign := signf(wheel_spin_rate[wheel]) if absf(wheel_spin_rate[wheel]) > 0.5 else 1.0
@@ -811,13 +872,6 @@ func _update_dust(forward: Vector3, right: Vector3) -> void:
 		grains.amount_ratio = clampf(wheel_intensity * amount * detail, 0.0, 1.0)
 		var process := grains.process_material as ParticleProcessMaterial
 		process.direction = (-forward * 0.75 * rotation_sign + right * side * (0.45 + slip_amount) + Vector3.UP * 0.65).normalized()
-		process.color = Surface.TINT[ground]
-		if grain_kind[i] != ground:
-			grain_kind[i] = ground
-			grain_materials[i].set_shader_parameter("sprite_kind", Surface.SPRITE[ground])
-			var size: float = Surface.SPRITE_SIZE[ground]
-			process.scale_min = grain_scale[i].x * size
-			process.scale_max = grain_scale[i].y * size
 		# Water and mud throw heavier, faster spray; wading lifts it further.
 		process.initial_velocity_min = (0.9 + movement * 0.08) * heavy
 		process.initial_velocity_max = (2.6 + movement * 0.12 + slip_amount * 3.5 + spinning * 3.5) * heavy

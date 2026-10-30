@@ -286,7 +286,7 @@ static func _tile_hidden(tile: Vector2i) -> bool:
 	var z0 := tile.y * TILE_SIZE - EXTENT - CELL
 	var x1 := x0 + TILE_SIZE + CELL * 2.0
 	var z1 := z0 + TILE_SIZE + CELL * 2.0
-	for hole: Vector4 in [Surface.COURSE, Surface.PAD, Surface.ROCKS]:
+	for hole: Vector4 in [Surface.COURSE, Surface.PAD, Surface.ROCKS, Surface.CIRCUIT]:
 		if x0 >= hole.x and z0 >= hole.y and x1 <= hole.z and z1 <= hole.w: return true
 	return false
 

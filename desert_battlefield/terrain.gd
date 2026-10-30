@@ -76,6 +76,32 @@ const ROCKS := Vector4(40.0, 68.0, 118.0, 120.0)
 const TRAIL := [Vector2(110, 111), Vector2(89, 113), Vector2(68, 106), Vector2(52, 96), Vector2(56, 84),
 	Vector2(74, 80), Vector2(92, 89), Vector2(107, 84), Vector2(100, 77.5), Vector2(80, 77)]
 const TRAIL_HALF := 2.3
+## Mixed-surface circuit north-west of the station (inside the ±128 m soil field):
+## a closed 8 m wide loop of straights and fillet arcs drawn through the corners
+## below, over two hills, with a surface section after each corner.
+const CIRCUIT := Vector4(-124.0, 62.0, -24.0, 124.0)
+const CIRCUIT_LEVEL := 0.9
+const CIRCUIT_HALF := 4.0
+const CIRCUIT_SHOULDER := 3.0
+const CIRCUIT_JUMP := 1.0
+## Painted start line, a few metres ahead of the starting grid.
+const CIRCUIT_START_LINE := 8.0
+## Corners [x, z, fillet radius], driven in this order; the start line is on the
+## first (asphalt) straight, from the first corner towards the second.
+const CIRCUIT_CORNERS := [Vector3(-38, 112, 10), Vector3(-112, 112, 10), Vector3(-112, 76, 9),
+	Vector3(-84, 76, 8), Vector3(-84, 96, 8), Vector3(-62, 96, 8), Vector3(-62, 76, 8),
+	Vector3(-38, 76, 9)]
+## Ground from [primitive, fraction along it] on. Primitives alternate straight /
+## arc: 0 = start straight, 1 = first corner, 2 = next straight...
+const CIRCUIT_SECTIONS := [[0, 0.0, ROAD], [0, 0.45, PACKED], [1, 0.0, WET_ROAD], [2, 0.0, GRAVEL],
+	[3, 0.0, CLAY], [5, 0.0, MUD], [7, 0.0, GRASS], [9, 0.0, SAND], [10, 0.0, SNOW], [11, 0.5, ICE],
+	[13, 0.0, ROCK], [15, 0.0, PACKED]]
+const CIRCUIT_NAMES := ["Okruh · štart", "Okruh · blato a tráva", "Okruh · sneh, ľad a kopec"]
+## Hills [x, z, height, radius]: one under each long side, so each side climbs
+## and descends (the east one after the flat icy corner, which is no place to climb).
+const CIRCUIT_HILLS := [Vector4(-112, 94, 4.0, 10.0), Vector4(-38, 99, 4.0, 10.0)]
+## Built once at load (read-only afterwards, so worker threads may sample it).
+static var circuit_path := _build_circuit()
 
 static func dune_height(x: float, z: float) -> float:
 	var wind := x * 0.075 + z * 0.029 + 0.66 * sin(z * 0.046)
@@ -98,7 +124,195 @@ static func height_at(x: float, z: float) -> float:
 		var w := smoothstep(0.0, MARGIN, minf(minf(x - ROCKS.x, ROCKS.z - x), minf(z - ROCKS.y, ROCKS.w - z)))
 		var dune := dune_height(x, z)
 		return lerpf(dune, rocky_height(x, z, dune), w)
+	if x > CIRCUIT.x and x < CIRCUIT.z and z > CIRCUIT.y and z < CIRCUIT.w:
+		return circuit_height(x, z)
 	return dune_height(x, z)
+
+static func _build_circuit() -> Array:
+	var n := CIRCUIT_CORNERS.size()
+	var fillets := []
+	for i in n:
+		var corner: Vector3 = CIRCUIT_CORNERS[i]
+		var before: Vector3 = CIRCUIT_CORNERS[(i + n - 1) % n]
+		var after: Vector3 = CIRCUIT_CORNERS[(i + 1) % n]
+		var p := Vector2(corner.x, corner.y)
+		var incoming := (p - Vector2(before.x, before.y)).normalized()
+		var outgoing := (Vector2(after.x, after.y) - p).normalized()
+		var turn := incoming.angle_to(outgoing)
+		var tangent := corner.z * tan(absf(turn) * 0.5)
+		var entry := p - incoming * tangent
+		# Fillet centre on the inside of the turn (left of travel for turn > 0).
+		var centre := entry + Vector2(-incoming.y, incoming.x) * signf(turn) * corner.z
+		fillets.append([entry, p + outgoing * tangent, centre, corner.z, turn])
+	# Primitives [type, ..., start along, bounds]: a straight from each corner's
+	# exit to the next corner's entry [0, ax, az, dx, dz, length], then that
+	# corner's arc [1, cx, cz, radius, start angle, signed sweep].
+	var reach := CIRCUIT_HALF + CIRCUIT_SHOULDER + 0.5
+	var primitives: Array[PackedFloat32Array] = []
+	var along := 0.0
+	for k in n:
+		var exit: Vector2 = fillets[k][1]
+		var fillet: Array = fillets[(k + 1) % n]
+		var entry: Vector2 = fillet[0]
+		var length := exit.distance_to(entry)
+		var d := (entry - exit) / length
+		primitives.append(PackedFloat32Array([0, exit.x, exit.y, d.x, d.y, length, along,
+			minf(exit.x, entry.x) - reach, minf(exit.y, entry.y) - reach, maxf(exit.x, entry.x) + reach, maxf(exit.y, entry.y) + reach]))
+		along += length
+		var centre: Vector2 = fillet[2]
+		var radius: float = fillet[3]
+		var turn: float = fillet[4]
+		var span := radius + reach
+		primitives.append(PackedFloat32Array([1, centre.x, centre.y, radius, (entry - centre).angle(), turn, along,
+			centre.x - span, centre.y - span, centre.x + span, centre.y + span]))
+		along += radius * absf(turn)
+	var starts := PackedFloat32Array()
+	var kinds := PackedInt32Array()
+	for section: Array in CIRCUIT_SECTIONS:
+		var q := primitives[section[0]]
+		starts.append(q[6] + section[1] * (q[5] if q[0] == 0 else q[3] * absf(q[5])))
+		kinds.append(section[2])
+	return [primitives, along, starts, kinds]
+
+static func circuit_length() -> float:
+	return circuit_path[1]
+
+## Signed distance from the centreline (x, positive to the left of travel), arc
+## length along it (y) and the nearest centreline point (z, w). Points farther than
+## the track plus shoulders from every primitive get x = INF.
+static func circuit_coords(x: float, z: float) -> Vector4:
+	var best := INF
+	var result := Vector4(INF, 0.0, x, z)
+	for q: PackedFloat32Array in circuit_path[0]:
+		if x < q[7] or z < q[8] or x > q[9] or z > q[10]: continue
+		var px := x - q[1]
+		var pz := z - q[2]
+		if q[0] == 0:
+			var t := clampf(px * q[3] + pz * q[4], 0.0, q[5])
+			var ex := px - q[3] * t
+			var ez := pz - q[4] * t
+			var distance := sqrt(ex * ex + ez * ez)
+			if distance < best:
+				best = distance
+				var left := q[3] * pz - q[4] * px >= 0.0
+				result = Vector4(distance if left else -distance, q[6] + t, q[1] + q[3] * t, q[2] + q[4] * t)
+		else:
+			var turn := signf(q[5])
+			var u := fposmod((atan2(pz, px) - q[4]) * turn, TAU)
+			if u > absf(q[5]): continue
+			var rho := sqrt(px * px + pz * pz)
+			var distance := absf(rho - q[3])
+			if distance < best:
+				best = distance
+				var angle := q[4] + turn * u
+				result = Vector4(turn * (q[3] - rho), q[6] + u * q[3], q[1] + cos(angle) * q[3], q[2] + sin(angle) * q[3])
+	return result
+
+## Centreline position and travel direction at a distance along the loop.
+static func circuit_frame(along: float) -> Array:
+	along = fposmod(along, circuit_length())
+	for q: PackedFloat32Array in circuit_path[0]:
+		var length: float = q[5] if q[0] == 0 else q[3] * absf(q[5])
+		if along > q[6] + length: continue
+		var s := along - q[6]
+		if q[0] == 0: return [Vector2(q[1] + q[3] * s, q[2] + q[4] * s), Vector2(q[3], q[4])]
+		var turn := signf(q[5])
+		var angle := q[4] + turn * s / q[3]
+		return [Vector2(q[1], q[2]) + Vector2(cos(angle), sin(angle)) * q[3], Vector2(-sin(angle), cos(angle)) * turn]
+	return [Vector2.ZERO, Vector2.RIGHT]
+
+## Distance along the loop where the first section of a ground begins.
+static func circuit_section_start(kind: int) -> float:
+	for i in CIRCUIT_SECTIONS.size():
+		if CIRCUIT_SECTIONS[i][2] == kind: return (circuit_path[2] as PackedFloat32Array)[i]
+	return 0.0
+
+## Section index at a distance along the loop.
+static func circuit_section(along: float) -> int:
+	var starts: PackedFloat32Array = circuit_path[2]
+	var index := 0
+	for i in starts.size():
+		if along >= starts[i]: index = i
+	return index
+
+## Ground the track is laid on, before features: a level plain with two hills.
+static func circuit_ground(x: float, z: float) -> float:
+	var h := CIRCUIT_LEVEL
+	for hill: Vector4 in CIRCUIT_HILLS:
+		h += hill.z * exp(-((x - hill.x) * (x - hill.x) + (z - hill.y) * (z - hill.y)) / (2.0 * hill.w * hill.w))
+	return h
+
+static func _circuit_edge(x: float, z: float) -> float:
+	return minf(minf(x - CIRCUIT.x, CIRCUIT.z - x), minf(z - CIRCUIT.y, CIRCUIT.w - z))
+
+static func circuit_height(x: float, z: float) -> float:
+	return circuit_height_from(x, z, circuit_coords(x, z))
+
+## Height with the circuit coordinates of the point already known.
+static func circuit_height_from(x: float, z: float, c: Vector4) -> float:
+	# Rolling sand between the track runs, rising into the dunes at the border
+	# (the track itself keeps at least 12 m from it).
+	var rough := circuit_ground(x, z) + 0.25 * sin(x * 0.23 + z * 0.11) * sin(z * 0.19 - x * 0.05)
+	rough = lerpf(dune_height(x, z), rough, smoothstep(0.0, 7.0, _circuit_edge(x, z)))
+	if c.x == INF: return rough
+	var on_track := 1.0 - smoothstep(CIRCUIT_HALF, CIRCUIT_HALF + CIRCUIT_SHOULDER, absf(c.x))
+	if on_track <= 0.0: return rough
+	# Level across the track: it follows the hills along its centreline only.
+	return lerpf(rough, circuit_ground(c.z, c.w) + circuit_relief(x, z, c.y, c.x), on_track)
+
+## Obstacles built into each section's ground, above the track surface.
+static func circuit_relief(x: float, z: float, along: float, across: float) -> float:
+	var inside := CIRCUIT_HALF - absf(across)
+	if inside <= 0.0: return 0.0
+	var section := circuit_section(along)
+	var s := along - (circuit_path[2] as PackedFloat32Array)[section]
+	var taper := smoothstep(0.0, 1.2, inside)
+	match section:
+		0:
+			# Three 8 cm speed bumps after the start line.
+			if s > 11.0 and s < 24.0:
+				var d := absf(fposmod(s - 13.0 + 2.25, 4.5) - 2.25)
+				if d < 0.45: return 0.08 * pow(cos(d / 0.45 * PI * 0.5), 2.0) * taper
+		1:
+			# Tabletop jump: 6 m kicker to 1 m, 5 m table, 7 m landing.
+			return CIRCUIT_JUMP * smoothstep(6.0, 12.0, s) * (1.0 - smoothstep(17.0, 24.0, s)) * taper
+	match CIRCUIT_SECTIONS[section][2]:
+		CLAY:
+			# Staggered moguls (left and right out of phase) twist the chassis.
+			var moguls := smoothstep(2.0, 4.0, s) * (1.0 - smoothstep(19.0, 21.0, s))
+			return 0.22 * sin(s * TAU / 4.5) * sin(across / CIRCUIT_HALF * PI * 0.5) * moguls * taper
+		MUD:
+			return -smoothstep(0.0, 1.4, inside) * (0.08 + 0.03 * sin(s * 0.9) * sin(across * 1.3))
+		GRASS:
+			# Two logs across the track, the second one skewed.
+			var h := 0.04 * sin(s * 0.45) * sin(across * 0.8 + 1.0)
+			for log_at: Vector2 in [Vector2(4.5, 0.0), Vector2(11.0, 0.28)]:
+				var u := (s - log_at.x - across * log_at.y) / 0.24
+				if absf(u) < 1.0: h = maxf(h, 0.17 * sqrt(1.0 - u * u))
+			return h * taper
+		SNOW:
+			return smoothstep(0.0, 0.8, inside) * (SNOW_DEPTH + 0.03 * sin(s * 0.7 + across * 0.3))
+		ICE:
+			return -0.01 * smoothstep(0.0, 0.3, inside)
+		ROCK:
+			# Alternating 16 cm rock steps up the hill and embedded stones.
+			var phase := fposmod(s, 12.0)
+			var steps := 0.16 * (smoothstep(3.0, 3.3, phase) - smoothstep(9.0, 9.3, phase))
+			return (steps + _rock(x, z, 1.9, 0.4, 0.16, 3.0)) * taper
+	return 0.0
+
+## Vertex data for the circuit shader: arc length, the same shifted by half a
+## lap (so one of them interpolates smoothly across the start line), signed and
+## absolute distance from the centreline.
+static func circuit_paint(c: Vector4) -> Color:
+	var across := clampf(c.x, -99.0, 99.0)
+	return Color(c.y, fposmod(c.y + circuit_length() * 0.5, circuit_length()), across, absf(across))
+
+static func circuit_surface(x: float, z: float) -> int:
+	if _circuit_edge(x, z) < MARGIN * 0.5: return SAND
+	var c := circuit_coords(x, z)
+	if absf(c.x) < CIRCUIT_HALF: return CIRCUIT_SECTIONS[circuit_section(c.y)][2]
+	return PACKED if absf(c.x) < CIRCUIT_HALF + 1.0 else SAND
 
 ## Distance to the trail centreline (x) and arc length along it (y).
 static func trail_coords(x: float, z: float) -> Vector2:
@@ -225,6 +439,7 @@ static func surface_at(x: float, z: float) -> int:
 		var edge := minf(minf(x - ROCKS.x, ROCKS.z - x), minf(z - ROCKS.y, ROCKS.w - z))
 		if edge < MARGIN * 0.5: return SAND
 		return ROCK if trail_coords(x, z).x < TRAIL_HALF + 0.2 else GRAVEL
+	if x > CIRCUIT.x and x < CIRCUIT.z and z > CIRCUIT.y and z < CIRCUIT.w: return circuit_surface(x, z)
 	return SAND
 
 ## Rut compaction scale at a point; loose dunes are 1.
@@ -234,7 +449,8 @@ static func deform_at(x: float, z: float) -> float:
 static func in_test_ground(x: float, z: float, margin: float = 0.0) -> bool:
 	return (x > COURSE.x - margin and x < COURSE.z + margin and z > COURSE.y - margin and z < COURSE.w + margin) \
 		or (x > PAD.x - margin and x < PAD.z + margin and z > PAD.y - margin and z < PAD.w + margin) \
-		or (x > ROCKS.x - margin and x < ROCKS.z + margin and z > ROCKS.y - margin and z < ROCKS.w + margin)
+		or (x > ROCKS.x - margin and x < ROCKS.z + margin and z > ROCKS.y - margin and z < ROCKS.w + margin) \
+		or (x > CIRCUIT.x - margin and x < CIRCUIT.z + margin and z > CIRCUIT.y - margin and z < CIRCUIT.w + margin)
 
 ## Water above the ford bed; zero everywhere else.
 static func water_depth_at(x: float, z: float) -> float:
@@ -243,7 +459,9 @@ static func water_depth_at(x: float, z: float) -> float:
 
 ## Named driving tests: [label, x, z, yaw]. Yaw PI/2 faces west (-X).
 static func test_spots() -> Array:
-	var spots := []
+	# The circuit start comes first (the game starts there, key 1); its two
+	# mid-lap entries follow the other test grounds.
+	var spots := [_circuit_spot(CIRCUIT_NAMES[0], 3.5)]
 	for lane: int in LANE_ORDER:
 		spots.append([LANE_NAMES[lane], 114.0, LANE_Z[lane], PI * 0.5])
 	spots.append(["Kruh · asfalt", PAD_CENTER.x + PAD_RADIUS - 3.0, PAD_CENTER.y, 0.0])
@@ -251,7 +469,15 @@ static func test_spots() -> Array:
 	var start: Vector2 = TRAIL[0]
 	var heading: Vector2 = (TRAIL[1] - TRAIL[0]).normalized()
 	spots.append(["Kamenná trať", start.x, start.y, atan2(-heading.x, -heading.y)])
+	spots.append(_circuit_spot(CIRCUIT_NAMES[1], circuit_section_start(MUD) - 8.0))
+	spots.append(_circuit_spot(CIRCUIT_NAMES[2], circuit_section_start(SNOW) - 7.0))
 	return spots
+
+static func _circuit_spot(title: String, along: float) -> Array:
+	var frame := circuit_frame(along)
+	var p: Vector2 = frame[0]
+	var heading: Vector2 = frame[1]
+	return [title, p.x, p.y, atan2(-heading.x, -heading.y)]
 
 static func normal_at(x: float, z: float) -> Vector3:
 	return Vector3(height_at(x - 0.3, z) - height_at(x + 0.3, z), 0.6,

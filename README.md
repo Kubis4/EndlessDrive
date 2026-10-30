@@ -78,12 +78,26 @@ Use Forward+ for the full lighting, fog and dust presentation.
   (drag with the mouse), Roof view.
 - **+ / − / mouse wheel:** zoom or follow distance of the current camera
   (top-down down to an 8 m wide view).
-- **1–9, 0 / T:** jump straight to a test (T = next, Shift+T = previous): asphalt
-  slalom, gravel, clay, mud, water ford, moguls + jump, snow, ice, grass, wet
-  asphalt, then (T) skid pad, dune jump, rocky trail.
+- **1–9, 0 / T:** jump straight to a test (T = next, Shift+T = previous): circuit
+  start, asphalt slalom, gravel, clay, mud, water ford, moguls + jump, snow, ice,
+  grass, then (T) wet asphalt, skid pad, dune jump, rocky trail and two mid-lap
+  circuit entries (mud and grass; snow, ice and the hill).
 - **V:** drive the next patrol car (Jeep / IZH van / Jeep).
 - **Q:** switch graphics quality while playing (Notebook / Reference / Low).
+- **F11 / Alt+Enter:** fullscreen.
 - **H / F1:** controls overlay.
+
+## Screens and phones
+
+The UI is laid out for 1920×1080 and scales to any window (`canvas_items`
+stretch), so text and panels keep their proportions on 1440p, 4K and ultrawide
+screens. The 3D view is capped by a pixel budget per quality profile (Reference
+2560×1440, Notebook 1920×1080, Low 1600×900, Android about 1.6 MP): on larger
+windows it renders smaller and is upscaled (FSR on desktop, bilinear on phones),
+re-evaluated whenever the window is resized. `--render-scale=` still fixes the
+scale by hand. Desktop windows open at 80 % of the monitor. On phones the HUD,
+pedals and buttons keep clear of notches and punch-hole cameras, and the button
+labels grow with the buttons.
 
 In manual driving a small readout shows **km/h**, total **kg**, ground type, ford
 depth, reverse gear and airborne state, with camera/quality/FPS below. The
@@ -93,7 +107,17 @@ cinematic view stays free of UI.
 
 This build is a terrain test bed: the buildings and other props are gone, only
 the Jeep and the IZH van remain, and the patrol no longer drives around (add
-`-- --patrol` for the original cinematic diorama). You start in the Jeep.
+`-- --patrol` for the original cinematic diorama). You start in the Jeep on the
+circuit's start grid.
+
+North-west of the station (x −124…−24, z 62…124) a 230 m **test circuit** loops
+through twelve ground sections in one lap: asphalt start straight with speed
+bumps, a packed-sand tabletop jump, a wet-asphalt corner, a gravel climb over
+the first hill between oil drums, clay moguls, a mud hairpin, grass with two logs
+across the track, loose sand, snow, a flat icy corner, a rock-step climb over the
+second hill and a packed-sand descent back to the start/finish gantry. Tyre walls
+line the outside of the four hairpins; drums, tyres and gantry posts are solid.
+It is the place to watch handling, ruts and dust change from one ground to the next.
 
 East of the dunes (around x = 90, z = −78) a flattened course has six 47 m lanes
 with their own procedural textures and physics: **asphalt** (grip 1.0, slalom
