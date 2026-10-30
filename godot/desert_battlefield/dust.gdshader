@@ -29,5 +29,7 @@ void fragment() {
 	float soft_contact = clamp((-scene_view.z / scene_view.w + VERTEX.z) / 0.65, 0.0, 1.0);
 	float light_wrap = 0.83 + 0.18 * UV.y + 0.08 * p.x;
 	ALBEDO = tint.rgb * light_wrap;
-	ALPHA = density * tint.a * soft_contact;
+	// Thin out puffs right in front of a chase camera so they never fill the view.
+	float near_fade = smoothstep(2.0, 9.0, -VERTEX.z);
+	ALPHA = density * tint.a * soft_contact * near_fade;
 }

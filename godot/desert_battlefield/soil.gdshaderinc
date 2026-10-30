@@ -1,5 +1,11 @@
 uniform sampler2D soil_map : filter_linear, repeat_disable;
 uniform bool soil_enabled = false;
+// Live tyre segments (start.xz, end.xz) with rut depths, from soil.gd. They span
+// from each wheel's position at the last field upload to the wheel itself, so
+// the rut is drawn immediately behind the car between texture uploads.
+uniform vec4 live_segments[12];
+uniform vec4 live_depths[3];
+uniform int live_count = 0;
 
 vec4 sand_spline(vec2 p) {
 	vec2 f = fract((p + vec2(128.0)) * 4.0);
@@ -12,7 +18,22 @@ vec4 sand_spline(vec2 p) {
 	return vec4(w0 + w1, w2 + w3);
 }
 
-float sand_depth(vec2 p) {
+float live_depth(vec2 p) {
+	float result = 0.0;
+	for (int i = 0; i < 12; i++) {
+		if (i >= live_count) { break; }
+		float depth = live_depths[i / 4][i % 4];
+		if (depth <= 0.0) { continue; }
+		vec2 a = live_segments[i].xy;
+		vec2 ab = live_segments[i].zw - a;
+		float t = clamp(dot(p - a, ab) / max(dot(ab, ab), 0.0001), 0.0, 1.0);
+		vec2 offset = p - a - ab * t;
+		result = max(result, depth * exp(-dot(offset, offset) / 0.09));
+	}
+	return result;
+}
+
+float sand_field_depth(vec2 p) {
 	if (!soil_enabled || max(abs(p.x), abs(p.y)) >= 128.0) { return 0.0; }
 	// Cubic B-spline reconstruction: sixteen samples collapsed into four bilinear
 	// fetches. The CPU uses the same weights; convex weights cannot overshoot.
@@ -28,6 +49,10 @@ float sand_depth(vec2 p) {
 	float c = textureLod(soil_map, vec2(lo.x, hi.y), 0.0).r;
 	float d = textureLod(soil_map, hi, 0.0).r;
 	return mix(mix(a, b, g.z), mix(c, d, g.z), g.w);
+}
+
+float sand_depth(vec2 p) {
+	return max(sand_field_depth(p), live_depth(p));
 }
 
 vec3 sand_normal(vec2 p, vec3 base) {

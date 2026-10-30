@@ -1,7 +1,13 @@
 param(
-    [ValidateSet('Play', 'Build', 'Check', 'Capture')]
+    [ValidateSet('Play', 'Build', 'Check', 'Capture', 'Benchmark')]
     [string]$Action = 'Play',
-    [string]$GodotPath = ''
+    [string]$GodotPath = '',
+    [ValidateSet('Auto', 'Notebook', 'Reference', 'Low')]
+    [string]$Quality = 'Auto',
+    [ValidateRange(0.5, 1.0)]
+    [double]$RenderScale = 1.0,
+    [ValidateRange(10, 600)]
+    [int]$Duration = 60
 )
 
 $ErrorActionPreference = 'Stop'
@@ -32,12 +38,19 @@ if (-not $GodotPath -or -not (Test-Path -LiteralPath $GodotPath -PathType Leaf))
 $battlefieldArguments = @('--path', $battlefieldProject, '--rendering-method', 'forward_plus', '--audio-driver', 'Dummy')
 $battlefieldLog = Join-Path $battlefieldBuild "battlefield-$($Action.ToLower()).log"
 $battlefieldArguments += @('--log-file', $battlefieldLog)
+$demoOptions = @("--quality=$($Quality.ToLower())")
+# Only override the profile's scale if the caller explicitly supplied one.
+if ($PSBoundParameters.ContainsKey('RenderScale')) {
+    $demoOptions += '--render-scale=' + $RenderScale.ToString([System.Globalization.CultureInfo]::InvariantCulture)
+}
 switch ($Action) {
     'Play' { $battlefieldArguments += @('--resolution', '1920x1080', 'res://desert_battlefield/desert_battlefield.tscn') }
     'Build' { $battlefieldArguments += @('--headless', '--script', 'res://desert_battlefield/build_scene.gd') }
-    'Check' { $battlefieldArguments += @('--headless', '--fixed-fps', '60', '--script', 'res://desert_battlefield/verify_scene.gd', '--', '--duration=120') }
+    'Check' { $battlefieldArguments += @('--headless', '--fixed-fps', '60', '--script', 'res://desert_battlefield/verify_scene.gd'); $demoOptions += '--duration=120' }
     'Capture' { $battlefieldArguments += @('--resolution', '1920x1080', '--script', 'res://desert_battlefield/verify_scene.gd') }
+    'Benchmark' { $battlefieldArguments += @('--disable-vsync', '--resolution', '1920x1080', '--script', 'res://desert_battlefield/verify_scene.gd'); $demoOptions += "--duration=$Duration" }
 }
+$battlefieldArguments += @('--') + $demoOptions
 # Keep this standalone showcase's shader cache away from the main game's profile.
 $battlefieldOriginalAppData = $env:APPDATA
 try {
@@ -51,8 +64,18 @@ try {
         }
     }
     if ($Action -eq 'Check') {
+        $handlingLog = Join-Path $battlefieldBuild 'battlefield-handling-checks.log'
+        & $GodotPath --path $battlefieldProject --headless --rendering-method forward_plus --script res://desert_battlefield/handling_checks.gd --log-file $handlingLog -- @demoOptions
+        if ($LASTEXITCODE -ne 0 -or (Select-String -LiteralPath $handlingLog -Pattern '^SCRIPT ERROR:|^ERROR:' -Quiet)) {
+            throw "Vehicle handling checks failed. See $handlingLog"
+        }
+        $rolloverLog = Join-Path $battlefieldBuild 'battlefield-rollover-checks.log'
+        & $GodotPath --path $battlefieldProject --headless --rendering-method forward_plus --script res://desert_battlefield/rollover_checks.gd --log-file $rolloverLog -- @demoOptions
+        if ($LASTEXITCODE -ne 0 -or (Select-String -LiteralPath $rolloverLog -Pattern '^SCRIPT ERROR:|^ERROR:' -Quiet)) {
+            throw "Vehicle rollover/energy checks failed. See $rolloverLog"
+        }
         $soilLog = Join-Path $battlefieldBuild 'battlefield-soil-checks.log'
-        & $GodotPath --path $battlefieldProject --headless --rendering-method forward_plus --script res://desert_battlefield/soil_checks.gd --log-file $soilLog
+        & $GodotPath --path $battlefieldProject --headless --rendering-method forward_plus --script res://desert_battlefield/soil_checks.gd --log-file $soilLog -- @demoOptions
         if ($LASTEXITCODE -ne 0 -or (Select-String -LiteralPath $soilLog -Pattern '^SCRIPT ERROR:|^ERROR:' -Quiet)) {
             throw "Sand deformation checks failed. See $soilLog"
         }

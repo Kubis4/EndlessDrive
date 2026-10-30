@@ -6,6 +6,11 @@ var scene: Node3D
 var rng := RandomNumberGenerator.new()
 var materials := {}
 var mesh_cache := {}
+## The test-driving build is terrain-only: buildings, fences, poles, figures,
+## wrecks and rock fields are omitted (true restores the original diorama).
+const BUILD_PROPS := false
+## Jeep and IZH van; a third (second Jeep) only patrolled.
+const VEHICLES := 2
 
 func _initialize() -> void:
 	call_deferred("build")
@@ -99,6 +104,42 @@ func build() -> void:
 	material("Skin", "bba17d")
 	make_terrain()
 	make_lighting()
+	if BUILD_PROPS: build_props()
+	var patrol := group(scene, "Patrol")
+	for i in VEHICLES:
+		var car := CharacterBody3D.new()
+		car.name = "Scout%02d" % (i + 1)
+		car.set_script(preload("res://desert_battlefield/vehicle.gd"))
+		car.set("lane", i)
+		var phase: float = [0.75, 2.85, 4.95][i]
+		car.set("route_phase", phase)
+		car.set("cruise_speed", 10.5)
+		var model_id: String = "izh" if i == 1 else "jeep"
+		var model: Dictionary = EndlessModels.Catalog.DATA[model_id]
+		car.set("half_track", model.track * 0.5)
+		car.set("half_wheelbase", model.wheelbase * 0.5)
+		car.set("wheel_radius", model.radius)
+		patrol.add_child(car)
+		car.position = Surface.route(phase, i) + Vector3.UP * 0.55
+		var body := group(car, "Body")
+		EndlessModels.vehicle(body, model_id, Color("ada184") if i == 1 else Color("737762"))
+		var collision := CollisionShape3D.new()
+		collision.name = "CollisionShape3D"
+		var bounds := BoxShape3D.new()
+		bounds.size = Vector3(2.4, 1.8, 4.6)
+		collision.shape = bounds
+		collision.position.y = 0.65
+		car.add_child(collision)
+		make_dust(car)
+	assign_owner(scene)
+	var packed := PackedScene.new()
+	var error := packed.pack(scene)
+	if error == OK: error = ResourceSaver.save(packed, "res://desert_battlefield/desert_battlefield.tscn")
+	print("BATTLEFIELD BUILD: ", error_string(error), "; nodes=", scene.find_children("*", "", true, false).size())
+	scene.free()
+	quit(error)
+
+func build_props() -> void:
 	var outpost := group(scene, "AbandonedRelayStation")
 	bunker(outpost, -21, -14, Vector3(10, 3.5, 6.5), -0.09)
 	var workshop := grounded(outpost, "EndlessDriveWorkshop", -8, -19, 0.05)
@@ -143,39 +184,6 @@ func build() -> void:
 	var people := group(scene, "ScatteredPatrolFigures")
 	for p in [Vector2(-17, -8), Vector2(-18.5, -6.5), Vector2(-5, -13), Vector2(-29, -4), Vector2(39, -20), Vector2(42, -18), Vector2(16, 14), Vector2(18, 15)]:
 		person(people, p.x, p.y, rng.randf_range(-PI, PI))
-	var patrol := group(scene, "Patrol")
-	for i in 3:
-		var car := CharacterBody3D.new()
-		car.name = "Scout%02d" % (i + 1)
-		car.set_script(preload("res://desert_battlefield/vehicle.gd"))
-		car.set("lane", i)
-		var phase: float = [0.75, 2.85, 4.95][i]
-		car.set("route_phase", phase)
-		car.set("cruise_speed", 10.5)
-		var model_id: String = "izh" if i == 1 else "jeep"
-		var model: Dictionary = EndlessModels.Catalog.DATA[model_id]
-		car.set("half_track", model.track * 0.5)
-		car.set("half_wheelbase", model.wheelbase * 0.5)
-		car.set("wheel_radius", model.radius)
-		patrol.add_child(car)
-		car.position = Surface.route(phase, i) + Vector3.UP * 0.55
-		var body := group(car, "Body")
-		EndlessModels.vehicle(body, model_id, Color("ada184") if i == 1 else Color("737762"))
-		var collision := CollisionShape3D.new()
-		collision.name = "CollisionShape3D"
-		var bounds := BoxShape3D.new()
-		bounds.size = Vector3(2.4, 1.8, 4.6)
-		collision.shape = bounds
-		collision.position.y = 0.65
-		car.add_child(collision)
-		make_dust(car)
-	assign_owner(scene)
-	var packed := PackedScene.new()
-	var error := packed.pack(scene)
-	if error == OK: error = ResourceSaver.save(packed, "res://desert_battlefield/desert_battlefield.tscn")
-	print("BATTLEFIELD BUILD: ", error_string(error), "; nodes=", scene.find_children("*", "", true, false).size())
-	scene.free()
-	quit(error)
 
 func make_terrain() -> void:
 	var st := SurfaceTool.new()
@@ -186,9 +194,10 @@ func make_terrain() -> void:
 		for x in range(COUNT + 1):
 			var px := (x - COUNT / 2) * STEP
 			var pz := (z - COUNT / 2) * STEP
-			st.set_normal(Surface.normal_at(px, pz))
+			# Pure dunes: the test grounds are separate runtime meshes (test_course.gd).
+			st.set_normal(Surface.dune_normal_at(px, pz))
 			st.set_uv(Vector2(px, pz) * 0.1)
-			st.add_vertex(Vector3(px, Surface.height_at(px, pz), pz))
+			st.add_vertex(Vector3(px, Surface.dune_height(px, pz), pz))
 	for z in COUNT:
 		for x in COUNT:
 			var a := z * (COUNT + 1) + x

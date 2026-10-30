@@ -14,6 +14,8 @@ void fragment() {
 	vec2 p = UV * 2.0 - 1.0;
 	float d = dot(p, p);
 	float edge = 1.0 - smoothstep(0.2, 1.0, d);
-	ALBEDO = grain_color * (0.88 + UV.y * 0.24) * mix(0.9, 1.1, tint.r);
+	// The per-surface particle colour (sand, gravel, clods, water spray) arrives
+	// through COLOR; grain_color only tints the default dune sand ramp slightly.
+	ALBEDO = tint.rgb * (grain_color / vec3(0.57, 0.45, 0.30)) * (0.88 + UV.y * 0.24);
 	ALPHA = edge * tint.a;
 }
