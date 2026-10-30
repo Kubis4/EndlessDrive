@@ -1,5 +1,6 @@
 uniform sampler2D soil_map : filter_linear, repeat_disable;
 uniform bool soil_enabled = false;
+uniform sampler2D soil_touched : filter_nearest, repeat_disable;
 // Live tyre segments (start.xz, end.xz) with rut depths, from soil.gd. They span
 // from each wheel's position at the last field upload to the wheel itself, so
 // the rut is drawn immediately behind the car between texture uploads.
@@ -20,6 +21,7 @@ vec4 sand_spline(vec2 p) {
 
 float live_depth(vec2 p) {
 	float result = 0.0;
+	if (live_count == 0) { return 0.0; }
 	for (int i = 0; i < 12; i++) {
 		if (i >= live_count) { break; }
 		float depth = live_depths[i / 4][i % 4];
@@ -35,6 +37,8 @@ float live_depth(vec2 p) {
 
 float sand_field_depth(vec2 p) {
 	if (!soil_enabled || max(abs(p.x), abs(p.y)) >= 128.0) { return 0.0; }
+	// 4 m blocks no tyre has touched hold no displacement: skip 4 fetches.
+	if (textureLod(soil_touched, (p + vec2(128.0)) / 256.0, 0.0).r < 0.5) { return 0.0; }
 	// Cubic B-spline reconstruction: sixteen samples collapsed into four bilinear
 	// fetches. The CPU uses the same weights; convex weights cannot overshoot.
 	vec2 grid = (p + vec2(128.0)) * 4.0;
@@ -56,6 +60,9 @@ float sand_depth(vec2 p) {
 }
 
 vec3 sand_normal(vec2 p, vec3 base) {
+	// Untouched block (its 4 m mask covers the ±25 cm taps): keep the base normal.
+	if (live_count == 0 && (!soil_enabled || max(abs(p.x), abs(p.y)) >= 128.0
+		|| textureLod(soil_touched, (p + vec2(128.0)) / 256.0, 0.0).r < 0.5)) { return base; }
 	float dx = (sand_depth(p + vec2(0.25, 0)) - sand_depth(p - vec2(0.25, 0))) * 2.0;
 	float dz = (sand_depth(p + vec2(0, 0.25)) - sand_depth(p - vec2(0, 0.25))) * 2.0;
 	return normalize(vec3(base.x / max(base.y, 0.05) + dx, 1.0, base.z / max(base.y, 0.05) + dz));

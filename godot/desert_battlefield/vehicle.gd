@@ -34,6 +34,14 @@ const ROLL_ARM_LOW := 0.45
 const ROLLOVER_SPEED_START := 15.0
 const ROLLOVER_SPEED_FULL := 23.0
 var front_drive := false
+## Drivetrain (Jeep): part-time 4x4 (rigid transfer case, no centre diff) or
+## rear-wheel drive 4x2; axle differentials open (torque per axle limited by the
+## wheel with less traction, a lifted wheel spins) or locked (each wheel pushes
+## up to its own grip).
+var four_wheel_drive := true
+var diff_locked := false
+## 0..1 share of each wheel's drive torque that only spins the tyre.
+var drive_slip: Array[float] = [0.0, 0.0, 0.0, 0.0]
 var manual := false
 var heading := 0.0
 var pitch := 0.0
@@ -95,6 +103,16 @@ var track_material: ShaderMaterial
 var dust_clock := 0.0
 var dust_jets: Array[GPUParticles3D] = []
 var sand_grains: Array[GPUParticles3D] = []
+## Per-emitter grain sprite materials, base particle scale and current sprite.
+var grain_materials: Array[ShaderMaterial] = []
+var grain_scale: Array[Vector2] = []
+var grain_kind: Array[int] = [-1, -1, -1, -1]
+## Wheel index of each grain emitter (rear left/right, front left/right).
+const GRAIN_WHEELS := [1, 3, 0, 2]
+## Visual wheel rotation speed (rad/s) per wheel; driven tyres spin up when stuck.
+var wheel_spin_rate: Array[float] = [0.0, 0.0, 0.0, 0.0]
+## 0..1 how hard the driven tyres are spinning without progress.
+var wheelspin := 0.0
 var wheels: Array[Node3D] = []
 var wheel_indices: Array[int] = []
 ## Tests may substitute another surface; the live scene calls the soil directly.
@@ -144,6 +162,22 @@ func _ready() -> void:
 		particle.process_material = particle.process_material.duplicate()
 	dust_jets.assign([$WheelDustLeft, $WheelDustRight])
 	sand_grains.assign([$SandGrainsLeft, $SandGrainsRight])
+	# Front-wheel emitters (copies of the rear ones): spray comes from whichever
+	# wheels are driven, so 4x4, 4x2 and the front-drive van look different.
+	for name in ["SandGrainsFrontLeft", "SandGrainsFrontRight"]:
+		var copy := $SandGrainsLeft.duplicate() as GPUParticles3D
+		copy.name = name
+		copy.process_material = copy.process_material.duplicate()
+		add_child(copy)
+		sand_grains.append(copy)
+	for grains in sand_grains:
+		# Own mesh+material per emitter so each wheel can throw its surface's sprite.
+		var quad := grains.draw_pass_1.duplicate() as QuadMesh
+		quad.material = quad.material.duplicate()
+		grains.draw_pass_1 = quad
+		grain_materials.append(quad.material)
+		var process := grains.process_material as ParticleProcessMaterial
+		grain_scale.append(Vector2(process.scale_min, process.scale_max))
 	for wheel: Node3D in $Body/Wheels.get_children():
 		wheels.append(wheel)
 		wheel_indices.append((2 if wheel.position.x > 0 else 0) + (0 if wheel.get_meta("front", false) else 1))
@@ -255,7 +289,9 @@ func _physics_process(delta: float) -> void:
 		var pedal := float(Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP) or _touch("throttle")) - float(Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN) or _touch("reverse"))
 		if pedal * speed < -0.5: brake = absf(pedal)
 		else: throttle = pedal
-		turn = float(Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT) or _touch("left")) - float(Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT) or _touch("right"))
+		# Keys steer digitally; the touch steering zone is analog (action strength).
+		turn = clampf(float(Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT)) - float(Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT))
+			+ _touch_strength("left") - _touch_strength("right"), -1.0, 1.0)
 		handbrake = Input.is_physical_key_pressed(KEY_SHIFT) or _touch("handbrake")
 	else:
 		var nearest := route_phase
@@ -302,6 +338,14 @@ func _physics_process(delta: float) -> void:
 				stalled_time = 0.0
 				recovery_count += 1
 	simulate(delta, throttle, brake, turn, handbrake)
+
+func is_driven(i: int) -> bool:
+	if front_drive: return i % 2 == 0
+	return four_wheel_drive or i % 2 == 1
+
+func _touch_strength(action: String) -> float:
+	var name := "battlefield_" + action
+	return Input.get_action_strength(name) if InputMap.has_action(name) else 0.0
 
 func _touch(action: String) -> bool:
 	var name := "battlefield_" + action
@@ -471,7 +515,16 @@ func _integrate(dt: float, throttle: float, brake: float, handbrake: bool) -> vo
 			load = maxf(0.0, (spring_rate * compressions[i] + bar - damping * normal_speed / alignment) / alignment)
 		wheel_loads[i] = load
 		wheel_grounded[i] = load > 5.0
-		if wheel_grounded[i] and (not front_drive or i % 2 == 0): driven_load += load
+		if wheel_grounded[i] and is_driven(i): driven_load += load
+	# Traction of each tyre, for the open differentials below.
+	var traction := PackedFloat32Array([0, 0, 0, 0])
+	for i in 4:
+		if wheel_grounded[i]: traction[i] = wheel_loads[i] * float(Surface.GRIP[wheel_surface[i]])
+	for i in 4:
+		drive_slip[i] = 0.0
+		# Open diff: a lifted driven wheel takes all the torque and just spins.
+		if is_driven(i) and not wheel_grounded[i] and not diff_locked and wheel_grounded[(i + 2) % 4] and absf(motor) > 1.0:
+			drive_slip[i] = 1.0
 	var roll_arm := lerpf(ROLL_ARM_LOW, 1.0, smoothstep(ROLLOVER_SPEED_START, ROLLOVER_SPEED_FULL, absf(speed)))
 	for i in 4:
 		if not wheel_grounded[i]: continue
@@ -491,8 +544,6 @@ func _integrate(dt: float, throttle: float, brake: float, handbrake: bool) -> vo
 		var ground := wheel_surface[i]
 		var grip: float = Surface.GRIP[ground]
 		var capacity := load * grip
-		var drive_share := load / maxf(driven_load, 1.0) if (not front_drive or front) else 0.0
-		var longitudinal := motor * drive_share
 		var braking_force := brake * 13500.0 * 0.25 + (3400.0 if handbrake and not front else 0.0)
 		# Loose sand keeps the tuned default; other grounds scale it by their rolling loss.
 		var rolling: float = rolling_resistance * float(Surface.ROLLING[ground]) / float(Surface.ROLLING[Surface.SAND])
@@ -500,6 +551,25 @@ func _integrate(dt: float, throttle: float, brake: float, handbrake: bool) -> vo
 		# tyre ploughs. A spinning, digging car can bury itself.
 		if ground == Surface.MUD: rolling *= 1.0 + soil.depth_at(wheel_contacts[i].x, wheel_contacts[i].z) * 5.0
 		var resistance := minf(braking_force + load * rolling, absf(longitudinal_speed) * mass_kg * 0.25 / dt)
+		var longitudinal := 0.0
+		if is_driven(i) and driven_load > 0.0:
+			var partner := (i + 2) % 4
+			var requested := 0.0
+			if diff_locked:
+				# Locked: each tyre takes torque in proportion to its load and
+				# pushes up to its own grip (clamped with rolling loss below).
+				requested = motor * load / driven_load
+				longitudinal = requested
+			else:
+				# Open: equal torque to both sides of the axle; the side with less
+				# traction sets it, the surplus only spins the tyres.
+				var axle_load := load + (wheel_loads[partner] if wheel_grounded[partner] else 0.0)
+				requested = motor * axle_load / driven_load * 0.5
+				var limit := minf(traction[i], traction[partner]) + resistance
+				longitudinal = clampf(requested, -limit, limit)
+			if absf(requested) > 1.0:
+				var net := absf(clampf(longitudinal - signf(longitudinal_speed) * resistance, -capacity, capacity) + signf(longitudinal_speed) * resistance)
+				drive_slip[i] = clampf(1.0 - net / absf(requested), 0.0, 1.0)
 		longitudinal -= signf(longitudinal_speed) * resistance
 		longitudinal = clampf(longitudinal, -capacity, capacity)
 		var lateral_limit := sqrt(maxf(0.0, capacity * capacity - longitudinal * longitudinal))
@@ -619,7 +689,19 @@ func _update_visuals(dt: float) -> void:
 		var index := wheel_indices[i]
 		wheel.position.y = clampf(-wheel_gaps[index], -droop, bump_travel) if wheel_reachable[index] else -droop
 		wheel.rotation.y = steer if wheel.get_meta("front", false) else 0.0
-		wheel.get_node("Spin").rotate_x(-speed * dt / wheel_radius)
+		# Rolling speed, plus slip on driven tyres: with throttle and little
+		# progress (stuck in mud/sand, climbing) the wheels keep turning.
+		var rate := speed / wheel_radius
+		var driven := is_driven(index)
+		if driven and absf(last_throttle) > 0.15 and (wheel_grounded[index] or water_submersion > 0.0 or drive_slip[index] > 0.0):
+			var slip_rate := last_throttle * 14.0 * (1.0 - clampf(absf(speed) / 6.0, 0.0, 1.0))
+			# Torque the ground cannot take (open diff, ice, a lifted wheel) spins it.
+			slip_rate += last_throttle * 22.0 * drive_slip[index]
+			if signf(slip_rate) == signf(rate) or absf(rate) < 0.5: rate += slip_rate
+		elif not wheel_grounded[index]:
+			rate = wheel_spin_rate[index] * maxf(0.0, 1.0 - dt * 0.6)
+		wheel_spin_rate[index] = move_toward(wheel_spin_rate[index], rate, maxf(dt, 1e-3) * 40.0)
+		wheel.get_node("Spin").rotate_x(-wheel_spin_rate[index] * dt)
 
 func _update_tracks(dt: float) -> void:
 	# Clear lost contact every tick, so landing never connects a trail across a jump.
@@ -642,11 +724,17 @@ func _update_tracks(dt: float) -> void:
 	# Wheelspin: full throttle with little forward progress excavates a hole
 	# beneath the driven tyres (deepest drift profile), as in real soft sand.
 	var spin := clampf(absf(last_throttle) * (1.0 - absf(speed) / 2.5), 0.0, 1.0)
-	if spin > 0.3:
-		for i in 4:
-			if wheel_grounded[i] and (not front_drive or i % 2 == 0):
-				soil.stamp(wheel_contacts[i], -body.basis.z * signf(last_throttle), 3.0 * spin * dt, 1.0)
-		soil.prefetch(position)
+	wheelspin = spin if (wheel_grounded[1] or wheel_grounded[3]) else 0.0
+	# Only torque the ground cannot take digs: a locked diff / 4x4 spreads it
+	# over more tyres and digs less than one spinning wheel of an open axle.
+	var digging := false
+	for i in 4:
+		if not (wheel_grounded[i] and is_driven(i)): continue
+		var tyre_spin := clampf(drive_slip[i] * absf(last_throttle) * (1.0 - absf(speed) / 2.5), 0.0, 1.0)
+		if tyre_spin > 0.3:
+			soil.stamp(wheel_contacts[i], -body.basis.z * signf(last_throttle), 2.4 * tyre_spin * dt, 1.0)
+			digging = true
+	if digging: soil.prefetch(position)
 	if absf(speed) > 2.0:
 		# Prepare the fine sand patch the car is about to enter.
 		soil.prefetch(position + velocity * 0.7)
@@ -666,12 +754,13 @@ func _update_tracks(dt: float) -> void:
 			trail.append(rear_center, body.basis.x)
 
 func _stop_emitters() -> void:
-	for emitter in [dust, specks, $WheelDustLeft, $WheelDustRight, $SandGrainsLeft, $SandGrainsRight]:
+	for emitter in [dust, specks, $WheelDustLeft, $WheelDustRight]:
 		emitter.emitting = false
+	for emitter in sand_grains: emitter.emitting = false
 
 func _update_dust(forward: Vector3, right: Vector3) -> void:
 	var movement := Vector2(velocity.x, velocity.z).length()
-	var intensity := clampf(movement / 12.0 + slip_amount * 0.55, 0.05, 1.0)
+	var intensity := clampf(movement / 12.0 + slip_amount * 0.55 + wheelspin * 0.7, 0.05, 1.0)
 	surface_kind = wheel_surface[1] if wheel_grounded[1] or not wheel_grounded[3] else wheel_surface[3]
 	var cloud: float = Surface.DUST[surface_kind]
 	var spray: float = Surface.SPRAY[surface_kind]
@@ -690,24 +779,45 @@ func _update_dust(forward: Vector3, right: Vector3) -> void:
 		wake_material.direction = (-forward * 0.5 + Vector3(0.35, 0.6, 0.12)).normalized()
 		wake_material.color = Surface.TINT[surface_kind]
 		(specks.process_material as ParticleProcessMaterial).color = Surface.TINT[surface_kind]
+	var heavy := 1.0 + (spray - 1.0) * 0.6 + water_submersion
 	for i in 2:
 		var side := -1.0 if i == 0 else 1.0
-		var contact := wheel_contacts[1 if i == 0 else 3] + Vector3.UP * 0.13
-		var jet := dust_jets[i]
-		var grains := sand_grains[i]
-		var kick := (-forward * 0.75 + right * side * (0.45 + slip_amount) + Vector3.UP * 0.65).normalized()
 		var wheel := 1 if i == 0 else 3
+		var jet := dust_jets[i]
 		var ground := wheel_surface[wheel]
-		for emitter in [jet, grains]:
-			var amount: float = Surface.DUST[ground] if emitter == jet else Surface.SPRAY[ground]
-			emitter.global_position = contact
-			emitter.emitting = wheel_grounded[wheel] and movement > 0.9 and amount > 0.01
-			if not refresh: continue
-			emitter.amount_ratio = clampf(intensity * amount * (detail if emitter == grains else game.dust_density), 0.0, 1.0)
-			var process := emitter.process_material as ParticleProcessMaterial
-			process.direction = kick
-			process.color = Surface.TINT[ground]
-			# Water and mud throw heavier, faster spray; wading lifts it further.
-			var heavy := 1.0 + (spray - 1.0) * 0.6 + water_submersion
-			process.initial_velocity_min = (0.9 + movement * 0.08) * heavy
-			process.initial_velocity_max = (2.6 + movement * 0.12 + slip_amount * 3.5) * heavy
+		var amount: float = Surface.DUST[ground]
+		jet.global_position = wheel_contacts[wheel] + Vector3.UP * 0.13
+		jet.emitting = wheel_grounded[wheel] and (movement > 0.9 or wheelspin > 0.3) and amount > 0.01
+		if not refresh: continue
+		jet.amount_ratio = clampf(intensity * amount * game.dust_density, 0.0, 1.0)
+		var process := jet.process_material as ParticleProcessMaterial
+		process.direction = (-forward * 0.75 + right * side * (0.45 + slip_amount) + Vector3.UP * 0.65).normalized()
+		process.color = Surface.TINT[ground]
+		process.initial_velocity_min = (0.9 + movement * 0.08) * heavy
+		process.initial_velocity_max = (2.6 + movement * 0.12 + slip_amount * 3.5 + wheelspin * 3.0) * heavy
+	for i in sand_grains.size():
+		# Thrown material comes off the driven tyres, opposite to their rotation.
+		var wheel: int = GRAIN_WHEELS[i]
+		var grains := sand_grains[i]
+		var ground := wheel_surface[wheel]
+		var amount: float = Surface.SPRAY[ground]
+		var spinning := clampf(wheelspin + drive_slip[wheel] * absf(last_throttle), 0.0, 1.0)
+		grains.global_position = wheel_contacts[wheel] + Vector3.UP * 0.13
+		grains.emitting = is_driven(wheel) and wheel_grounded[wheel] and (movement > 0.9 or spinning > 0.3) and amount > 0.01
+		if not refresh or not grains.emitting: continue
+		var side := -1.0 if wheel < 2 else 1.0
+		var rotation_sign := signf(wheel_spin_rate[wheel]) if absf(wheel_spin_rate[wheel]) > 0.5 else 1.0
+		var wheel_intensity := clampf(intensity + spinning * 0.6, 0.05, 1.0)
+		grains.amount_ratio = clampf(wheel_intensity * amount * detail, 0.0, 1.0)
+		var process := grains.process_material as ParticleProcessMaterial
+		process.direction = (-forward * 0.75 * rotation_sign + right * side * (0.45 + slip_amount) + Vector3.UP * 0.65).normalized()
+		process.color = Surface.TINT[ground]
+		if grain_kind[i] != ground:
+			grain_kind[i] = ground
+			grain_materials[i].set_shader_parameter("sprite_kind", Surface.SPRITE[ground])
+			var size: float = Surface.SPRITE_SIZE[ground]
+			process.scale_min = grain_scale[i].x * size
+			process.scale_max = grain_scale[i].y * size
+		# Water and mud throw heavier, faster spray; wading lifts it further.
+		process.initial_velocity_min = (0.9 + movement * 0.08) * heavy
+		process.initial_velocity_max = (2.6 + movement * 0.12 + slip_amount * 3.5 + spinning * 3.5) * heavy

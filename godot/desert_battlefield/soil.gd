@@ -22,6 +22,10 @@ const BLOCK := 4.0
 const BLOCKS := 64
 var touched := PackedByteArray()
 var live_materials: Array[ShaderMaterial] = []
+## GPU copy of the 4 m occupancy blocks: shaders skip the cubic rut lookup on
+## untouched ground, which is nearly all vertices and pixels of the map.
+var touched_image: Image
+var touched_texture: ImageTexture
 var cars: Array = []
 var field := PackedFloat32Array()
 var image: Image
@@ -62,6 +66,9 @@ func configure(root: Node3D) -> void:
 	field.fill(0.0)
 	touched.resize(BLOCKS * BLOCKS)
 	touched.fill(0)
+	touched_image = Image.create(BLOCKS, BLOCKS, false, Image.FORMAT_R8)
+	touched_image.fill(Color.BLACK)
+	touched_texture = ImageTexture.create_from_image(touched_image)
 	# Half-float precision is better than 0.25 mm here, at half the upload size.
 	image = Image.create(RESOLUTION, RESOLUTION, false, Image.FORMAT_RH)
 	image.fill(Color(0, 0, 0, 1))
@@ -100,6 +107,7 @@ func configure(root: Node3D) -> void:
 func bind_material(material: ShaderMaterial, live: bool = true) -> void:
 	material.set_shader_parameter("soil_map", texture)
 	material.set_shader_parameter("soil_enabled", true)
+	material.set_shader_parameter("soil_touched", touched_texture)
 	if live and material not in live_materials: live_materials.append(material)
 
 ## Each grounded tyre on deformable ground contributes a segment from where it
@@ -253,7 +261,9 @@ func stamp(point: Vector3, forward: Vector3, travel: float, slip: float) -> void
 		var reach := radius + CELL * 3.0
 		for bz in range(maxi(0, floori((point.z - reach + EXTENT) / BLOCK)), mini(BLOCKS - 1, floori((point.z + reach + EXTENT) / BLOCK)) + 1):
 			for bx in range(maxi(0, floori((point.x - reach + EXTENT) / BLOCK)), mini(BLOCKS - 1, floori((point.x + reach + EXTENT) / BLOCK)) + 1):
-				touched[bz * BLOCKS + bx] = 1
+				if touched[bz * BLOCKS + bx] == 0:
+					touched[bz * BLOCKS + bx] = 1
+					touched_image.set_pixel(bx, bz, Color.WHITE)
 		# Queue touched tiles once per footprint, not once per changed texel.
 		var margin := radius + CELL * 2.0
 		for tz in range(maxi(0, floori((point.z - margin + EXTENT) / TILE_SIZE)), mini(15, floori((point.z + margin + EXTENT) / TILE_SIZE)) + 1):
@@ -286,6 +296,8 @@ func update(delta: float, force: bool = false) -> void:
 	upload_clock += delta
 	if (upload_clock >= upload_interval or force) and dirty:
 		texture.update(image)
+		# Sent with the field so the GPU skip mask never hides uploaded ruts.
+		touched_texture.update(touched_image)
 		dirty = false
 		upload_clock = 0.0
 		uploaded_revision = revision

@@ -124,6 +124,57 @@ now writes it from `Surface.dune_height` so a rebuild keeps the two consistent.
   same machine (original 3-car patrol scene vs. this build). GPU time on phones
   falls mainly from the ~1,000 removed draw calls and their shadow passes.
 
+## Drivetrain, differentials and a finger camera (v1.6)
+
+- **Jeep 4x4 / 4x2** (key G, button POHON): part-time 4x4 with a rigid transfer
+  case (torque split by axle load) or rear-wheel drive. The van stays front-drive.
+- **Differentials** (key L, button DIF): open — both tyres of an axle get the
+  same torque, so the wheel with less traction (or a lifted wheel) limits the
+  axle and the surplus only spins; locked — each tyre pushes up to its own grip.
+  `drive_slip` per wheel drives the visual wheelspin, digging and spray.
+  `drivetrain_checks.gd` from standstill, 6 s full throttle: mud 4x4 ≈ 28 m,
+  4x2 gets stuck (7–9 m); ice 4x4 ≈ 27 m vs 4x2 ≈ 16 m; moguls favour locked.
+- **Digging** now comes from real tyre slip only (torque the ground cannot
+  take), so a gentle throttle or a locked 4x4 digs less than one spinning wheel.
+- **Spray follows the drivetrain:** grain emitters on all four wheels; only
+  driven tyres throw material, opposite to their rotation (4x4 both axles, 4x2
+  rear, van front).
+- **Free camera "Voľná · prstom"** (camera mode 7): orbit around the car that
+  stays where you put it. On touch screens drag anywhere outside the controls
+  to rotate (also in Orbit), pinch with two fingers to zoom in every mode;
+  on desktop drag with the mouse, wheel to zoom.
+- **Smaller steering control**: the touch zone is invisible (no background
+  panel), the track and knob are about 30 % smaller; pedals and menu buttons
+  slightly smaller; menu has two rows of four.
+
+## Longer lanes, thumb controls, wheelspin and surface sprites (v1.5)
+
+- **Longer test lanes:** the course now starts at x = 14 (lanes x 20–115, 95 m
+  instead of 47 m), so each surface can be entered at a chosen speed. The ford's
+  deep section is 44 m long (x 45–89), the moguls run x 24–42 and the tabletop
+  jump lip sits at x = 60. Spots still start at the east end (x 114).
+- **Top-view performance:** `course.gdshader` evaluates its expensive cell
+  patterns only where they are visible: centimetre grit/pebbles (two Voronoi
+  passes on gravel, one on rocky ground) fade out by 3.5 cm per pixel, slab
+  joints only run on the trail, boulder facets only on boulders, clay/ice/road
+  cracks and mud clods only in close views. Zoomed-out views get the mean colours.
+  The soil field also uploads a 64×64 "touched block" mask: undeformed ground
+  skips the B-spline sampling and the live-segment loop entirely.
+- **Touch controls:** analog steering zone on the left — put the thumb anywhere
+  in it, the wheel centres there and turns proportionally (150 px for full lock,
+  slight progressive curve, small dead zone; dragging past full lock drags the
+  centre along). Right: tall PLYN pedal, BRZDA/CÚVANIE beside it and RUČNÁ above,
+  all inset ~5 % from the screen edge; a thumb can slide between pedals. Menu
+  buttons moved to a single row along the top edge.
+- **Wheelspin:** driven wheels keep turning with throttle when the car makes no
+  progress (stuck in mud or sand, climbing), up to 14 rad/s; airborne wheels
+  coast down. Spinning tyres also throw more and faster spray.
+- **Surface sprites:** `grain.gdshader` draws a procedural sprite per surface:
+  sand grain, gravel stone (angular, faceted), mud clod (glossy), water droplet
+  (translucent with glint), snow puff, grass blade, ice chip and clay crumb, with
+  a size factor per surface (`Surface.SPRITE`, `SPRITE_SIZE`). Each rear-wheel
+  emitter has its own material, so the two tyres can throw different sprites.
+
 ## Four more lanes, full-width ford, treacherous mud
 
 The course now has ten lanes (x 68–115) and extends north to z = −6. New, north

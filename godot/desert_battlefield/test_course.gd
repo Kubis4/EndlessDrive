@@ -31,6 +31,7 @@ func build(root: Node3D) -> void:
 	material.set_shader_parameter("lane_z", PackedFloat32Array(Surface.LANE_Z))
 	material.set_shader_parameter("lane_type", PackedInt32Array(Surface.LANE_TYPE))
 	material.set_shader_parameter("moguls_lane", Surface.LANE_MOGULS)
+	material.set_shader_parameter("jump_lip", Vector2(Surface.JUMP_LIP - 0.4, Surface.JUMP_LIP))
 	material.set_shader_parameter("water_x", Vector2(Surface.WATER_X0, Surface.WATER_X1))
 	for rect: Vector4 in [Surface.COURSE, Surface.PAD, Surface.ROCKS]:
 		_build_platform(rect)
@@ -163,7 +164,7 @@ func _build_markers() -> void:
 	cones.name = "SlalomCones"
 	add_child(cones)
 	# Visual slalom gates on the asphalt lane; they have no collision.
-	for i in 6:
+	for i in 12:
 		var x := 106.0 - i * 7.0
 		var z: float = Surface.LANE_Z[Surface.LANE_ROAD] + (1.2 if i % 2 == 0 else -1.2)
 		var cone := MeshInstance3D.new()

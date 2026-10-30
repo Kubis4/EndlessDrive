@@ -95,29 +95,51 @@ void vertex() {
 
 // Weathered limestone/granite: slabs on the trail, rounded boulders around it,
 // coarse grit in between. Rock relief comes from the mesh; colour from paint.
-void rocky_ground(vec2 p, float detail, out vec3 albedo, out float rough, out float height) {
-	float n = fbm(p * 0.6);
-	vec3 grit_cells = voronoi(p * 7.0);
-	vec3 grit = mix(vec3(0.33, 0.27, 0.21), vec3(0.47, 0.39, 0.3), grit_cells.z) * (0.88 + 0.24 * n);
-	grit = mix(grit, vec3(0.2, 0.16, 0.12), (1.0 - smoothstep(0.02, 0.12, grit_cells.y - grit_cells.x)) * detail);
-	vec2 q = p * 1.25 + 0.6 * vec2(fbm(p * 0.9), fbm(p * 0.9 + 4.0));
-	vec3 slabs = voronoi(q);
-	float joint = 1.0 - smoothstep(0.0, 0.06, slabs.y - slabs.x);
-	vec3 slab = mix(vec3(0.3, 0.27, 0.23), vec3(0.42, 0.37, 0.31), slabs.z) * (0.86 + 0.28 * fbm(p * 3.0));
-	slab = mix(slab, vec3(0.13, 0.11, 0.09), joint * 0.9);
-	// Pale sandy dust settled in the slab joints and a little lichen.
-	slab = mix(slab, vec3(0.6, 0.48, 0.33), smoothstep(0.62, 0.8, fbm(p * 1.7 + 8.0)) * 0.5);
-	slab = mix(slab, vec3(0.3, 0.32, 0.2), smoothstep(0.78, 0.86, vnoise(p * 5.0 + 3.0)) * 0.45);
-	// Weathered red-brown sandstone boulders with darker desert varnish.
-	vec3 facets = voronoi(p * 3.5);
-	vec3 boulder = mix(vec3(0.3, 0.2, 0.14), vec3(0.45, 0.31, 0.21), fbm(p * 2.2)) * (0.85 + 0.3 * facets.z);
-	boulder = mix(boulder, vec3(0.16, 0.11, 0.08), smoothstep(0.55, 0.75, fbm(p * 4.0 + 2.0)) * 0.5);
+void rocky_ground(vec2 p, float detail, float fine, out vec3 albedo, out float rough, out float height) {
+	// Expensive cell patterns only run where they are visible (zoomed-out views
+	// get their mean colours), and only for the materials present at this pixel.
 	float trail = smoothstep(0.35, 0.75, ground_paint.g);
 	float rock = smoothstep(0.08, 0.35, ground_paint.r);
+	float n = fbm(p * 0.6);
+	vec3 grit = mix(vec3(0.38, 0.32, 0.25), vec3(0.43, 0.36, 0.28), n);
+	float grit_height = 0.0;
+	if (trail < 1.0 && fine > 0.0) {
+		vec3 grit_cells = voronoi(p * 7.0);
+		vec3 stones = mix(vec3(0.33, 0.27, 0.21), vec3(0.47, 0.39, 0.3), grit_cells.z) * (0.88 + 0.24 * n);
+		stones = mix(stones, vec3(0.2, 0.16, 0.12), 1.0 - smoothstep(0.02, 0.12, grit_cells.y - grit_cells.x));
+		grit = mix(grit, stones, fine);
+		grit_height = (1.0 - grit_cells.x) * 0.006 * fine;
+	}
+	vec3 slab = vec3(0.36, 0.32, 0.27);
+	float slab_height = 0.0;
+	if (trail > 0.0) {
+		vec2 q = p * 1.25 + 0.6 * vec2(vnoise(p * 0.9), vnoise(p * 0.9 + 4.0));
+		vec3 slabs = voronoi(q);
+		float joint = (1.0 - smoothstep(0.0, 0.06, slabs.y - slabs.x)) * max(detail, 0.35);
+		slab = mix(vec3(0.3, 0.27, 0.23), vec3(0.42, 0.37, 0.31), slabs.z) * (0.86 + 0.28 * vnoise(p * 3.0));
+		slab = mix(slab, vec3(0.13, 0.11, 0.09), joint * 0.9);
+		// Pale sandy dust settled in the slab joints and a little lichen.
+		slab = mix(slab, vec3(0.6, 0.48, 0.33), smoothstep(0.62, 0.8, fbm(p * 1.7 + 8.0)) * 0.5);
+		slab = mix(slab, vec3(0.3, 0.32, 0.2), smoothstep(0.78, 0.86, vnoise(p * 5.0 + 3.0)) * 0.45 * detail);
+		slab_height = (-joint * 0.02 + vnoise(p * 4.0) * 0.008) * detail;
+	}
+	vec3 boulder = vec3(0.37, 0.26, 0.18);
+	float boulder_height = 0.0;
+	if (rock > 0.0) {
+		// Weathered red-brown sandstone boulders with darker desert varnish.
+		float varnish = fbm(p * 2.2);
+		boulder = mix(vec3(0.3, 0.2, 0.14), vec3(0.45, 0.31, 0.21), varnish);
+		if (detail > 0.0) {
+			vec3 facets = voronoi(p * 3.5);
+			boulder *= mix(1.0, 0.85 + 0.3 * facets.z, detail);
+			boulder_height = (facets.x * 0.04 + varnish * 0.015) * detail;
+		}
+		boulder = mix(boulder, vec3(0.16, 0.11, 0.08), smoothstep(0.55, 0.75, vnoise(p * 4.0 + 2.0)) * 0.5);
+	}
 	albedo = mix(grit, slab, trail);
 	albedo = mix(albedo, boulder, rock * (1.0 - trail * 0.4));
 	rough = mix(0.9, 0.78, max(trail, rock));
-	height = (mix((1.0 - grit_cells.x) * 0.006, -joint * 0.02 + fbm(p * 4.0) * 0.008, trail) + rock * (facets.x * 0.04 + fbm(p * 5.0) * 0.015)) * detail;
+	height = mix(grit_height, slab_height, trail) + rock * boulder_height;
 }
 
 void sand_like(vec2 p, float packed, float detail, out vec3 albedo, out float rough, out float height) {
@@ -136,6 +158,8 @@ void fragment() {
 	if (p.x < bounds.x || p.y < bounds.y || p.x >= bounds.z || p.y >= bounds.w) { discard; }
 	float px = max(length(fwidth(p)), 0.0005);
 	float detail = 1.0 - smoothstep(0.03, 0.09, px);
+	// Centimetre-scale stones/grit resolve only in close views.
+	float fine = 1.0 - smoothstep(0.012, 0.035, px);
 	float depth_here = sand_depth(p);
 	float rut = smoothstep(0.015, 0.22, depth_here);
 	// Rubber left by skidding tyres on asphalt and rock (a few mm in the field).
@@ -178,8 +202,11 @@ void fragment() {
 		float speck = mix(0.5, hash12(floor(p * 45.0)), detail);
 		lane_albedo = vec3(0.105, 0.105, 0.11) * (0.82 + 0.32 * n) * (0.85 + 0.3 * speck);
 		lane_albedo *= 1.0 - 0.1 * smoothstep(0.56, 0.64, vnoise(p * 0.7 + 4.0));
-		vec3 v = voronoi(p * 0.6);
-		float crack = (1.0 - smoothstep(0.0, 0.03, v.y - v.x)) * smoothstep(0.35, 0.75, vnoise(p * 0.21)) * detail;
+		float crack = 0.0;
+		if (detail > 0.0) {
+			vec3 v = voronoi(p * 0.6);
+			crack = (1.0 - smoothstep(0.0, 0.03, v.y - v.x)) * smoothstep(0.35, 0.75, vnoise(p * 0.21)) * detail;
+		}
 		lane_albedo *= 1.0 - crack * 0.45;
 		float paint = 0.0;
 		if (skid_pad) {
@@ -220,8 +247,11 @@ void fragment() {
 		// Clear blue-grey ice with frosted patches, trapped bubbles and cracks;
 		// sliding tyres leave pale scratch marks.
 		float frost = smoothstep(0.45, 0.7, fbm(p * 0.5 + 1.0));
-		vec3 v = voronoi(p * 0.9 + 0.4 * vec2(fbm(p * 0.7), fbm(p * 0.7 + 3.0)));
-		float crack = (1.0 - smoothstep(0.0, 0.025, v.y - v.x)) * detail;
+		float crack = 0.0;
+		if (detail > 0.0) {
+			vec3 v = voronoi(p * 0.9 + 0.4 * vec2(vnoise(p * 0.7), vnoise(p * 0.7 + 3.0)));
+			crack = (1.0 - smoothstep(0.0, 0.025, v.y - v.x)) * detail;
+		}
 		lane_albedo = mix(vec3(0.42, 0.52, 0.6), vec3(0.78, 0.84, 0.9), frost * 0.8);
 		lane_albedo = mix(lane_albedo, vec3(0.9, 0.94, 0.97), crack * 0.6);
 		lane_albedo = mix(lane_albedo, vec3(0.85, 0.88, 0.92), rubber * 0.7);
@@ -240,36 +270,49 @@ void fragment() {
 		lane_height = (blades * 0.004 + n * 0.006) * detail * (1.0 - rut);
 	} else if (kind == GRAVEL) {
 		// Rounded 3–6 cm stones over finer grit; fades to its mean colour when tiny.
-		vec2 q = p + 0.35 * vec2(vnoise(p * 1.7), vnoise(p * 1.7 + 9.0));
-		vec3 v = voronoi(q * 17.0);
-		float stone = smoothstep(0.02, 0.2, v.y - v.x);
-		vec3 rock = mix(vec3(0.36, 0.35, 0.33), vec3(0.6, 0.57, 0.52), v.z);
-		rock = mix(rock, vec3(0.55, 0.45, 0.35), step(0.8, fract(v.z * 7.3)));
-		vec3 g = mix(vec3(0.24, 0.22, 0.2), rock, stone);
-		vec3 grit = voronoi(p * 41.0);
-		g *= 0.9 + 0.2 * grit.z;
-		vec3 mean = vec3(0.44, 0.415, 0.38) * (0.92 + 0.16 * fbm(p * 0.4));
-		lane_albedo = mix(mean, g * (0.92 + 0.16 * fbm(p * 0.4)), detail);
+		float broad = 0.92 + 0.16 * fbm(p * 0.4);
+		vec3 mean = vec3(0.44, 0.415, 0.38) * broad;
+		lane_albedo = mean;
+		lane_height = 0.0;
+		float pebbles = max(fine, detail * 0.5);
+		if (pebbles > 0.0) {
+			vec2 q = p + 0.35 * vec2(vnoise(p * 1.7), vnoise(p * 1.7 + 9.0));
+			vec3 v = voronoi(q * 17.0);
+			float stone = smoothstep(0.02, 0.2, v.y - v.x);
+			vec3 rock = mix(vec3(0.36, 0.35, 0.33), vec3(0.6, 0.57, 0.52), v.z);
+			rock = mix(rock, vec3(0.55, 0.45, 0.35), step(0.8, fract(v.z * 7.3)));
+			vec3 g = mix(vec3(0.24, 0.22, 0.2), rock, stone);
+			float grit_height = 0.0;
+			if (fine > 0.0) {
+				vec3 grit = voronoi(p * 41.0);
+				g *= mix(1.0, 0.9 + 0.2 * grit.z, fine);
+				grit_height = (1.0 - grit.x) * 0.0015 * fine;
+			}
+			lane_albedo = mix(mean, g * broad, pebbles);
+			lane_height = stone * 0.008 * pebbles + grit_height;
+		}
 		lane_albedo *= 1.0 - rut * 0.15;
 		lane_rough = 0.88;
-		lane_height = (stone * 0.008 + (1.0 - grit.x) * 0.0015) * detail;
 	} else if (kind == CLAY) {
 		float n = fbm(p * 0.8);
 		lane_albedo = mix(vec3(0.38, 0.24, 0.15), vec3(0.5, 0.33, 0.21), n);
 		// Domain-warped crack network: irregular, thin, and only where dry.
-		vec2 q = p * 2.4 + 1.1 * vec2(fbm(p * 1.3), fbm(p * 1.3 + 5.0));
-		vec3 v = voronoi(q);
-		float crack = (1.0 - smoothstep(0.0, 0.03, v.y - v.x)) * detail * (1.0 - rut) * smoothstep(0.3, 0.6, fbm(p * 0.35 + 3.0));
-		lane_albedo = mix(lane_albedo * (0.96 + 0.08 * v.z), vec3(0.24, 0.15, 0.1), crack * 0.8);
+		float crack = 0.0;
+		if (detail > 0.0) {
+			vec2 q = p * 2.4 + 1.1 * vec2(vnoise(p * 1.3), vnoise(p * 1.3 + 5.0));
+			vec3 v = voronoi(q);
+			crack = (1.0 - smoothstep(0.0, 0.03, v.y - v.x)) * detail * (1.0 - rut) * smoothstep(0.3, 0.6, vnoise(p * 0.35 + 3.0));
+			lane_albedo = mix(lane_albedo * mix(1.0, 0.96 + 0.08 * v.z, detail), vec3(0.24, 0.15, 0.1), crack * 0.8);
+		}
 		lane_albedo *= 1.0 - rut * 0.22;
 		lane_rough = mix(0.93, 0.8, rut);
-		lane_height = (-crack * 0.01 + fbm(p * 6.0) * 0.004) * detail;
+		lane_height = (-crack * 0.01 + vnoise(p * 6.0) * 0.004) * detail;
 	} else if (kind == MUD || kind == WATER) {
 		float n = fbm(p * 0.7);
 		float wet = smoothstep(0.44, 0.6, fbm(p * 0.45 + 2.0)) + rut * 1.3;
 		if (kind == WATER) { wet = 1.0; }
 		wet = clamp(wet, 0.0, 1.0);
-		vec3 clods = voronoi(p * 3.2);
+		vec3 clods = detail > 0.0 ? voronoi(p * 3.2) : vec3(0.5, 0.5, 0.5);
 		lane_albedo = mix(vec3(0.13, 0.095, 0.065), vec3(0.2, 0.15, 0.1), n) * (0.94 + 0.12 * clods.z);
 		lane_albedo = mix(lane_albedo, vec3(0.075, 0.06, 0.045), wet * 0.8);
 		lane_rough = mix(0.42, 0.05, wet);
@@ -294,7 +337,7 @@ void fragment() {
 		vec3 rock_albedo;
 		float rock_rough;
 		float rock_height;
-		rocky_ground(p, detail, rock_albedo, rock_rough, rock_height);
+		rocky_ground(p, detail, fine, rock_albedo, rock_rough, rock_height);
 		rock_albedo = mix(rock_albedo, rock_albedo * 0.45, rubber * smoothstep(0.35, 0.75, ground_paint.g) * 0.8);
 		albedo = mix(albedo, rock_albedo * (1.0 - rut * 0.15), packed);
 		rough = mix(rough, rock_rough, packed);

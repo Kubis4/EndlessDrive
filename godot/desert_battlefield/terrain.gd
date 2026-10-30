@@ -14,6 +14,11 @@ const DEFORM := [1.0, 0.6, 0.0, 0.4, 0.8, 1.6, 1.3, 0.0, 1.1, 0.0, 0.35, 0.0]
 ## Particle response: dust clouds, ballistic grains/clods/spray and their tint.
 const DUST := [1.0, 0.75, 0.1, 0.65, 0.8, 0.0, 0.0, 0.3, 0.45, 0.0, 0.15, 0.0]
 const SPRAY := [1.0, 0.7, 0.0, 1.0, 0.8, 1.25, 1.7, 0.35, 1.3, 0.25, 0.6, 1.1]
+## Particle sprite thrown by tyres per surface (grain.gdshader sprite_kind):
+## 0 sand grain, 1 gravel stone, 2 mud clod, 3 water droplet, 4 snow flake,
+## 5 grass blade, 6 ice chip, 7 clay crumb; with a size factor per surface.
+const SPRITE := [0, 0, 1, 1, 7, 2, 3, 1, 4, 6, 5, 3]
+const SPRITE_SIZE := [1.0, 1.0, 0.8, 1.6, 1.4, 1.9, 1.3, 1.4, 1.5, 1.2, 2.2, 1.1]
 const TINT := [Color(1, 1, 1), Color(0.96, 0.94, 0.9), Color(0.7, 0.7, 0.7), Color(1.04, 1.1, 1.28),
 	Color(1.06, 0.8, 0.68), Color(0.5, 0.42, 0.34), Color(1.55, 1.68, 1.8), Color(1.0, 1.06, 1.2),
 	Color(1.75, 1.85, 2.0), Color(1.7, 1.8, 1.95), Color(0.6, 0.75, 0.4), Color(1.45, 1.55, 1.65)]
@@ -30,7 +35,8 @@ const SPEED := [0.85, 0.92, 1.0, 0.8, 0.72, 0.22, 0.28, 0.5, 0.6, 1.0, 0.75, 1.0
 
 ## Test course east of the dunes: Vector4(x0, z0, x1, z1). Lanes run along X;
 ## each starts at the east end, so the car drives west (yaw = PI / 2).
-const COURSE := Vector4(62.0, -112.0, 120.0, -6.0)
+## 95 m lanes leave room to build up any test speed before the feature.
+const COURSE := Vector4(14.0, -112.0, 120.0, -6.0)
 const COURSE_LEVEL := 0.7
 ## Asphalt skid pad south-west of the station.
 const PAD := Vector4(-102.0, -99.0, -54.0, -51.0)
@@ -38,7 +44,7 @@ const PAD_LEVEL := 0.25
 const PAD_CENTER := Vector2(-78.0, -75.0)
 const PAD_RADIUS := 19.0
 const MARGIN := 5.0
-const LANE_X0 := 68.0
+const LANE_X0 := 20.0
 const LANE_X1 := 115.0
 const LANE_HALF := 4.3
 const LANE_SPACING := 9.5
@@ -58,6 +64,10 @@ const WATER_X1 := LANE_X1
 const WATER_DEPTH := 0.7
 const WATER_LEVEL := COURSE_LEVEL - 0.02
 const SNOW_DEPTH := 0.14
+const WATER_DEEP_X0 := 45.0
+const WATER_DEEP_X1 := 89.0
+## Moguls lane: 48 m run-up, tabletop jump (lip at x = 60), moguls at the end.
+const JUMP_LIP := 60.0
 const JUMP_HEIGHT := 1.2
 ## Rocky off-road trail north-east of the station: a 4.6 m wide track that winds
 ## twice over a lowered dune ridge, with embedded rocks, alternating rock steps
@@ -173,9 +183,11 @@ static func course_relief(x: float, z: float) -> float:
 			# A slightly sunken, uneven bog that holds the wet surface.
 			return -smoothstep(0.0, 1.4, inside) * (0.08 + 0.035 * sin(x * 0.9) * sin(z * 1.3))
 		WATER:
-			var along := smoothstep(0.6, 6.5, minf(x - WATER_X0, WATER_X1 - x))
+			# Shallow water (about 15 cm) along the whole lane with a 50 m deep
+			# section in the middle, reached over 6 m ramps.
+			var along := smoothstep(WATER_DEEP_X0 - 6.0, WATER_DEEP_X0, x) * (1.0 - smoothstep(WATER_DEEP_X1, WATER_DEEP_X1 + 6.0, x))
 			var side := smoothstep(0.4, 2.4, LANE_HALF - absf(across))
-			return -0.07 * smoothstep(0.0, 0.35, inside) - WATER_DEPTH * along * side
+			return -0.07 * smoothstep(0.0, 0.35, inside) - 0.06 * smoothstep(0.0, 1.5, inside) - WATER_DEPTH * along * side
 		SNOW:
 			# A raised, gently drifted snow layer the tyres sink into.
 			return smoothstep(0.0, 0.8, inside) * (SNOW_DEPTH + 0.04 * sin(x * 0.7 + z * 0.3))
@@ -186,13 +198,13 @@ static func course_relief(x: float, z: float) -> float:
 	if lane == LANE_MOGULS:
 		var taper := smoothstep(0.0, 1.5, inside)
 		# Staggered moguls articulate the suspension (left/right out of phase).
-		var moguls := smoothstep(93.0, 96.0, x) * (1.0 - smoothstep(110.0, 113.0, x))
-		var twist := 0.27 * sin((x - 93.0) * TAU / 5.0) * sin(across / LANE_HALF * PI * 0.5)
+		var moguls := smoothstep(24.0, 27.0, x) * (1.0 - smoothstep(39.0, 42.0, x))
+		var twist := 0.27 * sin((x - 24.0) * TAU / 5.0) * sin(across / LANE_HALF * PI * 0.5)
 		# Tabletop jump approached from the east: kicker, flat table, landing slope.
 		var jump := 0.0
-		if x > 84.0 and x < 90.0: jump = JUMP_HEIGHT * pow((90.0 - x) / 6.0, 1.6)
-		elif x > 78.0 and x <= 84.0: jump = JUMP_HEIGHT
-		elif x > 70.0 and x <= 78.0: jump = JUMP_HEIGHT * smoothstep(70.0, 78.0, x)
+		if x > JUMP_LIP and x < JUMP_LIP + 6.0: jump = JUMP_HEIGHT * pow((JUMP_LIP + 6.0 - x) / 6.0, 1.6)
+		elif x > JUMP_LIP - 6.0 and x <= JUMP_LIP: jump = JUMP_HEIGHT
+		elif x > JUMP_LIP - 14.0 and x <= JUMP_LIP - 6.0: jump = JUMP_HEIGHT * smoothstep(JUMP_LIP - 14.0, JUMP_LIP - 6.0, x)
 		return (twist * moguls + jump) * taper
 	return 0.0
 

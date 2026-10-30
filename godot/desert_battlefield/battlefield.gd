@@ -3,7 +3,9 @@ extends Node3D
 const Surface = preload("res://desert_battlefield/terrain.gd")
 const PROFILES := ["notebook", "reference", "low"]
 const PROFILE_NAMES := {"notebook": "Notebook", "reference": "Referenčná", "low": "Nízka"}
-const CAMERA_NAMES := ["Prehľad", "Blízko zhora", "Za autom", "Nízko za autom", "Orbit", "Zo strechy"]
+const CAMERA_NAMES := ["Prehľad", "Blízko zhora", "Za autom", "Nízko za autom", "Orbit", "Zo strechy", "Voľná · prstom"]
+## Camera modes that orbit the car and follow finger/mouse dragging.
+const FREE_CAMERAS := [4, 6]
 const OVERVIEW_OFFSET := Vector3(41, 120, 58)
 @export_enum("Auto", "Notebook", "Reference", "Low") var quality := "Auto"
 var quality_name := "reference"
@@ -17,7 +19,7 @@ var camera_size := 91.0
 var camera_mode := 0
 var close_size := 26.0
 ## Chase/orbit distances in metres for modes 2, 3 and 4.
-var follow_distance := [0.0, 0.0, 8.5, 5.2, 12.0, 0.0]
+var follow_distance := [0.0, 0.0, 8.5, 5.2, 12.0, 0.0, 9.0]
 var orbit_yaw := 0.7
 var orbit_pitch := 0.42
 var orbit_idle := 0.0
@@ -100,7 +102,7 @@ func _create_driving_readout() -> void:
 	driving_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(driving_card)
 	driving_readout = Label.new()
-	driving_readout.add_theme_font_size_override("font_size", 30 if touch_ui else 26)
+	driving_readout.add_theme_font_size_override("font_size", 25 if touch_ui else 26)
 	driving_readout.add_theme_color_override("font_color", Color("f3e4c8"))
 	driving_card.add_child(driving_readout)
 	driving_card.hide()
@@ -135,8 +137,9 @@ func _create_driving_readout() -> void:
 		"W A S D / šípky  plyn, brzda, zatáčanie",
 		"SHIFT  ručná brzda      R  späť na štart",
 		"C  kamera   + − / koliesko  priblíženie",
-		"Orbit: ťahaj myšou      P  pauza",
+		"Orbit / Voľná kamera: ťahaj myšou      P  pauza",
 		"V  ďalšie auto      Q  kvalita grafiky",
+		"G  pohon 4x4 / 4x2 (Jeep)      L  uzávierka diferenciálu",
 		"T / Shift+T  ďalší / predošlý test,  1–9, 0  priamo:"])
 	for i in test_spots.size(): lines.append("   %s  %s" % [str(i + 1) if i < 9 else ("0" if i == 9 else "T"), test_spots[i][0]])
 	lines.append("H  skryť pomoc      ESC  kinematický pohľad")
@@ -222,6 +225,9 @@ func _update_readouts() -> void:
 	status_label.visible = driving or toast_time > 0.0 or help_card.visible
 	# Test signs belong to the driving overview; they would block chase views.
 	test_grounds.set_signs_visible(driving and camera_mode <= 1)
+	if touch_ui:
+		# Keep the status line just under the (variable-height) speed panel.
+		status_label.position.y = driving_card.get_rect().end.y + 8.0 if driving_card.visible else 24.0
 	status_label.text = "Kamera: %s (C)   ·   Kvalita: %s (Q)   ·   %d FPS   ·   H pomoc" % [CAMERA_NAMES[camera_mode], PROFILE_NAMES[render_profile], roundi(Engine.get_frames_per_second())]
 	if not driving: return
 	var state := "VO VZDUCHU" if not lead.grounded else ("SPIATOČKA" if lead.speed < -0.5 else "")
@@ -230,6 +236,7 @@ func _update_readouts() -> void:
 	var ground: String = Surface.SURFACE_NAMES[lead.wheel_surface[0]]
 	if lead.water_submersion > 0.0: ground += " · ponor %d cm" % roundi(lead.water_submersion * 100.0)
 	driving_readout.text += "\nPovrch: " + ground
+	driving_readout.text += "\nPohon: " + drivetrain_text()
 	if current_spot >= 0 and Surface.in_test_ground(lead.position.x, lead.position.z, 4.0):
 		driving_readout.text += "\nTest: " + str(test_spots[current_spot][0])
 	if not state.is_empty(): driving_readout.text += "\n" + state
@@ -279,9 +286,11 @@ func _update_camera(delta: float) -> void:
 		camera_snap = false
 		return
 	var distance: float = follow_distance[camera_mode]
-	if camera_mode == 4:
+	if camera_mode in FREE_CAMERAS:
+		# Orbit drifts around the car when left alone; the free camera stays
+		# exactly where the finger put it (relative to the world, not the car).
 		orbit_idle += delta
-		if orbit_idle > 4.0 and not paused: orbit_yaw += delta * 0.12
+		if camera_mode == 4 and orbit_idle > 4.0 and not paused: orbit_yaw += delta * 0.12
 		desired = centre + Vector3(sin(orbit_yaw) * cos(orbit_pitch), sin(orbit_pitch), cos(orbit_yaw) * cos(orbit_pitch)) * distance
 		look = centre + Vector3.UP * 0.3
 	else:
@@ -299,6 +308,11 @@ func _set_camera_mode(mode: int) -> void:
 	camera_snap = true
 	focus = _lead_transform().origin if (camera_mode >= 1 or driving) else focus
 	orbit_idle = 0.0
+	if camera_mode == 6:
+		# Start the free camera behind the car; from then on the finger rules.
+		var forward := -_lead_transform().basis.z
+		orbit_yaw = atan2(-forward.x, -forward.z)
+		orbit_pitch = 0.3
 	_apply_camera_environment()
 	toast_time = 2.5
 
@@ -309,7 +323,7 @@ func _apply_camera_environment() -> void:
 	if camera == null: return
 	var perspective := camera_mode >= 2
 	camera.projection = Camera3D.PROJECTION_PERSPECTIVE if perspective else Camera3D.PROJECTION_ORTHOGONAL
-	camera.fov = [55.0, 55.0, 62.0, 70.0, 55.0, 78.0][camera_mode]
+	camera.fov = [55.0, 55.0, 62.0, 70.0, 55.0, 78.0, 60.0][camera_mode]
 	camera.near = 0.08 if camera_mode == 5 else (0.2 if perspective else 0.5)
 	camera.far = 420.0 if perspective else 500.0
 	var environment: Environment = $DesertAtmosphere.environment
@@ -336,10 +350,9 @@ func _apply_camera_environment() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	# On touch screens dragging belongs to the pedals; the orbit drifts by itself.
-	if event is InputEventMouseMotion and event.button_mask != 0 and camera_mode == 4 and not OS.has_feature("android"):
-		orbit_yaw -= event.relative.x * 0.006
-		orbit_pitch = clampf(orbit_pitch + event.relative.y * 0.004, 0.05, 1.35)
-		orbit_idle = 0.0
+	# Touch screens drive the free cameras through mobile_controls (drag/pinch).
+	if event is InputEventMouseMotion and event.button_mask != 0 and camera_mode in FREE_CAMERAS and not touch_ui:
+		camera_drag(event.relative)
 	elif event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP: _zoom(-1)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN: _zoom(1)
@@ -348,7 +361,37 @@ func _zoom(direction: int) -> void:
 	match camera_mode:
 		0: camera_size = clampf(camera_size + direction * 8.0, 12.0, 115.0)
 		1: close_size = clampf(close_size + direction * 3.0, 8.0, 60.0)
-		2, 3, 4: follow_distance[camera_mode] = clampf(follow_distance[camera_mode] + direction * 1.0, 3.0, 30.0)
+		2, 3, 4, 6: follow_distance[camera_mode] = clampf(follow_distance[camera_mode] + direction * 1.0, 3.0, 30.0)
+
+## Finger/mouse drag on a free camera: yaw around the car and tilt.
+func camera_drag(relative: Vector2) -> void:
+	orbit_yaw -= relative.x * 0.006
+	orbit_pitch = clampf(orbit_pitch + relative.y * 0.004, 0.03, 1.4)
+	orbit_idle = 0.0
+
+## Two-finger pinch: factor > 1 spreads the fingers (moves closer).
+func camera_pinch(factor: float) -> void:
+	if camera_mode in FREE_CAMERAS or camera_mode in [2, 3]:
+		follow_distance[camera_mode] = clampf(follow_distance[camera_mode] / maxf(factor, 0.01), 3.0, 30.0)
+	elif camera_mode == 0:
+		camera_size = clampf(camera_size / maxf(factor, 0.01), 12.0, 115.0)
+	elif camera_mode == 1:
+		close_size = clampf(close_size / maxf(factor, 0.01), 8.0, 60.0)
+	orbit_idle = 0.0
+
+## Part-time 4x4 / rear-drive 4x2 (the Jeep; the van is front-drive only).
+func toggle_drive() -> void:
+	if lead.front_drive: return
+	lead.four_wheel_drive = not lead.four_wheel_drive
+	toast_time = 2.5
+
+func toggle_diff() -> void:
+	lead.diff_locked = not lead.diff_locked
+	toast_time = 2.5
+
+func drivetrain_text() -> String:
+	var drive := "4x2 predný" if lead.front_drive else ("4x4" if lead.four_wheel_drive else "4x2 zadný")
+	return "%s · dif. %s" % [drive, "zamknutý" if lead.diff_locked else "otvorený"]
 
 func teleport_to_test(index: int) -> void:
 	current_spot = posmod(index, test_spots.size())
@@ -411,6 +454,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if key >= KEY_1 and key <= KEY_9 and key - KEY_1 < test_spots.size(): teleport_to_test(key - KEY_1)
 	if key == KEY_0 and test_spots.size() > 9: teleport_to_test(9)
 	if key == KEY_V: _switch_vehicle()
+	if key == KEY_G: toggle_drive()
+	if key == KEY_L: toggle_diff()
 	if key == KEY_Q:
 		_apply_render_profile(PROFILES[(PROFILES.find(render_profile) + 1) % PROFILES.size()])
 		toast_time = 2.5
