@@ -1,0 +1,18 @@
+[gd_scene format=3]
+
+[ext_resource type="ArrayMesh" path="res://assets/models/supplied_environment/rock_desert_3.res" id="1_wejwl"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_jjid8"]
+size = Vector3(0.75, 0.8, 0.75)
+
+[node name="SuppliedRock_Desert_3" type="Node3D" unique_id=1128880870]
+
+[node name="RockVisual" type="MeshInstance3D" parent="." unique_id=1975735387]
+transform = Transform3D(0.018767972, 0, 0, 0, 0.011263841, -2.501075e-18, 0, 6.087553e-18, 0.027415901, 0, 0.006617293, 0)
+mesh = ExtResource("1_wejwl")
+
+[node name="RockCollision" type="StaticBody3D" parent="." unique_id=376873513]
+
+[node name="@CollisionShape3D@21" type="CollisionShape3D" parent="RockCollision" unique_id=796040824]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+shape = SubResource("BoxShape3D_jjid8")
