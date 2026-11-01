@@ -26,7 +26,8 @@ void fragment() {
 		|| (p.x >= test_hole_c.x && p.y >= test_hole_c.y && p.x < test_hole_c.z && p.y < test_hole_c.w)
 		|| (p.x >= test_hole_d.x && p.y >= test_hole_d.y && p.x < test_hole_d.z && p.y < test_hole_d.w)) { discard; }
 	if (fine_geometry && (p.x < patch_bounds.x || p.y < patch_bounds.y || p.x >= patch_bounds.z || p.y >= patch_bounds.w)) { discard; }
-	if (soil_enabled && !fine_geometry && max(abs(p.x), abs(p.y)) < 128.0 && texture(fine_tile_mask, (p + vec2(128.0)) / 256.0).r > 0.5) { discard; }
+	vec2 field_p = p - soil_center;
+	if (soil_enabled && !fine_geometry && max(abs(field_p.x), abs(field_p.y)) < 128.0 && texture(fine_tile_mask, (field_p + vec2(128.0)) / 256.0).r > 0.5) { discard; }
 	float broad = 0.5 + 0.24 * sin(p.x * 0.035 + p.y * 0.023) + 0.15 * sin(p.y * 0.11 - p.x * 0.064);
 	float phase = p.x * 10.0 + p.y * 4.0 + 2.2 * sin(p.y * 0.7) + sin(p.x * 0.28 + p.y * 0.21) * 2.0;
 	float ripple = sin(phase);

@@ -2,37 +2,115 @@ extends RefCounted
 ## Shared analytic surface: the visible mesh, suspension and tracks use one height field.
 ## The dune function stays unchanged; two flattened test grounds (a surface test
 ## course and an asphalt skid pad) are blended into it for physics and rendering.
+##
+## The ground tables below are shared by every world. Another world (a script
+## with the same static functions, see offroad/highlands.gd) is plugged in with
+## `world`; the height, ground, water, spot and route queries then go to it.
 
-enum { SAND, PACKED, ROAD, GRAVEL, CLAY, MUD, WATER, ROCK, SNOW, ICE, GRASS, WET_ROAD }
+enum { SAND, PACKED, ROAD, GRAVEL, CLAY, MUD, WATER, ROCK, SNOW, ICE, GRASS, WET_ROAD, DIRT, FOREST }
 const SURFACE_NAMES := ["Piesok", "Udupaný piesok", "Asfalt", "Štrk", "Hlina", "Bahno", "Brod", "Kamenná cesta",
-	"Sneh", "Ľad", "Tráva", "Mokrý asfalt"]
+	"Sneh", "Ľad", "Tráva", "Mokrý asfalt", "Lesná cesta", "Lesná pôda"]
 ## Gameplay approximations of tyre friction, rolling resistance (fraction of load)
 ## and how readily the ground is compacted into ruts (1 = loose dune sand).
-const GRIP := [0.85, 0.80, 1.0, 0.66, 0.76, 0.38, 0.5, 0.9, 0.34, 0.1, 0.55, 0.6]
-const ROLLING := [0.085, 0.05, 0.015, 0.032, 0.045, 0.16, 0.10, 0.03, 0.07, 0.01, 0.05, 0.02]
-const DEFORM := [1.0, 0.6, 0.0, 0.4, 0.8, 1.6, 1.3, 0.0, 1.1, 0.0, 0.35, 0.0]
+const GRIP := [0.85, 0.80, 1.0, 0.66, 0.76, 0.38, 0.5, 0.9, 0.34, 0.1, 0.55, 0.6, 0.72, 0.6]
+const ROLLING := [0.085, 0.05, 0.015, 0.032, 0.045, 0.16, 0.10, 0.03, 0.07, 0.01, 0.05, 0.02, 0.04, 0.06]
+const DEFORM := [1.0, 0.6, 0.0, 0.7, 0.85, 1.6, 1.3, 0.0, 1.1, 0.0, 0.9, 0.0, 0.9, 0.85]
 ## Particle response: dust clouds, ballistic grains/clods/spray and their tint.
-const DUST := [1.0, 0.75, 0.1, 0.65, 0.8, 0.0, 0.0, 0.3, 0.45, 0.0, 0.15, 0.0]
-const SPRAY := [1.0, 0.7, 0.0, 1.0, 0.8, 1.25, 1.7, 0.35, 1.3, 0.25, 0.6, 1.1]
+const DUST := [1.0, 0.75, 0.1, 0.65, 0.8, 0.0, 0.0, 0.3, 0.1, 0.0, 0.15, 0.0, 0.55, 0.2]
+const SPRAY := [1.0, 0.7, 0.0, 1.0, 0.8, 1.25, 1.7, 0.35, 1.3, 0.25, 0.6, 1.1, 0.8, 0.7]
 ## Particle sprite thrown by tyres per surface (grain.gdshader sprite_kind):
 ## 0 sand grain, 1 gravel stone, 2 mud clod, 3 water droplet, 4 snow flake,
-## 5 grass blade, 6 ice chip, 7 clay crumb; with a size factor per surface.
-const SPRITE := [0, 0, 1, 1, 7, 2, 3, 1, 4, 6, 5, 3]
-const SPRITE_SIZE := [1.0, 1.0, 0.8, 1.6, 1.4, 1.9, 1.3, 1.4, 1.5, 1.2, 2.2, 1.1]
+## 5 grass blade, 6 ice chip, 7 clay crumb, 8 soil clod, 9 leaf litter; with a
+## size factor per surface.
+const SPRITE := [0, 0, 1, 1, 7, 2, 3, 1, 4, 6, 5, 3, 8, 9]
+const SPRITE_SIZE := [1.0, 1.0, 0.8, 1.6, 1.4, 1.9, 1.3, 1.4, 1.5, 1.2, 2.2, 1.1, 1.3, 1.9]
 const TINT := [Color(1, 1, 1), Color(0.96, 0.94, 0.9), Color(0.7, 0.7, 0.7), Color(1.04, 1.1, 1.28),
 	Color(1.06, 0.8, 0.68), Color(0.5, 0.42, 0.34), Color(1.55, 1.68, 1.8), Color(1.0, 1.06, 1.2),
-	Color(1.75, 1.85, 2.0), Color(1.7, 1.8, 1.95), Color(0.6, 0.75, 0.4), Color(1.45, 1.55, 1.65)]
+	Color(1.75, 1.85, 2.0), Color(1.7, 1.8, 1.95), Color(0.6, 0.75, 0.4), Color(1.45, 1.55, 1.65),
+	Color(0.78, 0.62, 0.5), Color(0.55, 0.5, 0.38)]
 ## Ruts and tread ribbons belong to soft ground only.
 ## Painted tread ribbons are off everywhere: the deformed ground itself shows
 ## where the tyres went (and asphalt, gravel, rock and water show nothing).
-const TRACKED := [false, false, false, false, false, false, false, false, false, false, false, false]
+const TRACKED := [false, false, false, false, false, false, false, false, false, false, false, false, false, false]
 ## Fraction of the vehicle's top speed reachable on each ground: the engine
 ## stops pushing beyond it, and a car arriving faster is slowed towards it
 ## (soft ground bogs it down hard, rough ground such as gravel, rock or grass
 ## shakes speed off more gently, ice lets it slide on).
 ## Mud is slow and treacherous: a car arriving fast is dragged down hard and
 ## can dig itself in (see vehicle.gd sinkage).
-const SPEED := [0.75, 0.85, 1.0, 0.62, 0.55, 0.22, 0.28, 0.4, 0.45, 0.55, 0.6, 0.85]
+const SPEED := [0.75, 0.85, 1.0, 0.62, 0.55, 0.22, 0.28, 0.4, 0.45, 0.55, 0.6, 0.85, 0.6, 0.5]
+
+## Weather (set each frame by offroad/weather.gd; zero in the desert): how
+## soaked the ground is, how much fresh snow covers it, and how hard it is
+## frozen. The functions below give every ground's properties under it; physics,
+## ruts and particles use them instead of the raw tables.
+static var wetness := 0.0
+static var snow_cover := 0.0
+## Depth of the snow pack (m); deeper snow bogs cars down and ruts deeper.
+static var snow_depth := 0.0
+## Snow falling now (0..1), for snow settling on cars.
+static var snowfall := 0.0
+## Rain falling now (0..1), for raindrops on car glass.
+static var rain := 0.0
+static var frost := 0.0
+## How much rain softens each ground (soil and turf most; rock, asphalt, ice none).
+const SOAK := [0.3, 0.5, 0.0, 0.25, 1.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.8, 0.0, 1.0, 0.7]
+## Hard grounds a frost glazes over once they are wet.
+const GLAZES := [PACKED, ROAD, GRAVEL, ROCK, WET_ROAD, DIRT]
+
+## 0..1 snow lying on a ground (none on water or bare ice).
+static func _snow_on(kind: int) -> float:
+	return 0.0 if kind == WATER or kind == ICE else snow_cover
+
+## 0..1 ice glaze on a ground: frozen rain water on hard ground.
+static func glaze(kind: int) -> float:
+	if kind not in GLAZES: return 0.0
+	return frost * clampf(wetness * 1.6, 0.0, 1.0) * (1.0 - snow_cover * 0.6)
+
+static func grip(kind: int) -> float:
+	var g: float = GRIP[kind]
+	if kind == ROAD: g = lerpf(g, GRIP[WET_ROAD], wetness)
+	elif kind == ROCK: g *= 1.0 - 0.3 * wetness
+	else: g *= 1.0 - 0.35 * wetness * SOAK[kind]
+	g = lerpf(g, GRIP[SNOW], _snow_on(kind))
+	return lerpf(g, GRIP[ICE] * 1.5, glaze(kind))
+
+static func deform(kind: int) -> float:
+	var d: float = DEFORM[kind] * (1.0 + 0.45 * wetness * SOAK[kind]) * (1.0 - 0.7 * frost)
+	# Fresh snow ruts even over asphalt or rock.
+	return maxf(d, DEFORM[SNOW] * _snow_on(kind) * (1.0 - 0.4 * frost) * (1.0 + snow_depth * 1.5))
+
+static func rolling(kind: int) -> float:
+	var r: float = ROLLING[kind] * (1.0 + 0.8 * wetness * SOAK[kind])
+	return lerpf(r, maxf(r, ROLLING[SNOW] * (1.0 + snow_depth * 3.0)), _snow_on(kind))
+
+static func speed(kind: int) -> float:
+	var s: float = SPEED[kind] * (1.0 - 0.25 * wetness * SOAK[kind])
+	s = lerpf(s, minf(s, SPEED[SNOW] / (1.0 + snow_depth * 2.0)), _snow_on(kind))
+	return lerpf(s, SPEED[ICE], glaze(kind))
+
+static func dust(kind: int) -> float:
+	return lerpf(DUST[kind] * (1.0 - 0.95 * wetness), DUST[SNOW], _snow_on(kind))
+
+static func spray(kind: int) -> float:
+	return lerpf(SPRAY[kind] * (1.0 + 0.6 * wetness * SOAK[kind]), SPRAY[SNOW], _snow_on(kind))
+
+## The ground the tyres visibly throw up (snow over anything, ice chips off a glaze).
+static func look_kind(kind: int) -> int:
+	if _snow_on(kind) > 0.45: return SNOW
+	if glaze(kind) > 0.5: return ICE
+	if wetness > 0.6 and kind in [DIRT, CLAY, FOREST]: return MUD
+	return kind
+
+static func surface_name(kind: int) -> String:
+	var name: String = SURFACE_NAMES[kind]
+	if kind == WATER: return name
+	if _snow_on(kind) > 0.45: return name + " · zasnežená"
+	if glaze(kind) > 0.5: return name + " · poľadovica"
+	if frost > 0.5: return name + " · zamrznutá"
+	if wetness > 0.6 and kind in [DIRT, CLAY]: return name + " · rozbahnená"
+	if wetness > 0.5: return name + " · mokrá"
+	return name
 
 ## Test course east of the dunes: Vector4(x0, z0, x1, z1). Lanes run along X;
 ## each starts at the east end, so the car drives west (yaw = PI / 2).
@@ -101,10 +179,14 @@ const CIRCUIT_NAMES := ["Okruh · štart", "Okruh · blato a tráva", "Okruh · 
 ## Hills [x, z, height, radius]: one under each long side, so each side climbs
 ## and descends (the east one after the flat icy corner, which is no place to climb).
 const CIRCUIT_HILLS := [Vector4(-112, 94, 4.0, 10.0), Vector4(-38, 99, 4.0, 10.0)]
+## Active world script, or null for this desert. Set by the scene root before
+## its vehicles enter the tree (battlefield.gd _enter_tree).
+static var world: Script = null
 ## Built once at load (read-only afterwards, so worker threads may sample it).
 static var circuit_path := _build_circuit()
 
 static func dune_height(x: float, z: float) -> float:
+	if world != null: return world.height_at(x, z)
 	var wind := x * 0.075 + z * 0.029 + 0.66 * sin(z * 0.046)
 	var crest := maxf(0.0, sin(wind))
 	var ridge := crest * crest * crest
@@ -115,6 +197,7 @@ static func dune_height(x: float, z: float) -> float:
 	return lerpf(h, 0.6, pad)
 
 static func height_at(x: float, z: float) -> float:
+	if world != null: return world.height_at(x, z)
 	if x > COURSE.x and x < COURSE.z and z > COURSE.y and z < COURSE.w:
 		var w := smoothstep(0.0, MARGIN, minf(minf(x - COURSE.x, COURSE.z - x), minf(z - COURSE.y, COURSE.w - z)))
 		return lerpf(dune_height(x, z), COURSE_LEVEL + course_relief(x, z), w)
@@ -424,6 +507,7 @@ static func course_relief(x: float, z: float) -> float:
 	return 0.0
 
 static func surface_at(x: float, z: float) -> int:
+	if world != null: return world.surface_at(x, z)
 	if x > COURSE.x and x < COURSE.z and z > COURSE.y and z < COURSE.w:
 		var lane := lane_at(x, z)
 		if lane >= 0:
@@ -445,21 +529,56 @@ static func surface_at(x: float, z: float) -> int:
 
 ## Rut compaction scale at a point; loose dunes are 1.
 static func deform_at(x: float, z: float) -> float:
-	return DEFORM[surface_at(x, z)]
+	return deform(surface_at(x, z))
 
 static func in_test_ground(x: float, z: float, margin: float = 0.0) -> bool:
+	if world != null: return world.in_test_ground(x, z, margin)
 	return (x > COURSE.x - margin and x < COURSE.z + margin and z > COURSE.y - margin and z < COURSE.w + margin) \
 		or (x > PAD.x - margin and x < PAD.z + margin and z > PAD.y - margin and z < PAD.w + margin) \
 		or (x > ROCKS.x - margin and x < ROCKS.z + margin and z > ROCKS.y - margin and z < ROCKS.w + margin) \
 		or (x > CIRCUIT.x - margin and x < CIRCUIT.z + margin and z > CIRCUIT.y - margin and z < CIRCUIT.w + margin)
 
+## 0..1 how far ground there can be rutted at all: the desert relay station's
+## concrete foundation (around -19, -13) cannot; other worlds have no such pad.
+static func rut_softness(x: float, z: float) -> float:
+	if world != null: return 1.0
+	return smoothstep(10.0, 15.0, Vector2(x + 19.0, z + 13.0).length())
+
+## Half size of the drivable square; a car beyond it is put back on its route.
+static func play_limit() -> float:
+	if world != null: return world.play_limit()
+	return 125.0
+
+## Water surface height at a point (ponds sit higher than the river).
+static func water_level_at(x: float, z: float) -> float:
+	if world != null: return world.water_level_at(x, z)
+	return WATER_LEVEL
+
+## Current of the water at a point (m/s, X and Z); the desert ford is still.
+static func water_flow_at(x: float, z: float) -> Vector2:
+	if world != null: return world.water_flow_at(x, z)
+	return Vector2.ZERO
+
+## Water surface height (one level per world).
+static func water_level() -> float:
+	if world != null: return world.water_level()
+	return WATER_LEVEL
+
+## Ground rectangles drawn by their own meshes: the dune mesh and fine sand
+## patches skip them.
+static func hidden_rects() -> Array:
+	if world != null: return world.hidden_rects()
+	return [COURSE, PAD, ROCKS, CIRCUIT]
+
 ## Water above the ford bed; zero everywhere else.
 static func water_depth_at(x: float, z: float) -> float:
+	if world != null: return world.water_depth_at(x, z)
 	if x <= WATER_X0 or x >= WATER_X1 or absf(z - LANE_Z[LANE_WATER]) >= LANE_HALF: return 0.0
 	return maxf(0.0, WATER_LEVEL - (COURSE_LEVEL + course_relief(x, z)))
 
 ## Named driving tests: [label, x, z, yaw]. Yaw PI/2 faces west (-X).
 static func test_spots() -> Array:
+	if world != null: return world.test_spots()
 	# The circuit start comes first (the game starts there, key 1); its two
 	# mid-lap entries follow the other test grounds.
 	var spots := [_circuit_spot(CIRCUIT_NAMES[0], 3.5)]
@@ -493,6 +612,7 @@ static func route(t: float, lane: int = 0) -> Vector3:
 	return Vector3(p.x, height_at(p.x, p.y), p.y)
 
 static func route_xz(t: float, lane: int = 0) -> Vector2:
+	if world != null: return world.route_xz(t, lane)
 	# Patrol the valley north of the station. The old ellipse crossed steep
 	# dune faces beyond the van's traction; manual driving can still go anywhere.
 	var z := (25.0 + float(lane) * 0.8) * sin(t) + 30.0

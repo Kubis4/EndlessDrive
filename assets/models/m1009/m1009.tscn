@@ -1,0 +1,111 @@
+[gd_scene format=3]
+
+[ext_resource type="ArrayMesh" path="res://assets/models/m1009/m1009_body.res" id="1_wx1eu"]
+[ext_resource type="ArrayMesh" path="res://assets/models/m1009/m1009_wheel_fl.res" id="2_3xl0t"]
+[ext_resource type="ArrayMesh" path="res://assets/models/m1009/m1009_wheel_fr.res" id="3_2y1sw"]
+[ext_resource type="ArrayMesh" path="res://assets/models/m1009/m1009_wheel_rl.res" id="4_38ncf"]
+[ext_resource type="ArrayMesh" path="res://assets/models/m1009/m1009_wheel_rr.res" id="5_fk3fn"]
+[ext_resource type="ArrayMesh" path="res://assets/models/m1009/m1009_suspension_front.res" id="6_5ts2i"]
+[ext_resource type="ArrayMesh" path="res://assets/models/m1009/m1009_suspension_rear.res" id="7_om1it"]
+[ext_resource type="ArrayMesh" path="res://assets/models/m1009/m1009_wiper_1.res" id="8_cg0h7"]
+[ext_resource type="ArrayMesh" path="res://assets/models/m1009/m1009_wiper_2.res" id="9_tf1so"]
+[ext_resource type="ArrayMesh" path="res://assets/models/m1009/m1009_axle_front.res" id="10_ecfkq"]
+[ext_resource type="ArrayMesh" path="res://assets/models/m1009/m1009_axle_rear.res" id="11_bv4dv"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_x62u0"]
+albedo_color = Color(0.32, 0.025, 0.012, 1)
+roughness = 0.65
+emission_enabled = true
+emission = Color(0.8, 0.025, 0.008, 1)
+emission_energy_multiplier = 0.0
+
+[sub_resource type="QuadMesh" id="QuadMesh_iu8ix"]
+size = Vector2(0.14, 0.16)
+
+[node name="ChevroletM1009" type="Node3D" unique_id=1805150792]
+metadata/model_author = "snafuj (https://sketchfab.com/snafuj)"
+metadata/model_license = "CC-BY-4.0"
+metadata/model_source = "https://sketchfab.com/3d-models/1986-chevrolet-m1009-d2a462c09f054bb093e360a263478732"
+
+[node name="Body" type="MeshInstance3D" parent="." unique_id=518205748]
+mesh = ExtResource("1_wx1eu")
+
+[node name="Wheel_FL" type="Node3D" parent="." unique_id=28284270]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3486146, 0, 0.88467526)
+
+[node name="TyreAndRim" type="MeshInstance3D" parent="Wheel_FL" unique_id=2146533106]
+mesh = ExtResource("2_3xl0t")
+
+[node name="Wheel_FR" type="Node3D" parent="." unique_id=238682725]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3486146, 0, -0.8846754)
+
+[node name="TyreAndRim" type="MeshInstance3D" parent="Wheel_FR" unique_id=1843699360]
+mesh = ExtResource("3_2y1sw")
+
+[node name="Wheel_RL" type="Node3D" parent="." unique_id=484047393]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.3486146, 0, 0.8846754)
+
+[node name="TyreAndRim" type="MeshInstance3D" parent="Wheel_RL" unique_id=906008984]
+mesh = ExtResource("4_38ncf")
+
+[node name="Wheel_RR" type="Node3D" parent="." unique_id=374180645]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.3486146, 0, -0.88467526)
+
+[node name="TyreAndRim" type="MeshInstance3D" parent="Wheel_RR" unique_id=1843696802]
+mesh = ExtResource("5_fk3fn")
+
+[node name="Suspension_Front" type="MeshInstance3D" parent="." unique_id=518003056]
+mesh = ExtResource("6_5ts2i")
+metadata/axle_x = 1.3486146
+
+[node name="Suspension_Rear" type="MeshInstance3D" parent="." unique_id=1554090446]
+mesh = ExtResource("7_om1it")
+metadata/axle_x = -1.3486146
+
+[node name="Wiper_1" type="Node3D" parent="." unique_id=1562959875]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.77917933, 1.0013363, -0.58157533)
+metadata/axis = Vector3(0.7206598, 0.69328564, 0.0021448229)
+metadata/rest = Vector3(-0.10540717, 0.10651036, 0.98870873)
+metadata/reach = 0.5843662
+metadata/sweep_sign = -1.0
+
+[node name="Blade" type="MeshInstance3D" parent="Wiper_1" unique_id=355018838]
+mesh = ExtResource("8_cg0h7")
+
+[node name="Wiper_2" type="Node3D" parent="." unique_id=880749666]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.8135307, 1.0259068, 0.070547126)
+metadata/axis = Vector3(0.7344581, 0.6762721, 0.05680903)
+metadata/rest = Vector3(-0.21207404, 0.14919056, 0.9657985)
+metadata/reach = 0.6164479
+metadata/sweep_sign = -1.0
+
+[node name="Blade" type="MeshInstance3D" parent="Wiper_2" unique_id=330750111]
+mesh = ExtResource("9_tf1so")
+
+[node name="Axle_Front" type="Node3D" parent="." unique_id=1238380458]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3486146, 0, 0)
+
+[node name="Housing" type="MeshInstance3D" parent="Axle_Front" unique_id=491112799]
+mesh = ExtResource("10_ecfkq")
+
+[node name="Axle_Rear" type="Node3D" parent="." unique_id=1208375832]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.3486146, 0, 0)
+
+[node name="Housing" type="MeshInstance3D" parent="Axle_Rear" unique_id=1892801779]
+mesh = ExtResource("11_bv4dv")
+
+[node name="BrakeLampL" type="MeshInstance3D" parent="." unique_id=1423571624]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -2.4101934, 0.5732672, 0.88472193)
+material_override = SubResource("StandardMaterial3D_x62u0")
+mesh = SubResource("QuadMesh_iu8ix")
+
+[node name="BrakeLampR" type="MeshInstance3D" parent="." unique_id=1358700931]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -2.4101934, 0.5732672, -0.8847863)
+material_override = SubResource("StandardMaterial3D_x62u0")
+mesh = SubResource("QuadMesh_iu8ix")
+
+[node name="HeadlightL" type="Marker3D" parent="." unique_id=97206877]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.0072012, 0.5827789, 0.77356625)
+
+[node name="HeadlightR" type="Marker3D" parent="." unique_id=462742038]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.0072012, 0.5827789, -0.75667286)

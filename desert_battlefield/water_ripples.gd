@@ -28,21 +28,21 @@ var active := false
 ## forcing and uploads the finished field one frame later.
 var task := -1
 
-func configure() -> void:
-	origin = Vector2(Surface.WATER_X0, Surface.LANE_Z[Surface.LANE_WATER] - Surface.LANE_HALF)
-	nx = ceili((Surface.WATER_X1 - Surface.WATER_X0) / CELL) + 1
-	nz = ceili(Surface.LANE_HALF * 2.0 / CELL) + 1
+## Simulated area (x0, z0, size x, size z); the desert ford lane by default.
+func configure(area: Vector4 = Vector4.ZERO) -> void:
+	if area == Vector4.ZERO:
+		area = Vector4(Surface.WATER_X0, Surface.LANE_Z[Surface.LANE_WATER] - Surface.LANE_HALF,
+			Surface.WATER_X1 - Surface.WATER_X0, Surface.LANE_HALF * 2.0)
+	origin = Vector2(area.x, area.y)
+	nx = ceili(area.z / CELL) + 1
+	nz = ceili(area.w / CELL) + 1
 	height.resize(nx * nz)
 	speed.resize(nx * nz)
 	smooth.resize(nx * nz)
 	wet.resize(nx * nz)
 	shore.resize(nx * nz)
 	for z in nz:
-		for x in nx:
-			var depth := Surface.water_depth_at(origin.x + x * CELL, origin.y + z * CELL)
-			wet[z * nx + x] = 1 if depth > 0.03 else 0
-			# Shallow margins absorb energy like a sloping beach.
-			shore[z * nx + x] = lerpf(0.9, DAMPING, smoothstep(0.03, 0.35, depth))
+		for x in nx: _setup_cell(x, z)
 	image = Image.create(nx, nz, false, Image.FORMAT_RGF)
 	image.fill(Color(0, 0, 0, 1))
 	texture = ImageTexture.create_from_image(image)
@@ -50,6 +50,46 @@ func configure() -> void:
 ## World-space rectangle covered by the texture (x0, z0, size x, size z).
 func bounds() -> Vector4:
 	return Vector4(origin.x, origin.y, (nx - 1) * CELL, (nz - 1) * CELL)
+
+## Keeps `centre` well inside the simulated rectangle by moving it in whole
+## cells: running waves keep their world position, only the strip that comes
+## into view is set up (and starts calm). Returns true when it moved.
+func follow(centre: Vector2) -> bool:
+	var half := Vector2((nx - 1) * CELL, (nz - 1) * CELL) * 0.5
+	var offset := centre - (origin + half)
+	if absf(offset.x) < half.x * 0.3 and absf(offset.y) < half.y * 0.3: return false
+	var shift := Vector2i(roundi(offset.x / CELL), roundi(offset.y / CELL))
+	if task != -1:
+		WorkerThreadPool.wait_for_task_completion(task)
+		task = -1
+	var old_height := height.duplicate()
+	var old_speed := speed.duplicate()
+	var old_wet := wet.duplicate()
+	var old_shore := shore.duplicate()
+	origin += Vector2(shift) * CELL
+	for z in nz:
+		for x in nx:
+			var i := z * nx + x
+			var sx := x + shift.x
+			var sz := z + shift.y
+			if sx >= 0 and sz >= 0 and sx < nx and sz < nz:
+				var j := sz * nx + sx
+				height[i] = old_height[j]
+				speed[i] = old_speed[j]
+				wet[i] = old_wet[j]
+				shore[i] = old_shore[j]
+			else:
+				height[i] = 0.0
+				speed[i] = 0.0
+				_setup_cell(x, z)
+	_upload()
+	return true
+
+func _setup_cell(x: int, z: int) -> void:
+	var depth := Surface.water_depth_at(origin.x + x * CELL, origin.y + z * CELL)
+	wet[z * nx + x] = 1 if depth > 0.03 else 0
+	# Shallow margins absorb energy like a sloping beach.
+	shore[z * nx + x] = lerpf(0.9, DAMPING, smoothstep(0.03, 0.35, depth))
 
 func update(delta: float, cars: Array) -> void:
 	var driving := false

@@ -8,7 +8,7 @@ The repository root is the Godot project; this folder holds the demo scene and s
 From the repository root, run:
 
 ```powershell
-.sirocco.ps1 Play
+.\sirocco.ps1 Play
 ```
 
 The launcher selects **Forward+** for this run, enables the intended atmosphere and
@@ -444,10 +444,10 @@ for the Jeep attribution and the supplied models' provenance.
 - `sand.gdshader`, `dust.gdshader`, `grain.gdshader`, `tracks.gdshader`: procedural materials.
 
 ```powershell
-.sirocco.ps1 Build
-.sirocco.ps1 Check
-.sirocco.ps1 Capture
-.sirocco.ps1 Benchmark -Quality Auto -Duration 60
+.\sirocco.ps1 Build
+.\sirocco.ps1 Check
+.\sirocco.ps1 Capture
+.\sirocco.ps1 Benchmark -Quality Auto -Duration 60
 ```
 
 **Build overwrites the generated scene and terrain resource**, including any manual

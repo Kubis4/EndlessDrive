@@ -7,6 +7,12 @@ uniform sampler2D soil_touched : filter_nearest, repeat_disable;
 uniform vec4 live_segments[12];
 uniform vec4 live_depths[3];
 uniform int live_count = 0;
+uniform vec2 soil_center = vec2(0.0);
+// Snow layer (highlands): how far tyres pressed the snow down, and how much the
+// snow buries the soil ruts (0 bare .. 1 covered). See soil.gd.
+uniform sampler2D snow_map : filter_linear, repeat_disable;
+uniform bool snow_layer = false;
+uniform float soil_bury = 0.0;
 
 vec4 sand_spline(vec2 p) {
 	vec2 f = fract((p + vec2(128.0)) * 4.0);
@@ -22,6 +28,9 @@ vec4 sand_spline(vec2 p) {
 float live_depth(vec2 p) {
 	float result = 0.0;
 	if (live_count == 0) { return 0.0; }
+	// (All of them lie by the car: nothing further off pays for the loop.)
+	vec2 away = p - live_segments[0].xy;
+	if (dot(away, away) > 900.0) { return 0.0; }
 	for (int i = 0; i < 12; i++) {
 		if (i >= live_count) { break; }
 		float depth = live_depths[i / 4][i % 4];
@@ -35,7 +44,9 @@ float live_depth(vec2 p) {
 	return result;
 }
 
-float sand_field_depth(vec2 p) {
+float sand_field_depth(vec2 world_p) {
+	// The field follows the car in large worlds; soil_center is its world origin.
+	vec2 p = world_p - soil_center;
 	if (!soil_enabled || max(abs(p.x), abs(p.y)) >= 128.0) { return 0.0; }
 	// 4 m blocks no tyre has touched hold no displacement: skip 4 fetches.
 	if (textureLod(soil_touched, (p + vec2(128.0)) / 256.0, 0.0).r < 0.5) { return 0.0; }
@@ -52,7 +63,13 @@ float sand_field_depth(vec2 p) {
 	float b = textureLod(soil_map, vec2(hi.x, lo.y), 0.0).r;
 	float c = textureLod(soil_map, vec2(lo.x, hi.y), 0.0).r;
 	float d = textureLod(soil_map, hi, 0.0).r;
-	return mix(mix(a, b, g.z), mix(c, d, g.z), g.w);
+	float soil = mix(mix(a, b, g.z), mix(c, d, g.z), g.w);
+	if (!snow_layer) { return soil; }
+	float sa = textureLod(snow_map, lo, 0.0).r;
+	float sb = textureLod(snow_map, vec2(hi.x, lo.y), 0.0).r;
+	float sc = textureLod(snow_map, vec2(lo.x, hi.y), 0.0).r;
+	float sd = textureLod(snow_map, hi, 0.0).r;
+	return soil * (1.0 - soil_bury) + mix(mix(sa, sb, g.z), mix(sc, sd, g.z), g.w);
 }
 
 float sand_depth(vec2 p) {
@@ -61,8 +78,9 @@ float sand_depth(vec2 p) {
 
 vec3 sand_normal(vec2 p, vec3 base) {
 	// Untouched block (its 4 m mask covers the ±25 cm taps): keep the base normal.
-	if (live_count == 0 && (!soil_enabled || max(abs(p.x), abs(p.y)) >= 128.0
-		|| textureLod(soil_touched, (p + vec2(128.0)) / 256.0, 0.0).r < 0.5)) { return base; }
+	vec2 q = p - soil_center;
+	if (live_count == 0 && (!soil_enabled || max(abs(q.x), abs(q.y)) >= 128.0
+		|| textureLod(soil_touched, (q + vec2(128.0)) / 256.0, 0.0).r < 0.5)) { return base; }
 	float dx = (sand_depth(p + vec2(0.25, 0)) - sand_depth(p - vec2(0.25, 0))) * 2.0;
 	float dz = (sand_depth(p + vec2(0, 0.25)) - sand_depth(p - vec2(0, 0.25))) * 2.0;
 	return normalize(vec3(base.x / max(base.y, 0.05) + dx, 1.0, base.z / max(base.y, 0.05) + dz));

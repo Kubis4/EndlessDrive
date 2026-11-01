@@ -1,0 +1,207 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://offroad/layout/layout_editor.gd" id="1_y7rqx"]
+[ext_resource type="Script" path="res://offroad/layout/layout_trail.gd" id="2_xxn0o"]
+[ext_resource type="Script" path="res://offroad/layout/layout_pond.gd" id="3_k60y0"]
+
+[sub_resource type="Curve3D" id="Curve3D_o02dd"]
+_data = {
+"points": PackedVector3Array(0, 0, 0, 0, 0, 0, -30, 0.9326379, -108, 0, 0, 0, 0, 0, 0, 20, 3.9342618, -104, 0, 0, 0, 0, 0, 0, 70, 7.3288293, -88, 0, 0, 0, 0, 0, 0, 100, 5.986666, -50, 0, 0, 0, 0, 0, 0, 108, 10.840825, 0, 0, 0, 0, 0, 0, 0, 98, 13.467388, 50, 0, 0, 0, 0, 0, 0, 70, 7.145318, 92, 0, 0, 0, 0, 0, 0, 30, 0.19999997, 110, 0, 0, 0, 0, 0, 0, -20, 6.024149, 112, 0, 0, 0, 0, 0, 0, -62, 8.297128, 98, 0, 0, 0, 0, 0, 0, -92, 1.4574361, 62, 0, 0, 0, 0, 0, 0, -104, 2.0036428, 15, 0, 0, 0, 0, 0, 0, -96, 7.3965216, -35, 0, 0, 0, 0, 0, 0, -70, 6.692208, -80),
+"tilts": PackedFloat32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+}
+point_count = 14
+
+[sub_resource type="Curve3D" id="Curve3D_rcgvj"]
+_data = {
+"points": PackedVector3Array(0, 0, 0, 0, 0, 0, 100, 5.986666, -50, 0, 0, 0, 0, 0, 0, 78, 8.410788, -30, 0, 0, 0, 0, 0, 0, 64, 9.903841, -2, 0, 0, 0, 0, 0, 0, 72, 11.291284, 28, 0, 0, 0, 0, 0, 0, 60, 6.8970222, 58, 0, 0, 0, 0, 0, 0, 70, 7.145318, 92),
+"tilts": PackedFloat32Array(0, 0, 0, 0, 0, 0)
+}
+point_count = 6
+
+[sub_resource type="Curve3D" id="Curve3D_lxyo5"]
+_data = {
+"points": PackedVector3Array(0, 0, 0, 0, 0, 0, -104, 2.0036428, 15, 0, 0, 0, 0, 0, 0, -88, 1.9339827, 10, 0, 0, 0, 0, 0, 0, -76, 5.323944, 0, 0, 0, 0, 0, 0, 0, -66, 10.254498, -12, 0, 0, 0, 0, 0, 0, -58, 14.026512, -28),
+"tilts": PackedFloat32Array(0, 0, 0, 0, 0)
+}
+point_count = 5
+
+[sub_resource type="Curve3D" id="Curve3D_2e1g3"]
+_data = {
+"points": PackedVector3Array(0, 0, 0, 0, 0, 0, -30, 6.343034, -20, 0, 0, 0, 0, 0, 0, -5, 3.3968081, -18, 0, 0, 0, 0, 0, 0, 16, -0.25000006, -16, 0, 0, 0, 0, 0, 0, 35, 1.7266895, -14, 0, 0, 0, 0, 0, 0, 64, 9.903841, -2),
+"tilts": PackedFloat32Array(0, 0, 0, 0, 0)
+}
+point_count = 5
+
+[sub_resource type="Curve3D" id="Curve3D_wqyou"]
+_data = {
+"points": PackedVector3Array(0, 0, 0, 0, 0, 0, -70, 6.692208, -80, 0, 0, 0, 0, 0, 0, -50, 5.62546, -65, 0, 0, 0, 0, 0, 0, -35, 5.4744105, -50, 0, 0, 0, 0, 0, 0, -30, 6.343034, -20),
+"tilts": PackedFloat32Array(0, 0, 0, 0)
+}
+point_count = 4
+
+[sub_resource type="Curve3D" id="Curve3D_fcau7"]
+_data = {
+"points": PackedVector3Array(0, 0, 0, 0, 0, 0, -62, 8.297128, 98, 0, 0, 0, 0, 0, 0, -62, 3.1018734, 88, 0, 0, 0, 0, 0, 0, -62, -0.15205656, 78, 0, 0, 0, 0, 0, 0, -62, -0.19477968, 70),
+"tilts": PackedFloat32Array(0, 0, 0, 0)
+}
+point_count = 4
+
+[sub_resource type="Curve3D" id="Curve3D_1ooti"]
+_data = {
+"points": PackedVector3Array(0, 0, 0, 0, 0, 0, 0, 3.569475, -262, 0, 0, 0, 0, 0, 0, 95, 3.7366197, -248, 0, 0, 0, 0, 0, 0, 180, 7.07642, -202, 0, 0, 0, 0, 0, 0, 238, 10.192274, -122, 0, 0, 0, 0, 0, 0, 262, 2.8420794, -25, 0, 0, 0, 0, 0, 0, 250, 6.073802, 75, 0, 0, 0, 0, 0, 0, 212, 10.102029, 165, 0, 0, 0, 0, 0, 0, 140, 5.7597914, 232, 0, 0, 0, 0, 0, 0, 55, 2.9228652, 258, 0, 0, 0, 0, 0, 0, -34, 5.3347735, 178, 0, 0, 0, 0, 0, 0, -75, 10.098264, 140, 0, 0, 0, 0, 0, 0, -150, 4.814435, 126, 0, 0, 0, 0, 0, 0, -225, 8.378519, 92, 0, 0, 0, 0, 0, 0, -258, 8.980658, 5, 0, 0, 0, 0, 0, 0, -245, 8.792134, -92, 0, 0, 0, 0, 0, 0, -195, 9.606688, -176, 0, 0, 0, 0, 0, 0, -110, 7.7618413, -236),
+"tilts": PackedFloat32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+}
+point_count = 17
+
+[sub_resource type="Curve3D" id="Curve3D_ji8lm"]
+_data = {
+"points": PackedVector3Array(0, 0, 0, 0, 0, 0, -20, 6.024149, 112, 0, 0, 0, 0, 0, 0, -22, 4.9493804, 135, 0, 0, 0, 0, 0, 0, -28, 4.502859, 158, 0, 0, 0, 0, 0, 0, -34, 5.3347735, 178),
+"tilts": PackedFloat32Array(0, 0, 0, 0)
+}
+point_count = 4
+
+[sub_resource type="Curve3D" id="Curve3D_n5o1m"]
+_data = {
+"points": PackedVector3Array(0, 0, 0, 0, 0, 0, 108, 10.840825, 0, 0, 0, 0, 0, 0, 0, 150, 8.0211315, -8, 0, 0, 0, 0, 0, 0, 205, 4.2627172, -18, 0, 0, 0, 0, 0, 0, 262, 2.8420794, -25),
+"tilts": PackedFloat32Array(0, 0, 0, 0)
+}
+point_count = 4
+
+[sub_resource type="Curve3D" id="Curve3D_a017o"]
+_data = {
+"points": PackedVector3Array(0, 0, 0, 0, 0, 0, 98, 13.467388, 50, 0, 0, 0, 0, 0, 0, 118, 9.719446, 68, 0, 0, 0, 0, 0, 0, 134, 6.089577, 86, 0, 0, 0, 0, 0, 0, 145, 3.5618494, 97),
+"tilts": PackedFloat32Array(0, 0, 0, 0)
+}
+point_count = 4
+
+[sub_resource type="Curve3D" id="Curve3D_iesn0"]
+_data = {
+"points": PackedVector3Array(0, 0, 0, 0, 0, 0, -75, 10.098264, 140, 0, 0, 0, 0, 0, 0, -84, 10.569798, 146, 0, 0, 0, 0, 0, 0, -90, 11.129831, 150, 0, 0, 0, 0, 0, 0, -113.75, 11.814417, 156.5, 0, 0, 0, 0, 0, 0, -137.5, 13.004411, 163, 0, 0, 0, 0, 0, 0, -161.25, 14.630916, 169.5, 0, 0, 0, 0, 0, 0, -185, 17.34385, 176, 0, 0, 0, 0, 0, 0, -190, 18.029177, 177.33975, 0, 0, 0, 0, 0, 0, -193.66025, 18.715313, 181, 0, 0, 0, 0, 0, 0, -195, 19.48237, 186, 0, 0, 0, 0, 0, 0, -193.66025, 20.29712, 191, 0, 0, 0, 0, 0, 0, -190, 21.155485, 194.66025, 0, 0, 0, 0, 0, 0, -185, 22.011644, 196, 0, 0, 0, 0, 0, 0, -161.25, 25.91232, 202.5, 0, 0, 0, 0, 0, 0, -137.5, 29.06619, 209, 0, 0, 0, 0, 0, 0, -113.75, 31.883108, 215.5, 0, 0, 0, 0, 0, 0, -90, 34.87792, 222, 0, 0, 0, 0, 0, 0, -85, 35.583733, 223.33975, 0, 0, 0, 0, 0, 0, -81.339745, 36.292503, 227, 0, 0, 0, 0, 0, 0, -80, 37.018463, 232, 0, 0, 0, 0, 0, 0, -81.339745, 37.771217, 237, 0, 0, 0, 0, 0, 0, -85, 38.529434, 240.66025, 0, 0, 0, 0, 0, 0, -90, 39.27462, 242, 0, 0, 0, 0, 0, 0, -113.75, 42.426594, 248.5, 0, 0, 0, 0, 0, 0, -137.5, 44.879276, 255, 0, 0, 0, 0, 0, 0, -161.25, 46.600983, 261.5, 0, 0, 0, 0, 0, 0, -185, 49.06287, 268, 0, 0, 0, 0, 0, 0, -190, 49.718548, 269.33975, 0, 0, 0, 0, 0, 0, -193.66025, 50.437397, 273, 0, 0, 0, 0, 0, 0, -195, 51.160915, 278, 0, 0, 0, 0, 0, 0, -193.66025, 51.86126, 283, 0, 0, 0, 0, 0, 0, -190, 52.615948, 286.66025, 0, 0, 0, 0, 0, 0, -185, 53.38035, 288, 0, 0, 0, 0, 0, 0, -161.25, 56.706684, 294.5, 0, 0, 0, 0, 0, 0, -137.5, 59.17981, 301, 0, 0, 0, 0, 0, 0, -113.75, 60.97349, 307.5, 0, 0, 0, 0, 0, 0, -90, 61.895977, 314, 0, 0, 0, 0, 0, 0, -84, 62.25913, 316),
+"tilts": PackedFloat32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+}
+point_count = 38
+
+[node name="RozlozenieVrchoviny" type="Node3D" unique_id=1826580555]
+script = ExtResource("1_y7rqx")
+
+[node name="Trasy" type="Node3D" parent="." unique_id=939771805]
+
+[node name="Poľná cesta" type="Path3D" parent="Trasy" unique_id=669925101]
+curve = SubResource("Curve3D_o02dd")
+script = ExtResource("2_xxn0o")
+ground = 3
+half = 3.4
+closed = true
+ford = 0.3
+tracks = true
+
+[node name="Lesná cesta" type="Path3D" parent="Trasy" unique_id=213413811]
+curve = SubResource("Curve3D_rcgvj")
+script = ExtResource("2_xxn0o")
+half = 2.3
+
+[node name="Výstup na vrch" type="Path3D" parent="Trasy" unique_id=88850041]
+curve = SubResource("Curve3D_lxyo5")
+script = ExtResource("2_xxn0o")
+ground = 7
+half = 2.6
+
+[node name="Brod" type="Path3D" parent="Trasy" unique_id=1195119803]
+curve = SubResource("Curve3D_2e1g3")
+script = ExtResource("2_xxn0o")
+ford = 0.75
+
+[node name="Bahnisko" type="Path3D" parent="Trasy" unique_id=1790359964]
+curve = SubResource("Curve3D_wqyou")
+script = ExtResource("2_xxn0o")
+half = 2.6
+bog = true
+
+[node name="Lom" type="Path3D" parent="Trasy" unique_id=358144249]
+curve = SubResource("Curve3D_fcau7")
+script = ExtResource("2_xxn0o")
+ground = 3
+half = 3.0
+
+[node name="Diaľková cesta" type="Path3D" parent="Trasy" unique_id=191785766]
+curve = SubResource("Curve3D_1ooti")
+script = ExtResource("2_xxn0o")
+ground = 3
+half = 3.2
+closed = true
+ford = 0.35
+smooth = 16
+tracks = true
+
+[node name="Severná spojka" type="Path3D" parent="Trasy" unique_id=1524290356]
+curve = SubResource("Curve3D_ji8lm")
+script = ExtResource("2_xxn0o")
+
+[node name="Východná spojka" type="Path3D" parent="Trasy" unique_id=471770393]
+curve = SubResource("Curve3D_n5o1m")
+script = ExtResource("2_xxn0o")
+
+[node name="K jazierku" type="Path3D" parent="Trasy" unique_id=1872204565]
+curve = SubResource("Curve3D_a017o")
+script = ExtResource("2_xxn0o")
+half = 2.4
+
+[node name="Serpentíny" type="Path3D" parent="Trasy" unique_id=2065128671]
+curve = SubResource("Curve3D_iesn0")
+script = ExtResource("2_xxn0o")
+ground = 3
+half = 3.0
+smooth = 22
+tracks = true
+ice = true
+
+[node name="Jazierka" type="Node3D" parent="." unique_id=1909318580]
+
+[node name="Jazierko1" type="Marker3D" parent="Jazierka" unique_id=622894323]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 150, 3.4, 110)
+script = ExtResource("3_k60y0")
+
+[node name="Testy" type="Node3D" parent="." unique_id=317899951]
+
+[node name="Tábor · štart" type="Marker3D" parent="Testy" unique_id=377311497]
+transform = Transform3D(-0.078702435, 0, -0.9968982, 0, 1, 0, 0.9968982, 0, -0.078702435, -24, 6.3508725, -19.5)
+
+[node name="Brod cez rieku" type="Marker3D" parent="Testy" unique_id=729589322]
+transform = Transform3D(-0.10344212, 0, -0.99463546, 0, 1, 0, 0.99463546, 0, -0.10344212, -9, 4.66875, -18.6)
+
+[node name="Bahnisko" type="Marker3D" parent="Testy" unique_id=1574865024]
+transform = Transform3D(-0.6000001, 0, -0.79999995, 0, 1, 0, 0.79999995, 0, -0.6000001, -66, 7.100273, -77)
+
+[node name="Výstup na vrch" type="Marker3D" parent="Testy" unique_id=1195905675]
+transform = Transform3D(0.28, 0, -0.96, 0, 1, 0, 0.96, 0, 0.28, -100, 2.4509535, 13.5)
+
+[node name="Lesná cesta" type="Marker3D" parent="Testy" unique_id=33151076]
+transform = Transform3D(-0.6643638, 0, 0.74740934, 0, 1, 0, -0.74740934, 0, -0.6643638, 96, 6.692103, -46)
+
+[node name="Lom" type="Marker3D" parent="Testy" unique_id=355447418]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -62, 9.095492, 102)
+
+[node name="Poľná cesta" type="Marker3D" parent="Testy" unique_id=1744888697]
+transform = Transform3D(0.5230162, 0, -0.85232276, 0, 1, 0, 0.85232276, 0, 0.5230162, -52, 5.437184, -94.5)
+
+[node name="Serpentíny · úpätie" type="Marker3D" parent="Testy" unique_id=1876252929]
+transform = Transform3D(-0.26432598, 0, 0.9644334, 0, 1, 0, -0.9644334, 0, -0.26432598, -93, 11.802964, 150.8)
+
+[node name="Serpentíny · sneh" type="Marker3D" parent="Testy" unique_id=1788190385]
+transform = Transform3D(-0.26432598, 0, 0.9644334, 0, 1, 0, -0.9644334, 0, -0.26432598, -93, 40.319187, 242.8)
+
+[node name="Serpentíny · ľad" type="Marker3D" parent="Testy" unique_id=846290169]
+transform = Transform3D(-0.26515698, 0, -0.96420527, 0, 1, 0, 0.96420527, 0, -0.26515698, -182, 54.418583, 288.8)
+
+[node name="Diaľková cesta" type="Marker3D" parent="Testy" unique_id=1970742175]
+transform = Transform3D(-0.97072834, 0, -0.2401802, 0, 1, 0, 0.2401802, 0, -0.97072834, 238, 10.692274, -122)
+
+[node name="Lesné jazierko" type="Marker3D" parent="Testy" unique_id=28973978]
+transform = Transform3D(-0.77039427, 0, -0.63756776, 0, 1, 0, 0.63756776, 0, -0.77039427, 122, 9.430128, 71.5)
+
+[node name="Pečiatky" type="Node3D" parent="." unique_id=1989261505]
+
+[node name="Doplnky" type="Node3D" parent="." unique_id=478699462]
+
+[node name="Slnko" type="DirectionalLight3D" parent="." unique_id=1649297615]
+transform = Transform3D(0.8660254, 0.38302222, -0.32139382, 0, 0.64278764, 0.76604444, 0.5, -0.66341394, 0.5566704, 0, 0, 0)

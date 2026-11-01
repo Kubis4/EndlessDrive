@@ -19,8 +19,9 @@ func run() -> void:
 	for car in vehicles:
 		starting.append(car.position)
 		var model_id: String = car.get_node("Body").get_meta("endless_drive_model", "")
-		if model_id not in ["jeep", "izh"]: failures.append("Endless Drive vehicle model missing")
-		var wheels := car.get_node("Body/Wheels").get_children()
+		if model_id not in ["jeep", "izh", "m1009"]: failures.append("Endless Drive vehicle model missing")
+		# Axle pivots (rigs with solid axles) sit beside the wheels; skip them.
+		var wheels := car.get_node("Body/Wheels").get_children().filter(func(node): return not node.get_meta("axle", false))
 		if wheels.size() != 4: failures.append("Vehicle must have four wheel pivots")
 		for wheel in wheels:
 			if absf(absf(wheel.position.x) - car.half_track) > 0.001 or absf(absf(wheel.position.z) - car.half_wheelbase) > 0.001:
@@ -133,8 +134,11 @@ func run() -> void:
 	Input.parse_input_event(turn)
 	Input.parse_input_event(brake)
 	Input.parse_input_event(throttle)
+	# ESC opens the pause menu; its "Kinematický pohľad" entry hands the car back.
 	key.keycode = KEY_ESCAPE
 	game._unhandled_key_input(key)
-	if game.driving or vehicles[0].manual: failures.append("Cinematic return failed")
+	if not game.pause_menu.visible or not game.paused: failures.append("ESC did not open the pause menu")
+	game._cinematic_from_menu()
+	if game.driving or vehicles[0].manual or game.paused: failures.append("Cinematic return failed")
 	print("BATTLEFIELD CHECKS ", "PASS" if failures.is_empty() else failures)
 	quit(0 if failures.is_empty() else 1)

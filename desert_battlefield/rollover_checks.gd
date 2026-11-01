@@ -31,6 +31,8 @@ func energy() -> float:
 
 func run() -> void:
 	game = load("res://desert_battlefield/desert_battlefield.tscn").instantiate()
+	# Car-to-car collisions need both cars.
+	game.single_vehicle = false
 	root.add_child(game)
 	game.set_process(false)
 	for vehicle in game.get_node("Patrol").get_children():

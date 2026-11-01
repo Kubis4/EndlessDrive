@@ -1,0 +1,752 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://desert_battlefield/battlefield.gd" id="1_wab02"]
+[ext_resource type="Script" path="res://offroad/highlands.gd" id="2_b3mfj"]
+[ext_resource type="Script" path="res://offroad/highlands_world.gd" id="3_7pv3c"]
+[ext_resource type="Shader" path="res://offroad/highlands_ground.gdshader" id="4_43krw"]
+[ext_resource type="Script" path="res://desert_battlefield/vehicle.gd" id="5_776bt"]
+[ext_resource type="Shader" path="res://shaders/jeep_paint.gdshader" id="6_x1fox"]
+[ext_resource type="Texture2D" path="res://assets/models/jeep/jeep_cherokee_0.png" id="7_0fgq5"]
+[ext_resource type="Texture2D" path="res://assets/models/jeep/jeep_cherokee_2.png" id="8_gnj1w"]
+[ext_resource type="Texture2D" path="res://assets/models/jeep/jeep_cherokee_1.png" id="9_8pqgd"]
+[ext_resource type="ArrayMesh" path="res://assets/models/jeep/jeep_body.res" id="10_7bkob"]
+[ext_resource type="ArrayMesh" path="res://assets/models/jeep/jeep_wheel_fl.res" id="11_auup5"]
+[ext_resource type="ArrayMesh" path="res://assets/models/jeep/jeep_wheel_rl.res" id="12_0uxxv"]
+[ext_resource type="ArrayMesh" path="res://assets/models/jeep/jeep_wheel_fr.res" id="13_lws2x"]
+[ext_resource type="ArrayMesh" path="res://assets/models/jeep/jeep_wheel_rr.res" id="14_j674o"]
+[ext_resource type="Shader" path="res://desert_battlefield/dust.gdshader" id="15_818nq"]
+[ext_resource type="Shader" path="res://desert_battlefield/grain.gdshader" id="16_c3ji5"]
+[ext_resource type="Shader" path="res://shaders/izh_paint.gdshader" id="17_b4m6t"]
+[ext_resource type="Texture2D" path="res://assets/models/izh/textures/IZH-2715_albedo.png" id="18_rqqdr"]
+[ext_resource type="Texture2D" path="res://assets/models/izh/textures/IZH-2715_metalness.png" id="19_loqjw"]
+[ext_resource type="Texture2D" path="res://assets/models/izh/textures/IZH-2715_roughness.png" id="20_0mxtm"]
+[ext_resource type="ArrayMesh" path="res://assets/models/izh/izh_body.res" id="21_5418f"]
+[ext_resource type="Material" path="res://assets/models/izh/izh_tyres.tres" id="22_8xo51"]
+[ext_resource type="ArrayMesh" path="res://assets/models/izh/izh_wheel_fl.res" id="23_yv5eq"]
+[ext_resource type="ArrayMesh" path="res://assets/models/izh/izh_wheel_rl.res" id="24_co1wf"]
+[ext_resource type="ArrayMesh" path="res://assets/models/izh/izh_wheel_fr.res" id="25_qllv6"]
+[ext_resource type="ArrayMesh" path="res://assets/models/izh/izh_wheel_rr.res" id="26_q20jt"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_a63cb"]
+render_priority = 0
+shader = ExtResource("4_43krw")
+shader_parameter/soil_enabled = null
+shader_parameter/live_segments = null
+shader_parameter/live_depths = null
+shader_parameter/live_count = null
+shader_parameter/soil_center = null
+shader_parameter/fine_geometry = null
+shader_parameter/map_half = null
+shader_parameter/map_step = null
+shader_parameter/water_level = null
+shader_parameter/wetness = null
+shader_parameter/snow_cover = null
+shader_parameter/frost = null
+
+[sub_resource type="Environment" id="Environment_2q11m"]
+background_mode = 1
+background_color = Color(0.63, 0.7, 0.72, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.66, 0.74, 0.8, 1)
+ambient_light_energy = 0.45
+tonemap_mode = 2
+ssao_enabled = true
+ssao_radius = 2.1
+ssao_intensity = 1.5
+ssao_detail = 0.7
+ssil_enabled = true
+ssil_intensity = 0.3
+fog_enabled = true
+fog_light_color = Color(0.68, 0.74, 0.74, 1)
+fog_light_energy = 0.75
+fog_density = 0.0005
+fog_sky_affect = 0.0
+volumetric_fog_enabled = true
+volumetric_fog_density = 0.0008
+volumetric_fog_albedo = Color(0.74, 0.78, 0.78, 1)
+volumetric_fog_length = 200.0
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_o21yt"]
+resource_name = "Desert_paint"
+render_priority = 0
+shader = ExtResource("6_x1fox")
+shader_parameter/albedo_map = ExtResource("7_0fgq5")
+shader_parameter/orm_map = ExtResource("9_8pqgd")
+shader_parameter/normal_map = ExtResource("8_gnj1w")
+shader_parameter/tint = Color(0.4509804, 0.46666667, 0.38431373, 1)
+shader_parameter/body_damage = null
+
+[sub_resource type="StandardMaterial3D" id="SkidSteel"]
+albedo_color = Color(0.15, 0.16, 0.15, 1)
+metallic = 0.35
+roughness = 0.85
+
+[sub_resource type="BoxMesh" id="SkidPlate"]
+size = Vector3(2.4, 0.16, 1.34)
+
+[sub_resource type="StandardMaterial3D" id="BrakeLens"]
+albedo_color = Color(0.32, 0.025, 0.012, 1)
+roughness = 0.65
+emission_enabled = true
+emission = Color(0.8, 0.025, 0.008, 1)
+emission_energy_multiplier = 0.0
+
+[sub_resource type="QuadMesh" id="BrakePanel"]
+size = Vector2(0.09, 0.2)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_w50sb"]
+size = Vector3(2.4, 1.8, 4.6)
+
+[sub_resource type="Gradient" id="Gradient_fwhhm"]
+offsets = PackedFloat32Array(0, 0.12, 0.5, 1)
+colors = PackedColorArray(0.45, 0.33, 0.2, 0, 0.51, 0.39, 0.25, 0.62, 0.58, 0.46, 0.31, 0.3, 0.63, 0.52, 0.37, 0)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_7b5gc"]
+gradient = SubResource("Gradient_fwhhm")
+
+[sub_resource type="Curve" id="Curve_ellf2"]
+_data = [Vector2(0, 0.18), 0.0, 0.0, 0, 0, Vector2(0.25, 0.65), 0.0, 0.0, 0, 0, Vector2(1, 1), 0.0, 0.0, 0, 0]
+point_count = 3
+
+[sub_resource type="CurveTexture" id="CurveTexture_72vn8"]
+curve = SubResource("Curve_ellf2")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_qvdmj"]
+emission_shape = 3
+emission_box_extents = Vector3(0.95, 0.12, 0.4)
+angle_min = -180.0
+angle_max = 180.0
+direction = Vector3(0.8, 0.6, 0.2)
+spread = 35.0
+initial_velocity_min = 0.6
+initial_velocity_max = 1.9
+gravity = Vector3(0.38, 0.13, 0.14)
+damping_min = 0.15
+damping_max = 0.3
+scale_max = 2.3
+scale_curve = SubResource("CurveTexture_72vn8")
+color_ramp = SubResource("GradientTexture1D_7b5gc")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_5biqr"]
+render_priority = 0
+shader = ExtResource("15_818nq")
+
+[sub_resource type="QuadMesh" id="QuadMesh_abxw4"]
+material = SubResource("ShaderMaterial_5biqr")
+size = Vector2(4.5, 4.5)
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_lbl2o"]
+emission_shape = 3
+emission_box_extents = Vector3(0.13, 0.05, 0.18)
+angle_min = -180.0
+angle_max = 180.0
+direction = Vector3(0.8, 0.6, 0.2)
+spread = 35.0
+initial_velocity_min = 0.6
+initial_velocity_max = 1.9
+gravity = Vector3(0.2, -0.35, 0.1)
+damping_min = 0.15
+damping_max = 0.3
+scale_min = 0.5
+scale_max = 1.05
+scale_curve = SubResource("CurveTexture_72vn8")
+color_ramp = SubResource("GradientTexture1D_7b5gc")
+
+[sub_resource type="Gradient" id="Gradient_idab6"]
+offsets = PackedFloat32Array(0, 0.15, 0.65, 1)
+colors = PackedColorArray(0.48, 0.36, 0.21, 0, 0.58, 0.46, 0.29, 0.9, 0.65, 0.53, 0.35, 0.65, 0.65, 0.53, 0.35, 0)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_xhp42"]
+gradient = SubResource("Gradient_idab6")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_ni0yg"]
+emission_shape = 3
+emission_box_extents = Vector3(0.16, 0.03, 0.2)
+angle_min = -180.0
+angle_max = 180.0
+spread = 26.0
+angular_velocity_min = -120.0
+angular_velocity_max = 120.0
+damping_min = 0.4
+damping_max = 0.8
+scale_min = 0.4
+scale_max = 1.5
+color_ramp = SubResource("GradientTexture1D_xhp42")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_6mqcu"]
+render_priority = 0
+shader = ExtResource("16_c3ji5")
+shader_parameter/grain_color = null
+shader_parameter/sprite_kind = null
+
+[sub_resource type="QuadMesh" id="QuadMesh_wlepx"]
+material = SubResource("ShaderMaterial_6mqcu")
+size = Vector2(0.045, 0.09)
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_171ul"]
+emission_shape = 3
+emission_box_extents = Vector3(1, 0.14, 0.35)
+angle_min = -180.0
+angle_max = 180.0
+direction = Vector3(0.35, 0.5, 0.12)
+spread = 48.0
+initial_velocity_min = 0.5
+initial_velocity_max = 1.6
+angular_velocity_min = -120.0
+angular_velocity_max = 120.0
+gravity = Vector3(0.42, -0.1, 0.16)
+damping_min = 0.2
+damping_max = 0.5
+scale_min = 0.3
+scale_max = 0.8
+color_ramp = SubResource("GradientTexture1D_xhp42")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_lfeoy"]
+emission_shape = 3
+emission_box_extents = Vector3(0.13, 0.05, 0.18)
+angle_min = -180.0
+angle_max = 180.0
+direction = Vector3(0.8, 0.6, 0.2)
+spread = 35.0
+initial_velocity_min = 0.6
+initial_velocity_max = 1.9
+gravity = Vector3(0.2, -0.35, 0.1)
+damping_min = 0.15
+damping_max = 0.3
+scale_min = 0.5
+scale_max = 1.05
+scale_curve = SubResource("CurveTexture_72vn8")
+color_ramp = SubResource("GradientTexture1D_7b5gc")
+
+[sub_resource type="Gradient" id="Gradient_f7fnp"]
+offsets = PackedFloat32Array(0, 0.15, 0.65, 1)
+colors = PackedColorArray(0.48, 0.36, 0.21, 0, 0.58, 0.46, 0.29, 0.9, 0.65, 0.53, 0.35, 0.65, 0.65, 0.53, 0.35, 0)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_bc5lh"]
+gradient = SubResource("Gradient_f7fnp")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_gswes"]
+emission_shape = 3
+emission_box_extents = Vector3(0.16, 0.03, 0.2)
+angle_min = -180.0
+angle_max = 180.0
+spread = 26.0
+angular_velocity_min = -120.0
+angular_velocity_max = 120.0
+damping_min = 0.4
+damping_max = 0.8
+scale_min = 0.4
+scale_max = 1.5
+color_ramp = SubResource("GradientTexture1D_bc5lh")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_o7fql"]
+render_priority = 0
+shader = ExtResource("16_c3ji5")
+shader_parameter/grain_color = null
+shader_parameter/sprite_kind = null
+
+[sub_resource type="QuadMesh" id="QuadMesh_8mmlh"]
+material = SubResource("ShaderMaterial_o7fql")
+size = Vector2(0.045, 0.09)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_yw6su"]
+resource_name = "Desert_paint"
+render_priority = 0
+shader = ExtResource("17_b4m6t")
+shader_parameter/tint = Color(0.6784314, 0.6313726, 0.5176471, 1)
+shader_parameter/body_damage = null
+shader_parameter/albedo_texture = ExtResource("18_rqqdr")
+shader_parameter/roughness_texture = ExtResource("20_0mxtm")
+shader_parameter/metalness_texture = ExtResource("19_loqjw")
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hqkjo"]
+albedo_color = Color(0.56078434, 0.14117648, 0.105882354, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_xudjc"]
+size = Vector3(0.015, 0.07, 0.12)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ic71m"]
+albedo_color = Color(0.56078434, 0.14117648, 0.105882354, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_ujfgf"]
+size = Vector3(0.015, 0.07, 0.12)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_cb3hc"]
+size = Vector3(2.4, 1.8, 4.6)
+
+[sub_resource type="Gradient" id="Gradient_uyn7k"]
+offsets = PackedFloat32Array(0, 0.12, 0.5, 1)
+colors = PackedColorArray(0.45, 0.33, 0.2, 0, 0.51, 0.39, 0.25, 0.62, 0.58, 0.46, 0.31, 0.3, 0.63, 0.52, 0.37, 0)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_ho33g"]
+gradient = SubResource("Gradient_uyn7k")
+
+[sub_resource type="Curve" id="Curve_f5bna"]
+_data = [Vector2(0, 0.18), 0.0, 0.0, 0, 0, Vector2(0.25, 0.65), 0.0, 0.0, 0, 0, Vector2(1, 1), 0.0, 0.0, 0, 0]
+point_count = 3
+
+[sub_resource type="CurveTexture" id="CurveTexture_1d3fa"]
+curve = SubResource("Curve_f5bna")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_t4rqk"]
+emission_shape = 3
+emission_box_extents = Vector3(0.95, 0.12, 0.4)
+angle_min = -180.0
+angle_max = 180.0
+direction = Vector3(0.8, 0.6, 0.2)
+spread = 35.0
+initial_velocity_min = 0.6
+initial_velocity_max = 1.9
+gravity = Vector3(0.38, 0.13, 0.14)
+damping_min = 0.15
+damping_max = 0.3
+scale_max = 2.3
+scale_curve = SubResource("CurveTexture_1d3fa")
+color_ramp = SubResource("GradientTexture1D_ho33g")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_sk6vx"]
+render_priority = 0
+shader = ExtResource("15_818nq")
+
+[sub_resource type="QuadMesh" id="QuadMesh_skkk3"]
+material = SubResource("ShaderMaterial_sk6vx")
+size = Vector2(4.5, 4.5)
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_31swf"]
+emission_shape = 3
+emission_box_extents = Vector3(0.13, 0.05, 0.18)
+angle_min = -180.0
+angle_max = 180.0
+direction = Vector3(0.8, 0.6, 0.2)
+spread = 35.0
+initial_velocity_min = 0.6
+initial_velocity_max = 1.9
+gravity = Vector3(0.2, -0.35, 0.1)
+damping_min = 0.15
+damping_max = 0.3
+scale_min = 0.5
+scale_max = 1.05
+scale_curve = SubResource("CurveTexture_1d3fa")
+color_ramp = SubResource("GradientTexture1D_ho33g")
+
+[sub_resource type="Gradient" id="Gradient_jn6xu"]
+offsets = PackedFloat32Array(0, 0.15, 0.65, 1)
+colors = PackedColorArray(0.48, 0.36, 0.21, 0, 0.58, 0.46, 0.29, 0.9, 0.65, 0.53, 0.35, 0.65, 0.65, 0.53, 0.35, 0)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_0gyrx"]
+gradient = SubResource("Gradient_jn6xu")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_odcm2"]
+emission_shape = 3
+emission_box_extents = Vector3(0.16, 0.03, 0.2)
+angle_min = -180.0
+angle_max = 180.0
+spread = 26.0
+angular_velocity_min = -120.0
+angular_velocity_max = 120.0
+damping_min = 0.4
+damping_max = 0.8
+scale_min = 0.4
+scale_max = 1.5
+color_ramp = SubResource("GradientTexture1D_0gyrx")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_dyg4n"]
+render_priority = 0
+shader = ExtResource("16_c3ji5")
+shader_parameter/grain_color = null
+shader_parameter/sprite_kind = null
+
+[sub_resource type="QuadMesh" id="QuadMesh_yhom7"]
+material = SubResource("ShaderMaterial_dyg4n")
+size = Vector2(0.045, 0.09)
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_mbhyw"]
+emission_shape = 3
+emission_box_extents = Vector3(1, 0.14, 0.35)
+angle_min = -180.0
+angle_max = 180.0
+direction = Vector3(0.35, 0.5, 0.12)
+spread = 48.0
+initial_velocity_min = 0.5
+initial_velocity_max = 1.6
+angular_velocity_min = -120.0
+angular_velocity_max = 120.0
+gravity = Vector3(0.42, -0.1, 0.16)
+damping_min = 0.2
+damping_max = 0.5
+scale_min = 0.3
+scale_max = 0.8
+color_ramp = SubResource("GradientTexture1D_0gyrx")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_nfxl2"]
+emission_shape = 3
+emission_box_extents = Vector3(0.13, 0.05, 0.18)
+angle_min = -180.0
+angle_max = 180.0
+direction = Vector3(0.8, 0.6, 0.2)
+spread = 35.0
+initial_velocity_min = 0.6
+initial_velocity_max = 1.9
+gravity = Vector3(0.2, -0.35, 0.1)
+damping_min = 0.15
+damping_max = 0.3
+scale_min = 0.5
+scale_max = 1.05
+scale_curve = SubResource("CurveTexture_1d3fa")
+color_ramp = SubResource("GradientTexture1D_ho33g")
+
+[sub_resource type="Gradient" id="Gradient_lviio"]
+offsets = PackedFloat32Array(0, 0.15, 0.65, 1)
+colors = PackedColorArray(0.48, 0.36, 0.21, 0, 0.58, 0.46, 0.29, 0.9, 0.65, 0.53, 0.35, 0.65, 0.65, 0.53, 0.35, 0)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_owa2c"]
+gradient = SubResource("Gradient_lviio")
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_7vsmh"]
+emission_shape = 3
+emission_box_extents = Vector3(0.16, 0.03, 0.2)
+angle_min = -180.0
+angle_max = 180.0
+spread = 26.0
+angular_velocity_min = -120.0
+angular_velocity_max = 120.0
+damping_min = 0.4
+damping_max = 0.8
+scale_min = 0.4
+scale_max = 1.5
+color_ramp = SubResource("GradientTexture1D_owa2c")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_2ibfd"]
+render_priority = 0
+shader = ExtResource("16_c3ji5")
+shader_parameter/grain_color = null
+shader_parameter/sprite_kind = null
+
+[sub_resource type="QuadMesh" id="QuadMesh_fyu8n"]
+material = SubResource("ShaderMaterial_2ibfd")
+size = Vector2(0.045, 0.09)
+
+[node name="LesnaVrchovina" type="Node3D" unique_id=1015806892]
+script = ExtResource("1_wab02")
+world_script = ExtResource("2_b3mfj")
+ground_node = NodePath("Ground")
+grounds_script = ExtResource("3_7pv3c")
+sky_colors = PackedColorArray(0.49803922, 0.6392157, 0.76862746, 1, 0.7882353, 0.827451, 0.8117647, 1, 0.43529412, 0.47843137, 0.3529412, 1)
+other_world = "res://desert_battlefield/desert_battlefield.tscn"
+
+[node name="Ground" type="MeshInstance3D" parent="." unique_id=934259495]
+material_override = SubResource("ShaderMaterial_a63cb")
+cast_shadow = 0
+
+[node name="DesertAtmosphere" type="WorldEnvironment" parent="." unique_id=1524375313]
+environment = SubResource("Environment_2q11m")
+
+[node name="LateAfternoonSun" type="DirectionalLight3D" parent="." unique_id=1861711124]
+transform = Transform3D(0.7313537, 0.32017884, -0.6021688, 0, 0.88294756, 0.46947157, 0.6819984, -0.34334978, 0.64574695, 0, 0, 0)
+light_color = Color(1, 0.95, 0.86, 1)
+light_energy = 1.3
+light_angular_distance = 0.7
+shadow_enabled = true
+shadow_bias = 0.06
+shadow_normal_bias = 1.5
+directional_shadow_blend_splits = true
+directional_shadow_max_distance = 250.0
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=1101903967]
+physics_interpolation_mode = 2
+transform = Transform3D(0.8161376, -0.49738634, 0.29415342, 0, 0.50904137, 0.86074203, -0.5778576, -0.70248395, 0.4154478, 41, 121, 62)
+projection = 1
+current = true
+size = 91.0
+near = 0.5
+far = 500.0
+
+[node name="Patrol" type="Node3D" parent="." unique_id=71716659]
+
+[node name="Scout01" type="CharacterBody3D" parent="Patrol" unique_id=290963701]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -29.779276, 0.28926286, 47.04097)
+script = ExtResource("5_776bt")
+route_phase = 0.75
+cruise_speed = 10.5
+half_track = 0.803
+half_wheelbase = 1.48
+wheel_radius = 0.44
+
+[node name="Body" type="Node3D" parent="Patrol/Scout01" unique_id=98966087]
+metadata/endless_drive_model = "jeep"
+
+[node name="EndlessDrive_jeep" type="Node3D" parent="Patrol/Scout01/Body" unique_id=581558652]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
+metadata/model_author = "Renafox (https://sketchfab.com/kryik1023)"
+metadata/model_license = "CC-BY-NC-SA-4.0"
+metadata/model_source = "https://sketchfab.com/3d-models/jeep-cherokee-3fdd9619be2c4e7b809888d08cbdab88"
+
+[node name="Body" type="MeshInstance3D" parent="Patrol/Scout01/Body/EndlessDrive_jeep" unique_id=2080868134]
+material_override = SubResource("ShaderMaterial_o21yt")
+mesh = ExtResource("10_7bkob")
+
+[node name="SkidPlate" type="MeshInstance3D" parent="Patrol/Scout01/Body/EndlessDrive_jeep" unique_id=867173804]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.02, 0)
+material_override = SubResource("SkidSteel")
+mesh = SubResource("SkidPlate")
+
+[node name="BrakeLampL" type="MeshInstance3D" parent="Patrol/Scout01/Body/EndlessDrive_jeep" unique_id=415496150]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -2.35, 0.56, 0.814)
+material_override = SubResource("BrakeLens")
+mesh = SubResource("BrakePanel")
+
+[node name="BrakeLampR" type="MeshInstance3D" parent="Patrol/Scout01/Body/EndlessDrive_jeep" unique_id=282990126]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -2.35, 0.56, -0.814)
+material_override = SubResource("BrakeLens")
+mesh = SubResource("BrakePanel")
+
+[node name="HeadlightL" type="Marker3D" parent="Patrol/Scout01/Body/EndlessDrive_jeep" unique_id=1390446490]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.23, 0.44, 0.63)
+
+[node name="HeadlightR" type="Marker3D" parent="Patrol/Scout01/Body/EndlessDrive_jeep" unique_id=613251344]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.23, 0.44, -0.63)
+
+[node name="Wheels" type="Node3D" parent="Patrol/Scout01/Body" unique_id=2075644517]
+
+[node name="Wheel_FL" type="Node3D" parent="Patrol/Scout01/Body/Wheels" unique_id=1671851431]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.80300796, 0, -1.48)
+metadata/front = true
+
+[node name="Spin" type="Node3D" parent="Patrol/Scout01/Body/Wheels/Wheel_FL" unique_id=637611276]
+
+[node name="Wheel_FL" type="Node3D" parent="Patrol/Scout01/Body/Wheels/Wheel_FL/Spin" unique_id=277278118]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
+
+[node name="TyreAndRim" type="MeshInstance3D" parent="Patrol/Scout01/Body/Wheels/Wheel_FL/Spin/Wheel_FL" unique_id=1992697718]
+mesh = ExtResource("11_auup5")
+
+[node name="Wheel_RL" type="Node3D" parent="Patrol/Scout01/Body/Wheels" unique_id=1348808823]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.80300903, 0, 1.48)
+metadata/front = false
+
+[node name="Spin" type="Node3D" parent="Patrol/Scout01/Body/Wheels/Wheel_RL" unique_id=2077987666]
+
+[node name="Wheel_RL" type="Node3D" parent="Patrol/Scout01/Body/Wheels/Wheel_RL/Spin" unique_id=1707459511]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
+
+[node name="TyreAndRim" type="MeshInstance3D" parent="Patrol/Scout01/Body/Wheels/Wheel_RL/Spin/Wheel_RL" unique_id=553309099]
+mesh = ExtResource("12_0uxxv")
+
+[node name="Wheel_FR" type="Node3D" parent="Patrol/Scout01/Body/Wheels" unique_id=272977522]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.8029761, 0, -1.48)
+metadata/front = true
+
+[node name="Spin" type="Node3D" parent="Patrol/Scout01/Body/Wheels/Wheel_FR" unique_id=37124021]
+
+[node name="Wheel_FR" type="Node3D" parent="Patrol/Scout01/Body/Wheels/Wheel_FR/Spin" unique_id=1683054404]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
+
+[node name="TyreAndRim" type="MeshInstance3D" parent="Patrol/Scout01/Body/Wheels/Wheel_FR/Spin/Wheel_FR" unique_id=1648267763]
+mesh = ExtResource("13_lws2x")
+
+[node name="Wheel_RR" type="Node3D" parent="Patrol/Scout01/Body/Wheels" unique_id=1496449927]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.80297595, 0, 1.48)
+metadata/front = false
+
+[node name="Spin" type="Node3D" parent="Patrol/Scout01/Body/Wheels/Wheel_RR" unique_id=528175666]
+
+[node name="Wheel_RR" type="Node3D" parent="Patrol/Scout01/Body/Wheels/Wheel_RR/Spin" unique_id=1298498873]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
+
+[node name="TyreAndRim" type="MeshInstance3D" parent="Patrol/Scout01/Body/Wheels/Wheel_RR/Spin/Wheel_RR" unique_id=1074528018]
+mesh = ExtResource("14_j674o")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Patrol/Scout01" unique_id=58773581]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.65, 0)
+shape = SubResource("BoxShape3D_w50sb")
+
+[node name="Dust" type="GPUParticles3D" parent="Patrol/Scout01" unique_id=198944694]
+cast_shadow = 0
+amount = 144
+lifetime = 6.0
+visibility_aabb = AABB(-55, -5, -55, 110, 25, 110)
+process_material = SubResource("ParticleProcessMaterial_qvdmj")
+draw_pass_1 = SubResource("QuadMesh_abxw4")
+
+[node name="WheelDustLeft" type="GPUParticles3D" parent="Patrol/Scout01" unique_id=1165662549]
+cast_shadow = 0
+amount = 88
+lifetime = 1.8
+visibility_aabb = AABB(-55, -5, -55, 110, 25, 110)
+process_material = SubResource("ParticleProcessMaterial_lbl2o")
+draw_pass_1 = SubResource("QuadMesh_abxw4")
+
+[node name="SandGrainsLeft" type="GPUParticles3D" parent="Patrol/Scout01" unique_id=357640392]
+cast_shadow = 0
+amount = 100
+lifetime = 0.65
+visibility_aabb = AABB(-55, -5, -55, 110, 25, 110)
+process_material = SubResource("ParticleProcessMaterial_ni0yg")
+draw_pass_1 = SubResource("QuadMesh_wlepx")
+
+[node name="AirborneSpecks" type="GPUParticles3D" parent="Patrol/Scout01" unique_id=1895165856]
+cast_shadow = 0
+amount = 64
+lifetime = 2.4
+visibility_aabb = AABB(-55, -5, -55, 110, 25, 110)
+process_material = SubResource("ParticleProcessMaterial_171ul")
+draw_pass_1 = SubResource("QuadMesh_wlepx")
+
+[node name="WheelDustRight" type="GPUParticles3D" parent="Patrol/Scout01" unique_id=1566967734]
+cast_shadow = 0
+amount = 88
+lifetime = 1.8
+visibility_aabb = AABB(-55, -5, -55, 110, 25, 110)
+process_material = SubResource("ParticleProcessMaterial_lfeoy")
+draw_pass_1 = SubResource("QuadMesh_abxw4")
+
+[node name="SandGrainsRight" type="GPUParticles3D" parent="Patrol/Scout01" unique_id=805260810]
+cast_shadow = 0
+amount = 100
+lifetime = 0.65
+visibility_aabb = AABB(-55, -5, -55, 110, 25, 110)
+process_material = SubResource("ParticleProcessMaterial_gswes")
+draw_pass_1 = SubResource("QuadMesh_8mmlh")
+
+[node name="Scout02" type="CharacterBody3D" parent="Patrol" unique_id=2097492040]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -54.940125, -0.2813275, 37.41693)
+script = ExtResource("5_776bt")
+lane = 1
+route_phase = 2.85
+cruise_speed = 10.5
+half_track = 0.679025
+half_wheelbase = 1.317575
+wheel_radius = 0.33208
+
+[node name="Body" type="Node3D" parent="Patrol/Scout02" unique_id=1281191653]
+metadata/endless_drive_model = "izh"
+
+[node name="EndlessDrive_izh" type="Node3D" parent="Patrol/Scout02/Body" unique_id=2057275200]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
+metadata/model_id = "izh"
+
+[node name="Body" type="MeshInstance3D" parent="Patrol/Scout02/Body/EndlessDrive_izh" unique_id=1756201070]
+material_override = SubResource("ShaderMaterial_yw6su")
+mesh = ExtResource("21_5418f")
+
+[node name="HeadlightR" type="Marker3D" parent="Patrol/Scout02/Body/EndlessDrive_izh" unique_id=164331100]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0.48, -0.68)
+
+[node name="BrakeLampR" type="MeshInstance3D" parent="Patrol/Scout02/Body/EndlessDrive_izh" unique_id=1498852945]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.46, 0.24, -0.45)
+material_override = SubResource("StandardMaterial3D_hqkjo")
+mesh = SubResource("BoxMesh_xudjc")
+
+[node name="HeadlightL" type="Marker3D" parent="Patrol/Scout02/Body/EndlessDrive_izh" unique_id=355477523]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0.48, 0.68)
+
+[node name="BrakeLampL" type="MeshInstance3D" parent="Patrol/Scout02/Body/EndlessDrive_izh" unique_id=944278908]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.46, 0.24, 0.45)
+material_override = SubResource("StandardMaterial3D_ic71m")
+mesh = SubResource("BoxMesh_ujfgf")
+
+[node name="Wheels" type="Node3D" parent="Patrol/Scout02/Body" unique_id=1042863864]
+
+[node name="Wheel_FL" type="Node3D" parent="Patrol/Scout02/Body/Wheels" unique_id=40445068]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.67903036, 0, -1.3175732)
+metadata/front = true
+
+[node name="Spin" type="Node3D" parent="Patrol/Scout02/Body/Wheels/Wheel_FL" unique_id=1637608775]
+
+[node name="Wheel_FL" type="Node3D" parent="Patrol/Scout02/Body/Wheels/Wheel_FL/Spin" unique_id=1771299010]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
+
+[node name="TyreAndRim" type="MeshInstance3D" parent="Patrol/Scout02/Body/Wheels/Wheel_FL/Spin/Wheel_FL" unique_id=1367732266]
+material_override = ExtResource("22_8xo51")
+mesh = ExtResource("23_yv5eq")
+
+[node name="Wheel_RL" type="Node3D" parent="Patrol/Scout02/Body/Wheels" unique_id=907914783]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.6790306, 0, 1.3175735)
+metadata/front = false
+
+[node name="Spin" type="Node3D" parent="Patrol/Scout02/Body/Wheels/Wheel_RL" unique_id=1746175783]
+
+[node name="Wheel_RL" type="Node3D" parent="Patrol/Scout02/Body/Wheels/Wheel_RL/Spin" unique_id=1487127333]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
+
+[node name="TyreAndRim" type="MeshInstance3D" parent="Patrol/Scout02/Body/Wheels/Wheel_RL/Spin/Wheel_RL" unique_id=1323571950]
+material_override = ExtResource("22_8xo51")
+mesh = ExtResource("24_co1wf")
+
+[node name="Wheel_FR" type="Node3D" parent="Patrol/Scout02/Body/Wheels" unique_id=1019494089]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6790307, 0, -1.3175734)
+metadata/front = true
+
+[node name="Spin" type="Node3D" parent="Patrol/Scout02/Body/Wheels/Wheel_FR" unique_id=458770649]
+
+[node name="Wheel_FR" type="Node3D" parent="Patrol/Scout02/Body/Wheels/Wheel_FR/Spin" unique_id=1261333786]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
+
+[node name="TyreAndRim" type="MeshInstance3D" parent="Patrol/Scout02/Body/Wheels/Wheel_FR/Spin/Wheel_FR" unique_id=726494078]
+material_override = ExtResource("22_8xo51")
+mesh = ExtResource("25_qllv6")
+
+[node name="Wheel_RR" type="Node3D" parent="Patrol/Scout02/Body/Wheels" unique_id=1045776589]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.67903024, 0, 1.3175731)
+metadata/front = false
+
+[node name="Spin" type="Node3D" parent="Patrol/Scout02/Body/Wheels/Wheel_RR" unique_id=1657832793]
+
+[node name="Wheel_RR" type="Node3D" parent="Patrol/Scout02/Body/Wheels/Wheel_RR/Spin" unique_id=1848801752]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 0)
+
+[node name="TyreAndRim" type="MeshInstance3D" parent="Patrol/Scout02/Body/Wheels/Wheel_RR/Spin/Wheel_RR" unique_id=172421435]
+material_override = ExtResource("22_8xo51")
+mesh = ExtResource("26_q20jt")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Patrol/Scout02" unique_id=487050627]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.65, 0)
+shape = SubResource("BoxShape3D_cb3hc")
+
+[node name="Dust" type="GPUParticles3D" parent="Patrol/Scout02" unique_id=976591343]
+cast_shadow = 0
+amount = 144
+lifetime = 6.0
+visibility_aabb = AABB(-55, -5, -55, 110, 25, 110)
+process_material = SubResource("ParticleProcessMaterial_t4rqk")
+draw_pass_1 = SubResource("QuadMesh_skkk3")
+
+[node name="WheelDustLeft" type="GPUParticles3D" parent="Patrol/Scout02" unique_id=929393605]
+cast_shadow = 0
+amount = 88
+lifetime = 1.8
+visibility_aabb = AABB(-55, -5, -55, 110, 25, 110)
+process_material = SubResource("ParticleProcessMaterial_31swf")
+draw_pass_1 = SubResource("QuadMesh_skkk3")
+
+[node name="SandGrainsLeft" type="GPUParticles3D" parent="Patrol/Scout02" unique_id=511520648]
+cast_shadow = 0
+amount = 100
+lifetime = 0.65
+visibility_aabb = AABB(-55, -5, -55, 110, 25, 110)
+process_material = SubResource("ParticleProcessMaterial_odcm2")
+draw_pass_1 = SubResource("QuadMesh_yhom7")
+
+[node name="AirborneSpecks" type="GPUParticles3D" parent="Patrol/Scout02" unique_id=1247907930]
+cast_shadow = 0
+amount = 64
+lifetime = 2.4
+visibility_aabb = AABB(-55, -5, -55, 110, 25, 110)
+process_material = SubResource("ParticleProcessMaterial_mbhyw")
+draw_pass_1 = SubResource("QuadMesh_yhom7")
+
+[node name="WheelDustRight" type="GPUParticles3D" parent="Patrol/Scout02" unique_id=886632052]
+cast_shadow = 0
+amount = 88
+lifetime = 1.8
+visibility_aabb = AABB(-55, -5, -55, 110, 25, 110)
+process_material = SubResource("ParticleProcessMaterial_nfxl2")
+draw_pass_1 = SubResource("QuadMesh_skkk3")
+
+[node name="SandGrainsRight" type="GPUParticles3D" parent="Patrol/Scout02" unique_id=2079646708]
+cast_shadow = 0
+amount = 100
+lifetime = 0.65
+visibility_aabb = AABB(-55, -5, -55, 110, 25, 110)
+process_material = SubResource("ParticleProcessMaterial_7vsmh")
+draw_pass_1 = SubResource("QuadMesh_fyu8n")

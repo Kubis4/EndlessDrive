@@ -10,10 +10,10 @@ config_version=5
 
 [application]
 
-config/name="Sirocco"
-config/description="Desert driving tech demo: dust, persistent tyre ruts and off-road handling."
+config/name="Endless Drive"
+config/description="Endless road from the fields to the mountains: fuel, loot, scrap and a garage."
 config/version="1.6.0"
-run/main_scene="res://desert_battlefield/desert_battlefield.tscn"
+run/main_scene="res://offroad/endless_menu.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 boot_splash/bg_color=Color(0.098, 0.11, 0.098, 1)
 boot_splash/show_image=false
@@ -21,16 +21,13 @@ config/icon="res://icon.svg"
 
 [display]
 
+window/handheld/orientation=4
 window/size/viewport_width=1920
 window/size/viewport_height=1080
 window/size/window_width_override=1280
 window/size/window_height_override=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
-
-[input_devices]
-
-pointing/emulate_mouse_from_touch=true
 
 [physics]
 
@@ -39,8 +36,7 @@ common/physics_interpolation=true
 
 [rendering]
 
-renderer/rendering_method="forward_plus"
-renderer/rendering_method.mobile="mobile"
 textures/vram_compression/import_etc2_astc=true
+textures/default_filters/anisotropic_filtering_level.mobile=1
 anti_aliasing/quality/msaa_3d=1
 environment/defaults/default_clear_color=Color(0.11, 0.16, 0.19, 1)
