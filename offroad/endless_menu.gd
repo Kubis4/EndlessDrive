@@ -163,7 +163,10 @@ func _entry(text: String, action: Callable) -> Button:
 	return button
 
 func _clear_page() -> void:
-	for child in list.get_children(): child.free()
+	# (Not freed at once: this runs from the pressed signal of one of them.)
+	for child in list.get_children():
+		list.remove_child(child)
+		child.queue_free()
 
 ## The garage: on the sheet, the cars and upgrades; on the stand, the car being looked at.
 func _open_garage() -> void:

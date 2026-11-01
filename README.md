@@ -435,10 +435,3 @@ Hlavná scéna je teraz štartovacie menu `res://offroad/endless_menu.tscn` (F5 
 
 **Reálne údaje M1009.** Motor 6,2 l Detroit Diesel V8, 155 k (116 kW) a 325 Nm, 3-stupňový automat TH-400, rozvodovka NP-208, stály prevod 3,08 (Wikipédia, Commercial Utility Cargo Vehicle); nádrž 27 galónov (102 l) a pohotovostná hmotnosť asi 2360 kg (špecifikácie zo stránok majiteľov), nosnosť 540 kg. Majitelia uvádzajú 15,6 až 24,6 mpg, čiže asi 10 až 15 l/100 km. Spotreba v hre sa počíta z výkonu motora (`vehicle.gd` `fuel_rate`): voľnobeh 1,5 l/h a 0,29 až 0,43 l/kWh podľa záťaže, cez straty pohonu (4x2 85 %, 4x4 80 %, so zámkom 77 %). Zvuky riadi `offroad/car_audio.gd`, otáčky sa počítajú cez prevody TH-400.
 
-## Assets left out of this repository
-
-The game needs files that may not be published here, so they stay on the owner's
-machine and a fresh clone will not run complete without them: the roadside buildings
-(`assets/models/roadside/`, Sketchfab Standard licence), most sounds (`assets/audio/`) and
-the meadow plants and sunflowers, whose licences are not recorded. See `.gitignore` and
-`assets/ASSET_LICENSES.md`.

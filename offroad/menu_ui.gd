@@ -93,6 +93,7 @@ static func _paper_button(button: Button, kind: String, height: float, size: flo
 	for colour in ["font_color", "font_focus_color", "font_hover_pressed_color", "font_pressed_color"]:
 		button.add_theme_color_override(colour, ink)
 	button.add_theme_color_override("font_hover_color", ink if kind == "pen" else RUST)
+	button.add_theme_color_override("font_disabled_color", Color(PEN, 0.62))
 	button.custom_minimum_size.y = height * k()
 
 static func button(text: String, action: Callable, kind: String = "ghost", height: float = 64.0, size: float = 34.0) -> Button:

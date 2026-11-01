@@ -1,0 +1,10 @@
+[gd_resource type="StandardMaterial3D" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/models/supplied_environment/texture_0.res" id="1_5m8tp"]
+
+[resource]
+resource_name = "elements"
+cull_mode = 2
+albedo_texture = ExtResource("1_5m8tp")
+roughness = 0.6
+metadata/_gltf_primary_texture_coord = 0

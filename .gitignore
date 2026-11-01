@@ -4,18 +4,3 @@
 *.tmp
 # Source model packs (Sketchfab, 177 MB): extracted by offroad/build_props.gd.
 /assets/source/
-# Not ours to publish (assets/ASSET_LICENSES.md); the game needs them, so keep local copies.
-# Lowpoly Buildings: Sketchfab Standard licence, no redistribution.
-/assets/models/roadside/
-/assets/models/supplied_environment/texture_0.res
-/assets/models/supplied_environment/material_0.tres
-# Sounds whose origin is not recorded (rain and thunder are public domain).
-/assets/audio/*
-!/assets/audio/rain.*
-!/assets/audio/thunder*
-# Meadow plants and sunflowers supplied without a recorded licence.
-/assets/models/highlands/pack_*
-/assets/models/highlands/crop_sunflower_*
-/assets/models/crops/plant_*
-!/assets/models/crops/plant_wheat.*
-/assets/models/crops/sunflower.*

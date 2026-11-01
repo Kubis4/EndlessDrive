@@ -14,6 +14,16 @@ func _ready() -> void:
 	environment.ambient_light_color = Color(0.86, 0.82, 0.74)
 	environment.ambient_light_energy = 0.75
 	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	# (Without a sky to mirror, the glass shows black patches.)
+	var sky_material := ProceduralSkyMaterial.new()
+	sky_material.sky_top_color = Color(0.72, 0.8, 0.86)
+	sky_material.sky_horizon_color = Color(0.93, 0.86, 0.7)
+	sky_material.ground_bottom_color = Color(0.72, 0.64, 0.5)
+	sky_material.ground_horizon_color = Color(0.93, 0.86, 0.7)
+	environment.sky = Sky.new()
+	environment.sky.sky_material = sky_material
+	environment.sky.radiance_size = Sky.RADIANCE_SIZE_32
+	environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	world.environment = environment
 	add_child(world)
 	var sun := DirectionalLight3D.new()
