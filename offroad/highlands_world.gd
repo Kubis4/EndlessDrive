@@ -7,7 +7,7 @@ extends Node3D
 ## Sketchfab packs via build_props.gd (see props.gd).
 ## The world script it dresses (highlands.gd, or a generated world that
 ## answers the same queries: see generated_world.gd).
-var H = preload("res://offroad/highlands.gd")
+var H
 const Props = preload("res://offroad/props.gd")
 const Surface = preload("res://desert_battlefield/terrain.gd")
 const EndlessModels = preload("res://desert_battlefield/endless_models.gd")
@@ -24,9 +24,9 @@ const FOREST_TREES := ["tree_01_1", "tree_01_3", "tree_02_2", "tree_02_3", "tree
 var forest_models: Array = FOREST_TREES
 var foliage_tint := Color.WHITE
 ## Ground cover: grasses, low plants, tall flowers.
-var cover_grass: Array = ["grass_1", "grass_2", "grass_3"]
-var cover_low: Array = ["clover_1", "clover_2", "clover_3", "flowers_1", "flowers_3"]
-var cover_tall: Array = ["flowers_2", "flowers_4"]
+var cover_grass: Array = []
+var cover_low: Array = []
+var cover_tall: Array = []
 var ripples := preload("res://desert_battlefield/water_ripples.gd").new()
 var signs: Array[Label3D] = []
 var rng := RandomNumberGenerator.new()
@@ -72,8 +72,6 @@ func build(root: Node3D) -> void:
 	_build_camp()
 	_build_signs()
 	# Hand-placed extras from the layout scene (offroad/highlands_layout.tscn).
-	if H.resource_path == "res://offroad/highlands.gd" and ResourceLoader.exists("res://offroad/highlands_extras.tscn"):
-		add_child((load("res://offroad/highlands_extras.tscn") as PackedScene).instantiate())
 	add_child(weather)
 	weather.setup(root, [(root.get_node(root.ground_node) as MeshInstance3D).material_override, root.soil.fine_material], river_material)
 	weather._collect_overlays()

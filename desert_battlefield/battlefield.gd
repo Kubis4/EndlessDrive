@@ -17,11 +17,9 @@ const OVERVIEW_OFFSET := Vector3(41, 120, 58)
 @export var ground_node := NodePath("SculptedDunes")
 ## Builds the ground meshes and props on top of the terrain (build, update_wakes,
 ## set_signs_visible).
-@export var grounds_script: Script = preload("res://desert_battlefield/test_course.gd")
+@export var grounds_script: Script
 ## Sky of the perspective cameras: top, horizon and ground colours.
 @export var sky_colors := PackedColorArray([Color("8fb0c8"), Color("d9cdb3"), Color("b9a585")])
-## Legacy scene reference retained for authored scenes and the world builder.
-@export_file("*.tscn") var other_world := "res://offroad/highlands.tscn"
 ## Start with the lead Jeep only (the other cars are removed unless the patrol
 ## runs or a check asks for them).
 @export var single_vehicle := true
@@ -76,7 +74,6 @@ var base_environment: Environment
 ## Worlds generated from a seed when the scene starts, and the expedition
 ## (fuel, supplies, camps) played in each.
 const EXPEDITIONS := {
-	"res://offroad/generated_terrain.gd": "res://offroad/generated_expedition.gd",
 	"res://offroad/endless_terrain.gd": "res://offroad/endless_expedition.gd",
 }
 

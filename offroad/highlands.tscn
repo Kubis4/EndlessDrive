@@ -1,7 +1,6 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://desert_battlefield/battlefield.gd" id="1_wab02"]
-[ext_resource type="Script" path="res://offroad/highlands.gd" id="2_b3mfj"]
 [ext_resource type="Script" path="res://offroad/highlands_world.gd" id="3_7pv3c"]
 [ext_resource type="Shader" path="res://offroad/highlands_ground.gdshader" id="4_43krw"]
 [ext_resource type="Script" path="res://desert_battlefield/vehicle.gd" id="5_776bt"]
@@ -428,11 +427,9 @@ size = Vector2(0.045, 0.09)
 
 [node name="LesnaVrchovina" type="Node3D" unique_id=1015806892]
 script = ExtResource("1_wab02")
-world_script = ExtResource("2_b3mfj")
 ground_node = NodePath("Ground")
 grounds_script = ExtResource("3_7pv3c")
 sky_colors = PackedColorArray(0.49803922, 0.6392157, 0.76862746, 1, 0.7882353, 0.827451, 0.8117647, 1, 0.43529412, 0.47843137, 0.3529412, 1)
-other_world = "res://desert_battlefield/desert_battlefield.tscn"
 
 [node name="Ground" type="MeshInstance3D" parent="." unique_id=934259495]
 material_override = SubResource("ShaderMaterial_a63cb")

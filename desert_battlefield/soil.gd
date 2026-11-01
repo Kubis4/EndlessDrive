@@ -18,8 +18,6 @@ var depth_scale := 1.0
 var tyre_sink := 1.0
 var max_depth := MAX_DEPTH
 ## The authored Highlands uses shallower soil ruts outside mud and snow.
-var shallower_highlands_ruts := false
-const HIGHLANDS_SOIL_SCALE := 0.5
 const MAX_BANK := 0.2
 const ROLLING_DEPTH := 0.4
 const COMPACTION_PER_METRE := 0.55
@@ -90,7 +88,6 @@ var snow_clock := 0.0
 
 func configure(root: Node3D) -> void:
 	follow = root.world_script != null
-	shallower_highlands_ruts = follow and root.world_script.resource_path == "res://offroad/highlands.gd"
 	if follow:
 		# Highland soil: wheels sink well over twice as deep, down to 65 cm in mud.
 		depth_scale = 1.6
@@ -255,9 +252,6 @@ func normal_at(x: float, z: float) -> Vector3:
 ## Limit the eventual depth without suppressing the first visible tyre pass.
 ## Grip, resistance and the snow pack remain controlled by the surface system.
 func rut_depth_scale_at(x: float, z: float) -> float:
-	var kind := Surface.surface_at(x, z)
-	if shallower_highlands_ruts and kind not in [Surface.MUD, Surface.SNOW]:
-		return HIGHLANDS_SOIL_SCALE
 	return 1.0
 
 func stamp_segment(a: Vector3, b: Vector3, forward: Vector3, slip: float) -> void:

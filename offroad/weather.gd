@@ -8,8 +8,7 @@ extends Node3D
 ## ground shader; the sky, sun, fog, river and falling rain or snow follow the
 ## air. K advances to the next state at once.
 const Surface = preload("res://desert_battlefield/terrain.gd")
-const H = preload("res://offroad/highlands.gd")
-var water_world: Script = H
+var water_world: Script
 ## name, cloud cover, rain, snowfall, temperature (°C), the states it may become.
 const STATES := [
 	["Jasno", 0.1, 0.0, 0.0, 14.0, [1]],

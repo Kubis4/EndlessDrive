@@ -1,7 +1,7 @@
 extends Node3D
 ## Exploration layer on the seed-generated road network.
 ## The world it plays in (endless_expedition.gd swaps in the endless one).
-var H = preload("res://offroad/generated_terrain.gd")
+var H
 const Models = preload("res://desert_battlefield/endless_models.gd")
 const Props = preload("res://offroad/props.gd")
 const SAVE := "user://roadtrip_expedition.json"
