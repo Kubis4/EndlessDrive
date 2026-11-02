@@ -1,11 +1,19 @@
 # Endless Drive
 
 Off-road driving game for Android, made in **Godot 4.7.2** (Forward Mobile on phones). One
-procedural road of 50 km and more leads from the fields or the desert to the mountains,
-with fuel, loot, weather, tyres and a garage paid for in scrap found on the way.
+procedural road leads from the fields or the desert (drawn at random for each new run) ever
+higher, up the serpentines of the last range to a transmitter on the summit at about 2300 m.
+That ends the journey, and the land goes on being made for whoever drives further. On the way:
+fuel, loot, weather, tyres and a garage paid for in scrap.
 
 - Package: `sk.kubis.endlessdrive`
 - Main scene: `offroad/endless_menu.tscn`, the game itself `offroad/endless.tscn`
+
+A run goes from the start to the end and is saved as it goes; there are no checkpoints in the
+game. For testing only, the SKOK button (N on a computer, or in the pause menu) lists places
+before each landscape and each part of the last stage, and jumps there with a full tank. A far
+jump first has to plan the road that far (about a minute on a computer). A run that has jumped
+earns no scrap for what it skipped.
 
 ## Build the APK
 

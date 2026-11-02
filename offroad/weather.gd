@@ -293,14 +293,16 @@ func _visuals(delta: float = 0.0) -> void:
 	environment.background_color = base_background.lerp(grey, cloud * 0.8)
 	var perspective: bool = root.camera_mode >= 2
 	var fog: float = clear_fog if perspective else root.base_environment.fog_density
-	environment.fog_density = fog * (1.0 + 1.6 * cloud + 3.0 * maxf(rain, snowfall) + 9.0 * climate.get("mist", 0.0) + 22.0 * sand + 16.0 * fog_bank)
+	# Cold air is clear: the haze thins as it freezes harder.
+	var clear_air := lerpf(1.0, 0.45, smoothstep(1.0, -8.0, temperature))
+	environment.fog_density = fog * (1.0 + 1.6 * cloud + 3.0 * maxf(rain, snowfall) + 9.0 * climate.get("mist", 0.0) + 22.0 * sand + 16.0 * fog_bank) * clear_air
 	var haze: Color = mood_haze if not climate.is_empty() else Color(0.68, 0.74, 0.74)
 	var storm := Color(0.74, 0.52, 0.3)
 	environment.fog_light_color = haze.lerp(grey, cloud * 0.8).lerp(storm, sand)
 	if not climate.is_empty():
 		# Low mist in the marsh and on a foggy day, and each landscape's colours.
 		environment.fog_height = camera.global_position.y + 5.0
-		environment.fog_height_density = (mood_mist * (0.5 + 0.5 * cloud) + fog_bank) * 0.05
+		environment.fog_height_density = (mood_mist * (0.5 + 0.5 * cloud) + fog_bank) * 0.05 * clear_air
 		if not mobile:
 			environment.adjustment_enabled = true
 			environment.adjustment_saturation = mood_saturation * (1.0 - 0.2 * cloud)

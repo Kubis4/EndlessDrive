@@ -36,7 +36,10 @@ This inventory records known sources; it does not grant additional rights.
   in a public repository or a build. Source: `assets/source/roadside/` (not in git).
 - **Fonts (`assets/fonts/`):** Anton and Bebas Neue, SIL Open Font License, as bundled in the
   Endless Drive app.
-- **Sounds (`assets/audio/`):** copied from the Endless Drive app (`app/src/main/res/raw`).
+- **Winter conifers (`winter_*` in `assets/models/highlands/`, `winter_*` textures):** thinned by `tools/build_winter_trees.gd` from tree models and `bq_*` textures supplied by the project owner (Picea obovata and Pinus jeffreyi, winter). **No licence information was supplied;** check it before publishing.
+- **Dashboard symbols (`assets/ui/`):** copied from this project's earlier dashboard (`godot/assets/ui`); `wipers.svg` was drawn for it in the same style.
+- **Car sounds (`assets/audio/`):** `engine_start`, `engine_idle`, `engine_stop`, `engine_rev` (Kia Carnival 2.9 diesel, BigSoundBank #967), `stall` (Peugeot 106, #872) and `chirp_1`–`3` (#500), by Joseph Sardin; `skid` and `brake` (Screeching Tires #2368–2371, by Dorian Clair). All **CC0**, from https://bigsoundbank.com, cut by `tools/prepare_car_audio.py`.
+- **Other sounds (`assets/audio/`):** copied from the Endless Drive app (`app/src/main/res/raw`).
   `rain`, `thunder` and `thunder_roll` are public-domain Wikimedia Commons recordings (see that
   project's THIRD_PARTY_AUDIO.md). **The origin and licence of the others are not recorded
   there;** check them before publishing.

@@ -85,6 +85,10 @@ var snow_dirty := false
 var snow_archive := {}
 var snow_seen := 0.0
 var snow_clock := 0.0
+var settle_block := -1
+var settle_depth := 0.0
+var settle_fallen := 0.0
+var settle_bury := 0.0
 
 func configure(root: Node3D) -> void:
 	follow = root.world_script != null
@@ -466,41 +470,47 @@ func _mark_touched(point: Vector3, radius: float) -> void:
 ## (by as much as fell since), melting caps them at what is left, and with the
 ## snow gone the layer clears. Runs every couple of seconds over touched blocks.
 func _settle_snow() -> void:
-	var depth := Surface.snow_depth * Surface.snow_cover
-	var fallen := maxf(0.0, depth - snow_seen)
-	snow_seen = depth
-	var bury := snow_bury()
-	if depth <= 0.001:
-		if snow_field.has(0.0) and snow_field.count(0.0) == snow_field.size(): return
-		snow_field.fill(0.0)
-		_upload_snow()
-		return
-	var any := false
-	for b in BLOCKS * BLOCKS:
+	if settle_block < 0:
+		settle_depth = Surface.snow_depth * Surface.snow_cover
+		if settle_depth == snow_seen: return
+		settle_fallen = maxf(0.0, settle_depth - snow_seen)
+		snow_seen = settle_depth
+		settle_bury = snow_bury()
+		settle_block = 0
+	var deadline := Time.get_ticks_usec() + 900
+	while settle_block < BLOCKS * BLOCKS:
+		if Time.get_ticks_usec() >= deadline: return
+		var b := settle_block
+		settle_block += 1
 		if touched[b] == 0: continue
 		var bx := b % BLOCKS
 		var bz := b / BLOCKS
 		for row in 17:
 			var start := mini(bz * 16 + row, RESOLUTION - 1) * RESOLUTION + bx * 16
 			for col in 17:
+				# Adjacent touched blocks share border samples. Settle each once.
+				if col == 0 and bx > 0 and touched[b - 1]: continue
+				if row == 0 and bz > 0 and touched[b - BLOCKS]: continue
+				if row == 0 and col == 0 and bx > 0 and bz > 0 and touched[b - BLOCKS - 1]: continue
 				var i := start + mini(col, RESOLUTION - 1 - bx * 16)
 				var v := snow_field[i]
 				# Ruts in a road (thin, packed snow) stay partly visible: the
 				# layer gives back that share of the buried soil depth.
 				var shown := 0.0
-				if field[i] > 0.002:
+				if settle_depth > 0.001 and field[i] > 0.002:
 					var x := center.x + (i % RESOLUTION) * CELL - EXTENT
 					var z := center.y + (i / RESOLUTION) * CELL - EXTENT
-					if Surface.surface_at(x, z) in [Surface.DIRT, Surface.GRAVEL, Surface.MUD]: shown = field[i] * bury * ROAD_RUTS_SHOWN
+					if Surface.surface_at(x, z) in [Surface.DIRT, Surface.GRAVEL, Surface.MUD]: shown = field[i] * settle_bury * ROAD_RUTS_SHOWN
 				if v == 0.0 and shown == 0.0: continue
 				# Tracks fill up (never above the surface); side ridges stay.
-				var settled := clampf(v - fallen, 0.0, depth) if v > 0.0 else maxf(v, -depth * 0.15)
+				var settled := clampf(v - settle_fallen, 0.0, settle_depth) if v > 0.0 else maxf(v, -settle_depth * 0.15)
 				settled = maxf(settled, shown)
 				if absf(settled) < 0.002: settled = 0.0
 				if settled != v:
 					snow_field[i] = settled
-					any = true
-	if any: _upload_snow()
+					snow_image.set_pixel(i % RESOLUTION, i / RESOLUTION, Color(settled, 0, 0))
+					snow_dirty = true
+	settle_block = -1
 
 func _upload_snow() -> void:
 	# One bulk conversion (no per-texel writes).
@@ -532,13 +542,14 @@ func update(delta: float, force: bool = false) -> void:
 	if container == null: return
 	if follow and not cars.is_empty():
 		var p: Vector3 = cars[0].position
-		if maxf(absf(p.x - center.x), absf(p.z - center.y)) > FOLLOW_DISTANCE: recenter(Vector2(p.x, p.z))
+		if maxf(absf(p.x - center.x), absf(p.z - center.y)) > FOLLOW_DISTANCE:
+			if build_task == -1 or WorkerThreadPool.is_task_completed(build_task): recenter(Vector2(p.x, p.z))
 		_lay_worn_ruts()
 	_build_pending(force)
 	upload_clock += delta
 	if follow:
 		snow_clock += delta
-		if snow_clock > 2.0:
+		if settle_block >= 0 or snow_clock > 2.0:
 			snow_clock = 0.0
 			_settle_snow()
 		if snow_dirty and (upload_clock >= upload_interval or force):

@@ -75,10 +75,11 @@ func build(root: Node3D) -> void:
 	_water_materials()
 	add_child(weather)
 	weather.setup(root, [(root.get_node(root.ground_node) as MeshInstance3D).material_override, root.soil.fine_material], river_material)
-	# The first tiles all at once (the car starts at the camp).
-	_stream(Vector2(T.CAMP.x, T.CAMP.y), true)
+	# The first tiles, around the camp. (A saved run far from it makes its own, where it is:
+	# no sense in making the land twice.)
+	if not _saved_far_away(): await stream_all(Vector2(T.CAMP.x, T.CAMP.y))
 	_lap("tiles")
-	_build_far_land()
+	await _build_far_land()
 	_lap("far land")
 	Roadside.prepare()
 	_crop_material(0)
@@ -134,7 +135,10 @@ func _build_far_land() -> void:
 	add_child(far_land)
 	_near_rect()
 	far_at = Vector2(T.CAMP.x, T.CAMP.y).snapped(Vector2.ONE * T.FAR_GRID)
-	_show_far(T.far_bake(T.far_job(far_at)))
+	var job := T.far_job(far_at)
+	far_task = WorkerThreadPool.add_task(_make_far.bind(job))
+	while not WorkerThreadPool.is_task_completed(far_task): await get_tree().process_frame
+	_update_far(far_at)
 
 func _show_far(arrays: Array) -> void:
 	var mesh := ArrayMesh.new()
@@ -189,16 +193,21 @@ const CROPS := [["corn", 2.5, 3.0, 1, 3], ["barley", 0.85, 1.6, 1, 2], ["wheat",
 ## there, see crop.gdshader): models, spacing (m) across and along, size, colour.
 const CLOSE_CROPS := {T.WHEAT: [["crop_wheat"], Vector2(0.8, 0.75), 1.0, Color(0.95, 0.92, 0.8)], T.BARLEY: [["crop_wheat"], Vector2(0.75, 0.7), 0.82, Color(1.12, 1.08, 0.72)],
 	T.SUNFLOWER: [["crop_sunflower_1", "crop_sunflower_2", "crop_sunflower_3"], Vector2(1.3, 1.15), 1.0, Color(1, 1, 1)]}
-## (On phones only at high quality, and low quality on a computer has none either.)
-var close_tier: String = Settings.effective_quality() if not mobile else ("medium" if Settings.effective_quality() == "high" else "low")
+## (On a computer at medium quality and up; a phone has the tufts alone, one look all the way
+## out to the ribbons and nothing that changes as the car comes near.)
+var close_tier: String = Settings.effective_quality() if not mobile else "low"
 var close_plants: bool = close_tier != "low"
+var use_tufts: bool = close_plants or (mobile and Settings.effective_quality() != "low")
 const CLOSE_CELL := 12.0
 ## How far the real plants reach, where tufts (crossed quads with the plants' picture)
 ## take over from them, and where the ribbons take over from those: by quality.
 var close_reach := 16.0 if mobile else (40.0 if close_tier == "high" else 30.0)
-var tuft_from := 10.0 if mobile else (26.0 if close_tier == "high" else 18.0)
-var tuft_to := 70.0 if mobile else (150.0 if close_tier == "high" else 95.0)
-const TUFT_SPACING := 1.25
+var tuft_from := 0.0 if mobile else (26.0 if close_tier == "high" else 18.0)
+var tuft_to := 85.0 if mobile else (150.0 if close_tier == "high" else 95.0)
+## One gives way to the next over this many metres, and the last ribbons to the bare field.
+const CROP_BAND := 30.0
+const RIBBON_END := 125.0
+const TUFT_SPACING := 1.0
 const TUFT_WIDTH := 1.25
 const RIBBON := 3.0
 ## Foliage colour per landscape (the order of endless_terrain.gd's enum).
@@ -215,10 +224,17 @@ func _crop_material(crop: int) -> ShaderMaterial:
 			material.set_shader_parameter("plants", load("res://assets/models/crops/%s.res" % spec[0]))
 			material.set_shader_parameter("tall", spec[1])
 			material.set_shader_parameter("field_colour", T.CROP_COLOURS[index])
-			if CLOSE_CROPS.has(index) and close_plants: material.set_shader_parameter("near_cut", tuft_to - 12.0)
+			if use_tufts:
+				material.set_shader_parameter("near_cut", tuft_to - CROP_BAND)
+				material.set_shader_parameter("near_band", CROP_BAND)
+			if mobile:
+				material.set_shader_parameter("far_cut", RIBBON_END - CROP_BAND)
+				material.set_shader_parameter("far_band", CROP_BAND)
 			var tuft := material.duplicate() as ShaderMaterial
 			tuft.set_shader_parameter("near_cut", tuft_from)
-			tuft.set_shader_parameter("far_cut", tuft_to)
+			tuft.set_shader_parameter("near_band", 6.0)
+			tuft.set_shader_parameter("far_cut", tuft_to - CROP_BAND)
+			tuft.set_shader_parameter("far_band", CROP_BAND)
 			tuft_materials.append(tuft)
 			_listen(tuft)
 			crop_materials.append(material)
@@ -254,8 +270,8 @@ func _build_crops(area: Rect2) -> void:
 					continue
 				_ribbon(near, crop, ax, az, bx, bz, spec)
 				if row % (spacing * 3) == 0: _ribbon(far, crop, ax, az, bx, bz, spec)
-	_ribbons_mesh(near, 0.0, 115.0)
-	wants_tufts = close_plants
+	_ribbons_mesh(near, 0.0, RIBBON_END + 40.0 if mobile else 115.0)
+	wants_tufts = use_tufts
 	_ribbons_mesh(far, 100.0, 270.0)
 
 func _ribbon(store: Dictionary, crop: int, ax: float, az: float, bx: float, bz: float, spec: Array) -> void:
@@ -329,7 +345,7 @@ func _tuft_store(area: Rect2) -> Dictionary:
 			var pz := z + random.randf_range(-0.45, 0.45)
 			x += TUFT_SPACING
 			var crop: int = T.crop_at(px, pz)
-			if crop < 0 or not CLOSE_CROPS.has(crop): continue
+			if crop < 0 or crop == T.FALLOW: continue
 			var spec: Array = CROPS[crop]
 			var y: float = T.terrain_height(px, pz)
 			var angle := random.randf_range(0.0, PI)
@@ -461,6 +477,9 @@ func _build_land_plants(area: Rect2, biome: int) -> void:
 const POLE_EVERY := 48.0
 const PROP_EVERY := 150.0
 const OPEN_LAND := [T.DESERT, T.STEPPE, T.FIELDS, T.MEADOW]
+## The serpentines' stone wall: one block's length, its height and thickness (m).
+const STONE_LENGTH := 2.3
+const STONE_SIZE := Vector3(0.6, 2.2, 2.4)
 const PROPS_HERE := {T.DESERT: ["container02", "trailer01", "truck01", "sign01", "watertank01", "container03", "board01"], T.STEPPE: ["sign02", "trailer02", "truck01", "generator01", "fence02"],
 	T.FIELDS: ["fence01", "fence02", "sign03", "cable_reel01", "watertank01", "generator01"], T.MEADOW: ["fence01", "fence02", "bench01", "sign04"],
 	T.BOG: ["sign02", "cable_reel01"], T.FOREST: ["sign01", "cable_reel01", "container01"], T.TAIGA: ["sign04", "container01"], T.FOOTHILLS: ["sign03", "bench01", "fence01"]}
@@ -476,10 +495,13 @@ func _dress_road(area: Rect2) -> void:
 	if not near.has(0): return
 	var samples: Array = near[0]
 	samples.sort()
+	var stones: Array[Transform3D] = []
 	for k: int in samples:
 		if k < 1 or k + 2 >= line.size() or not area.has_point(line[k]): continue
 		if floori(along[k] / POLE_EVERY) != floori(along[k - 1] / POLE_EVERY): _pole(floori(along[k] / POLE_EVERY))
+		if floori(along[k] / STONE_LENGTH) != floori(along[k - 1] / STONE_LENGTH) and T.wall_share(line[k].y, T.wall_spans) > 0.8: _stones(k, near[0], stones)
 		if floori(along[k] / PROP_EVERY) != floori(along[k - 1] / PROP_EVERY): _road_prop(k, floori(along[k] / PROP_EVERY))
+	if not stones.is_empty(): _build_stones(stones)
 
 ## Where pole n stands: Vector3(x, z, height of its top), or nothing if the line
 ## has no pole there. (Remembered: a pole's neighbours ask for it too.)
@@ -628,6 +650,95 @@ func _road_prop(k: int, n: int) -> void:
 		prop.rotation.y = atan2(along_road.y, -along_road.x)
 		_place(prop)
 
+## The road's edge at sample k gets a block of the stone wall on each side where the ground
+## falls away (not where the road's own next leg runs close by). Each block stops the car.
+func _stones(k: int, samples: Array, stones: Array[Transform3D]) -> void:
+	var main: Dictionary = T.roads[0]
+	var line: PackedVector2Array = main.points
+	var levels: PackedFloat32Array = main.levels
+	var tangent := (line[mini(k + 2, line.size() - 1)] - line[k - 1]).normalized()
+	var normal := Vector2(-tangent.y, tangent.x)
+	var off: float = main.half + 0.75
+	# (Nothing on the inside of a bend: that is where the wheels cut across.)
+	var ahead := line[mini(k + 8, line.size() - 1)] - line[k]
+	var behind := line[k] - line[maxi(k - 8, 0)]
+	var inside := signf(behind.cross(ahead)) if absf(behind.angle_to(ahead)) > 0.2 else 0.0
+	for side: float in [-1.0, 1.0]:
+		if side == inside: continue
+		var p: Vector2 = line[k] + normal * side * off
+		var beyond: Vector2 = line[k] + normal * side * (off + 4.0)
+		if T.terrain_height(beyond.x, beyond.y) > levels[k] - 0.7: continue
+		var clear := true
+		for j: int in samples:
+			if absi(j - k) > 8 and line[j].distance_squared_to(p) < (main.half + 1.2) * (main.half + 1.2):
+				clear = false
+				break
+		if not clear: continue
+		var unit := Vector3(p.x, 0.0, p.y)
+		var cell := Vector2i(floori(p.x * 3.0), floori(p.y * 3.0))
+		# Following the road's level and grade, a stone or two out of line; its foot is in the ground.
+		var yaw := atan2(tangent.x, tangent.y) + (T._unit(cell, 7) - 0.5) * 0.03
+		var grade := atan2(levels[mini(k + 2, levels.size() - 1)] - levels[k - 1], line[mini(k + 2, line.size() - 1)].distance_to(line[k - 1]))
+		unit.y = levels[k] + 0.72 + 0.07 * T._unit(cell, 8) - 0.5 * STONE_SIZE.y
+		stones.append(Transform3D(Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, -grade), unit))
+
+func _build_stones(stones: Array[Transform3D]) -> void:
+	if stone_mesh == null:
+		var shape := BoxMesh.new()
+		shape.size = STONE_SIZE
+		var material := StandardMaterial3D.new()
+		material.albedo_texture = load(Props.GROUND + "rock_albedo.png")
+		material.albedo_color = Color(0.82, 0.8, 0.76)
+		material.uv1_triplanar = true
+		material.uv1_world_triplanar = true
+		material.uv1_scale = Vector3.ONE * 0.55
+		material.vertex_color_use_as_albedo = true
+		material.roughness = 1.0
+		shape.material = material
+		stone_mesh = shape
+		stone_shape = BoxShape3D.new()
+		stone_shape.size = Vector3(STONE_SIZE.x, STONE_SIZE.y, STONE_SIZE.z)
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.use_colors = true
+	multimesh.mesh = stone_mesh
+	multimesh.instance_count = stones.size()
+	for i in stones.size():
+		multimesh.set_instance_transform(i, stones[i])
+		var shade := 0.82 + 0.3 * T._unit(Vector2i(floori(stones[i].origin.x), floori(stones[i].origin.z)), 9)
+		multimesh.set_instance_color(i, Color(shade, shade, shade))
+		var collider := CollisionShape3D.new()
+		collider.shape = stone_shape
+		collider.transform = Transform3D(stones[i].basis.orthonormalized(), stones[i].origin)
+		collision.add_child(collider)
+	var wall := MultiMeshInstance3D.new()
+	wall.name = "StoneWall"
+	wall.multimesh = multimesh
+	wall.visibility_range_end = 170.0 if mobile else 300.0
+	wall.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if mobile else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	_place(wall)
+
+var stone_mesh: BoxMesh
+var stone_shape: BoxShape3D
+
+## What a winch can hook on around a point: the trunks, poles and boulders of the tiles
+## there (their colliders), as points on them a little above the ground.
+func anchors_near(at: Vector2, reach: float) -> Array[Vector3]:
+	var found: Array[Vector3] = []
+	var from := T.tile_of(at.x - reach, at.y - reach)
+	var to := T.tile_of(at.x + reach, at.y + reach)
+	for tz in range(from.y, to.y + 1):
+		for tx in range(from.x, to.x + 1):
+			var info: Dictionary = tiles.get(Vector2i(tx, tz), {})
+			if not info.has("node"): continue
+			var body := (info.node as Node).get_node_or_null("Collision")
+			if body == null: continue
+			for shape: Node in body.get_children():
+				if not shape is CollisionShape3D: continue
+				var p: Vector3 = (shape as CollisionShape3D).position
+				if Vector2(p.x, p.z).distance_squared_to(at) < reach * reach: found.append(Vector3(p.x, T.terrain_height(p.x, p.z) + 0.8, p.z))
+	return found
+
 ## The density reference for the scattered models (a tile gets its share).
 func _whole() -> Rect2:
 	return Rect2(-345.0, -345.0, 690.0, 690.0)
@@ -638,6 +749,8 @@ func _drivable(_p: Vector2) -> bool:
 func _on_trail(p: Vector2) -> bool:
 	for spot in clearings:
 		if spot.distance_squared_to(p) < 13.0 * 13.0: return true
+	# (The summit's lot is all clear.)
+	if Vector2(T.summit.x, T.summit.z).distance_squared_to(p) < (T.SUMMIT_LOT + 6.0) * (T.SUMMIT_LOT + 6.0): return true
 	var near := T.roads_near(Rect2(p - Vector2(8, 8), Vector2(16, 16)))
 	for r: int in near:
 		var road: Dictionary = T.roads[r]
@@ -647,9 +760,31 @@ func _on_trail(p: Vector2) -> bool:
 			if k + 1 < line.size() and Geometry2D.get_closest_point_to_segment(p, line[k], line[k + 1]).distance_squared_to(p) < reach * reach: return true
 	return T.surface_at(p.x, p.y) == Surface.WATER
 
+const WINTER_TREES := ["winter_a", "winter_b", "winter_c"]
+var winter_materials := {}
+
+## A winter tree's bark or needles (one material each per species, shared by all).
+func _winter_material(kind: String) -> StandardMaterial3D:
+	if winter_materials.has(kind): return winter_materials[kind]
+	var material := StandardMaterial3D.new()
+	material.albedo_texture = load(Props.TEXTURES + "winter_" + kind + ".png")
+	material.vertex_color_use_as_albedo = true
+	material.roughness = 0.95
+	material.metallic_specular = 0.0
+	if kind.ends_with("needles"):
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		material.alpha_scissor_threshold = 0.4
+		material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	winter_materials[kind] = material
+	return material
+
 func _mesh(model: String) -> Mesh:
 	var fresh := not meshes.has(model)
 	var mesh := super(model)
+	if fresh and model.begins_with("winter_"):
+		var species := "pine" if model.begins_with("winter_c") else "spruce"
+		mesh.surface_set_material(0, _winter_material(species + "_bark"))
+		mesh.surface_set_material(1, _winter_material(species + "_needles"))
 	if fresh:
 		if overlays_ready: _register_overlays(mesh)
 		for i in mesh.get_surface_count():
@@ -686,6 +821,32 @@ func update_wakes(vehicles: Array, delta: float = 1.0 / 60.0) -> void:
 func _apply_flood() -> void:
 	water_nodes = water_nodes.filter(func(node) -> bool: return is_instance_valid(node))
 	super()
+
+func _saved_far_away() -> bool:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--seed="): return false
+	const SAVE := "user://endless_expedition.json"
+	if not FileAccess.file_exists(SAVE): return false
+	var saved = JSON.parse_string(FileAccess.get_file_as_string(SAVE))
+	if not saved is Dictionary or not saved.has("x") or not saved.has("z"): return false
+	return Vector2(float(saved.x), float(saved.z)).distance_to(Vector2(T.CAMP.x, T.CAMP.y)) > T.TILE_M * RADIUS
+
+## Streams around p, a frame at a time, until everything in reach is made and dressed.
+func stream_all(p: Vector2) -> void:
+	while true:
+		_stream(p, false)
+		if planning == -1 and _all_there(p): return
+		await get_tree().process_frame
+
+func _all_there(p: Vector2) -> bool:
+	var here := T.tile_of(p.x, p.y)
+	for dz in range(-RADIUS, RADIUS + 1):
+		for dx in range(-RADIUS, RADIUS + 1):
+			var info: Variant = tiles.get(here + Vector2i(dx, dz))
+			if info == null: return false
+			if maxi(absi(dx), absi(dz)) <= dress_radius and not info.has("node"): return false
+	# (And the far land around it.)
+	return far_land == null or (far_task == -1 and p.distance_to(far_at) < FAR_MOVE)
 
 ## One frame of streaming around point p: plan the road on ahead (on a worker
 ## thread), collect made tiles, start new ones nearest first, lay the ground
@@ -839,10 +1000,13 @@ func _dress(tile: Vector2i) -> void:
 		if site.has("lot") and area.grow(site.lot + 4.0).has_point(site.at): clearings.append(site.at)
 	var biome: int = T.biome_at(area.get_center().x, area.get_center().y)
 	foliage_tint = TINTS[biome]
-	forest_models = (["pine_1", "pine_2"] if biome in [T.TAIGA, T.MOUNTAINS] else (["pine_1", "pine_2", "tree_02_2", "tree_01_3"] if biome == T.FOOTHILLS else FOREST_TREES))
+	# (High up nothing leafy grows, whatever the land is called there.)
+	var high: bool = T.altitude_of(area.get_center().y, T.altitude) > T.TREELINE
+	forest_models = WINTER_TREES if high or biome in [T.TAIGA, T.MOUNTAINS, T.FOOTHILLS] else FOREST_TREES
 	_build_forest(area)
-	if biome not in [T.TAIGA, T.DESERT]: _build_feature_trees(area)
-	_build_undergrowth(area)
+	if not high and biome not in [T.TAIGA, T.DESERT, T.MOUNTAINS]: _build_feature_trees(area)
+	# (No green bushes up where it snows.)
+	if not high and biome != T.MOUNTAINS: _build_undergrowth(area)
 	_build_ground_cover(area)
 	_build_boulders(area)
 	wants_tufts = false

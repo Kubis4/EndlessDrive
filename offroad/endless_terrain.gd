@@ -29,7 +29,11 @@ const MAX_FLOOD := 0.45
 const FROZEN := 0.8
 const LOOK_BANK := 1
 const POND_DEPTH := 1.4
-const SNOWLINE := 780.0
+const SNOWLINE := 1900.0
+## Above this no forest grows, and the mountains turn to rock.
+const TREELINE := 1450.0
+## From this height sheets of ice lie across the mountain road.
+const ICE_FROM := 1550.0
 ## Road planning: how far ahead of the car, stretch length, route grid cell.
 const PLAN_AHEAD := 900.0
 const ROUTE := 8.0
@@ -41,7 +45,7 @@ const BAND := 1500.0
 const QUARRY := Vector3(1.0e7, 1.0e7, 0.0)
 ## Version of how the world is made, kept in saves: a run saved in another
 ## version starts afresh (the same seed gives other land and roads).
-const CACHE_VERSION := 5
+const CACHE_VERSION := 9
 
 static var seed_value := 0
 static var river := PackedFloat32Array([0, 20, 0.013, 0, 7, 0.037, 0, 2.5, 0.08, 0])
@@ -72,6 +76,9 @@ static var road_index := {}
 ## Massifs (x, z, radius, height) and ponds (x, z, radius, level) per band.
 static var massifs: Array = []
 static var ponds: Array = []
+## The same by band of z: band → massifs, band → indices into ponds.
+static var massifs_in := {}
+static var ponds_in := {}
 static var bands := {}
 static var massif_bands := {}
 ## Sites along the way (name, kind "supply" / "camp", point, along, reward).
@@ -112,10 +119,15 @@ static func generate(new_seed: int, start: int = -1) -> void:
 	altitude.clear()
 	bag.clear()
 	mountains_z = 0.0
+	walls.clear()
+	wall_spans.clear()
+	summit = Vector3.ZERO
+	river_gap = Vector2(1.0e9, 1.0e9)
 	next_station = 900.0
 	noises = make_noises(noise_seeds)
 	noises.zones = zones
 	noises.altitude = altitude
+	noises.walls = wall_spans
 	heights = PackedFloat32Array()
 	heights.resize(N * N)
 	ground = PackedByteArray()
@@ -124,12 +136,16 @@ static func generate(new_seed: int, start: int = -1) -> void:
 	for i in RING * RING: slots.append(EMPTY)
 	massifs.clear()
 	ponds.clear()
+	massifs_in.clear()
+	ponds_in.clear()
 	bands.clear()
 	massif_bands.clear()
 	sites.clear()
 	roads.clear()
 	road_controls.clear()
 	road_index.clear()
+	old_end_control = Vector2(INF, INF)
+	settled_samples = 0
 	stretches = 0
 	# Camp beside the river on its east bank, the road heading north.
 	bank = 1.0 if rng.randf() < 0.5 else -1.0
@@ -139,13 +155,13 @@ static func generate(new_seed: int, start: int = -1) -> void:
 	roads.append({"name": "Výprava", "kind": Surface.GRAVEL, "half": 3.1, "points": PackedVector2Array(), "levels": PackedFloat32Array(), "along": PackedFloat32Array(), "ford": 0.4})
 	planned_z = camp.y
 	# (The whole journey's landscapes are known from the start.)
-	_ensure_zones(JOURNEY_KM * 1500.0)
+	_ensure_zones(JOURNEY_KM * 2000.0)
 	plan_to(PLAN_AHEAD)
 	_refresh_lists()
 	print("ENDLESS seed=%d planned to %d m in %d ms" % [seed_value, roundi(planned_z), Time.get_ticks_msec() - started])
 
-## Where a run starts: --start=N, else where the saved run started, else the
-## start menu's choice.
+## Where a run starts: --start=N, else where the saved run started, else what the
+## menu drew for a new run (fields or desert, never asked).
 static func _chosen_start() -> int:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--start="): return int(arg.trim_prefix("--start="))
@@ -153,13 +169,13 @@ static func _chosen_start() -> int:
 	if FileAccess.file_exists(path):
 		var saved = JSON.parse_string(FileAccess.get_file_as_string(path))
 		if saved is Dictionary and saved.has("start"): return int(saved.start)
-	return int(Engine.get_meta("endless_start", FIELDS))
+	return int(Engine.get_meta("endless_start", FIELDS if hash([seed_value, 5]) % 2 == 0 else DESERT))
 
 static func make_noises(seeds: PackedInt32Array) -> Dictionary:
 	return {"base": _noise(seeds[0], 1.0 / 260.0, 5), "detail": _noise(seeds[1], 1.0 / 55.0, 3),
 		"ridges": _noise(seeds[2], 1.0 / 150.0, 4, true), "warp": _noise(seeds[3], 1.0 / 90.0, 2),
 		"woods": _noise(seeds[4], 1.0 / 120.0, 3), "bog": _noise(seeds[5], 1.0 / 70.0, 2),
-		"hills": _noise(seeds[6], 1.0 / 95.0, 3), "zones": [], "altitude": []}
+		"hills": _noise(seeds[6], 1.0 / 95.0, 3), "zones": [], "altitude": [], "walls": [], "summit": Vector3.ZERO, "gap": Vector2(1.0e9, 1.0e9)}
 
 static func _noise(seed: int, frequency: float, octaves: int, ridged: bool = false) -> FastNoiseLite:
 	var noise := FastNoiseLite.new()
@@ -180,9 +196,10 @@ static func river_x_of(r: PackedFloat32Array, z: float) -> float:
 
 ## Landscapes the road passes through, in turn (every one before any comes
 ## again), their borders wandering with the warp noise and blending over 400 m.
-## Height along the way: each lowland zone has its level; a mountain range
-## climbs up over a kilometre at about 9 % and comes down again (6–14 km of way),
-## and everything, the river included, rides on this height.
+## Height along the way: every landscape of the journey lies higher than the one
+## before, up to the last stage, the great range with its serpentines and the summit
+## (_add_final_range). Past it the land goes on for whoever wants to explore. Everything,
+## the river included, rides on this height.
 enum { FOREST, MEADOW, DESERT, MOUNTAINS, BOG, FIELDS, STEPPE, TAIGA, FOOTHILLS }
 const BIOME_NAMES := ["Les", "Lúky", "Púšť", "Hory", "Močiare", "Polia", "Step", "Tajga", "Podhorie"]
 ## The journey to the mountains, from either start: landscape, its share of the
@@ -191,11 +208,30 @@ const JOURNEY_KM := 56.0
 const FROM_DESERT := [DESERT, STEPPE, FIELDS, MEADOW, BOG, FOREST, TAIGA, FOOTHILLS]
 const FROM_FIELDS := [FIELDS, MEADOW, STEPPE, FIELDS, BOG, FOREST, TAIGA, FOOTHILLS]
 const STAGE_KM := {DESERT: [6.0, 9.0], STEPPE: [4.0, 6.0], FIELDS: [6.0, 9.0], MEADOW: [3.0, 5.0], BOG: [5.0, 7.0], FOREST: [6.0, 9.0], TAIGA: [5.0, 7.0], FOOTHILLS: [5.0, 7.0]}
-const STAGE_HEIGHT := {DESERT: [15.0, 60.0], STEPPE: [60.0, 110.0], FIELDS: [90.0, 140.0], MEADOW: [120.0, 170.0], BOG: [80.0, 110.0], FOREST: [180.0, 260.0], TAIGA: [320.0, 420.0], FOOTHILLS: [520.0, 640.0]}
-## After the first range: on among the high lands, for ever.
+const STAGE_HEIGHT := {DESERT: [20.0, 60.0], FIELDS: [90.0, 140.0], STEPPE: [160.0, 210.0], MEADOW: [230.0, 280.0], BOG: [300.0, 340.0], FOREST: [420.0, 520.0], TAIGA: [680.0, 800.0], FOOTHILLS: [1000.0, 1150.0]}
+## After the summit: on among the high lands, for ever.
 const HIGH_LANDS := [TAIGA, FOOTHILLS, MOUNTAINS, FOOTHILLS, MOUNTAINS]
 ## Where the first range starts (m along z): the journey's end.
 static var mountains_z := 0.0
+## The serpentines. A wall is a steep slope (about 42 %) the road cannot go straight up: it
+## zigzags across it, a hairpin every WALL_LEG metres of z. Their road is planned as one
+## piece. `walls`: z0, z1, x, legs, built, then entry, exit, s0, s1 (along the road).
+## `wall_spans`: the same for land() on the workers: Vector4(z0, z1, x, how far it lasts on).
+static var walls: Array = []
+static var wall_spans: Array = []
+const WALL_HALF := 110.0
+const WALL_LEG := 60.0
+const HAIRPIN := 13.0
+const WALL_GRADE := 0.42
+## The transmitter on the summit: Vector3(x, height, z). Past the top the ground beyond
+## stays below it (land()). Where there is no river: from the first wall to well past the top.
+static var summit := Vector3.ZERO
+static var river_gap := Vector2(1.0e9, 1.0e9)
+## From the top of the last wall to the transmitter, its levelled lot.
+const SUMMIT_AHEAD := 130.0
+const SUMMIT_LOT := 34.0
+## Radius of the curves onto a wall's first leg and off its last (m).
+const TURN_IN := 16.0
 const BLEND := 200.0
 ## (Less than ROAD_GRADE: a road that cannot keep up ends in a trench or on a dyke.)
 const CLIMB := 0.09
@@ -226,7 +262,9 @@ static func _ensure_zones(z: float) -> void:
 		var level := first.randf_range(STAGE_HEIGHT[biome][0], STAGE_HEIGHT[biome][1]) if STAGE_HEIGHT.has(biome) else 300.0
 		altitude.append(Vector2(-1.0e7, level))
 		altitude.append(Vector2(_stage_length(biome, first), level))
-		if biome == MOUNTAINS: _add_range(first)
+		if biome == MOUNTAINS:
+			mountains_z = maxf(1.0, (altitude[altitude.size() - 1] as Vector2).x)
+			_add_final_range(first)
 	while (altitude[altitude.size() - 1] as Vector2).x < z + 2500.0:
 		var rng := RandomNumberGenerator.new()
 		rng.seed = hash([seed_value, zones.size(), 11])
@@ -234,13 +272,20 @@ static func _ensure_zones(z: float) -> void:
 		var biome: int
 		if not bag.is_empty(): biome = bag.pop_front()
 		elif mountains_z == 0.0: biome = MOUNTAINS
-		else: biome = HIGH_LANDS[zones.size() % HIGH_LANDS.size()]
+		else:
+			biome = HIGH_LANDS[zones.size() % HIGH_LANDS.size()]
+			# (Down from the summit first: no range past it stands as high.)
+			if biome == MOUNTAINS and from.y > 1500.0: biome = FOOTHILLS
 		if biome == MOUNTAINS:
-			if mountains_z == 0.0: mountains_z = from.x
 			zones.append(Vector2(from.x + 150.0, MOUNTAINS))
-			_add_range(rng)
+			if mountains_z == 0.0:
+				mountains_z = from.x
+				_add_final_range(rng)
+			else: _add_range(rng)
 		else:
 			var level := rng.randf_range(STAGE_HEIGHT[biome][0], STAGE_HEIGHT[biome][1])
+			# On the journey the way only ever goes up.
+			if mountains_z == 0.0: level = maxf(level, from.y + rng.randf_range(25.0, 60.0))
 			# Long, even climbs and descents on the way there.
 			var way := maxf(500.0, absf(level - from.y) / (CLIMB * 0.6))
 			var length := maxf(way + 400.0, _stage_length(biome, rng))
@@ -281,10 +326,50 @@ static func _stage_length(biome: int, rng: RandomNumberGenerator) -> float:
 	if not STAGE_KM.has(biome): return 1000.0
 	return rng.randf_range(STAGE_KM[biome][0], STAGE_KM[biome][1]) * 1000.0 * stage_scale
 
-## Up to a summit 450–1000 m high and along its saddle.
+## The last stage: a long climb, the first wall of serpentines, a high saddle, the second
+## wall, and along the top to the transmitter (about 2300 m).
+static func _add_final_range(rng: RandomNumberGenerator) -> void:
+	var from: Vector2 = altitude[altitude.size() - 1]
+	var base := maxf(from.y + 250.0, rng.randf_range(1380.0, 1480.0))
+	var foot := from.x + (base - from.y) / CLIMB
+	altitude.append(Vector2(foot, base))
+	altitude.append(Vector2(foot + 150.0, base))
+	var first := _add_wall(foot + 150.0, base, 12, 140.0)
+	var saddle := Vector2(first.x + rng.randf_range(1200.0, 1700.0), first.y + rng.randf_range(50.0, 100.0))
+	altitude.append(saddle)
+	altitude.append(Vector2(saddle.x + 100.0, saddle.y))
+	var top := _add_wall(saddle.x + 100.0, saddle.y, 19, 560.0)
+	summit = Vector3((walls[1] as Dictionary).x, top.y, top.x + SUMMIT_AHEAD)
+	altitude.append(Vector2(top.x + 420.0, top.y))
+	river_gap = Vector2((walls[0] as Dictionary).z0 - 100.0, top.x + 2400.0)
+	noises.summit = summit
+	noises.gap = river_gap
+
+## A wall from (z0, level): up WALL_GRADE over `legs` legs. Returns its top (z, height).
+static func _add_wall(z0: float, level: float, legs: int, lasts: float) -> Vector2:
+	var z1 := z0 + legs * WALL_LEG
+	var top := level + legs * WALL_LEG * WALL_GRADE
+	# (Straight up the valley's middle: no river runs here.)
+	var x := river_x(z0 + (z1 - z0) * 0.5)
+	walls.append({"z0": z0, "z1": z1, "x": x, "legs": legs, "built": false})
+	wall_spans.append(Vector4(z0, z1, x, lasts))
+	altitude.append(Vector2(z1, top))
+	return Vector2(z1, top)
+
+## How much of a wall's slope z is on (0..1).
+static func wall_share(z: float, spans: Array) -> float:
+	for span: Vector4 in spans:
+		if z > span.x - 140.0 and z < span.y + span.w: return smoothstep(span.x - 140.0, span.x, z) * (1.0 - smoothstep(span.y + span.w - 140.0, span.y + span.w, z))
+	return 0.0
+
+## Whether the river has given out here (0..1).
+static func river_off(z: float, gap: Vector2) -> float:
+	return smoothstep(gap.x - 100.0, gap.x, z) * (1.0 - smoothstep(gap.y - 100.0, gap.y, z))
+
+## Up to a summit and along its saddle.
 static func _add_range(rng: RandomNumberGenerator) -> void:
 	var from: Vector2 = altitude[altitude.size() - 1]
-	var peak := maxf(from.y + 150.0, rng.randf_range(1000.0, 1350.0))
+	var peak := maxf(from.y + 150.0, rng.randf_range(1500.0, 1900.0))
 	var top := from.x + (peak - from.y) / CLIMB
 	altitude.append(Vector2(top, peak))
 	altitude.append(Vector2(top + rng.randf_range(300.0, 700.0), peak - rng.randf_range(0.0, 40.0)))
@@ -345,7 +430,7 @@ static func _relief(biome: int, x: float, z: float, base: float, detail: float, 
 		FIELDS: return 7.0 + 6.5 * base + 0.25 * detail + 1.6 * hills
 		STEPPE: return 6.0 + 5.5 * base + 1.2 * detail + 4.0 * hills
 		TAIGA: return 9.0 + 10.0 * base + 2.0 * detail + 8.0 * hills
-		FOOTHILLS: return (12.0 + 17.0 * base + 10.0 * ridge * ridge + 10.0 * hills) * (1.0 + high / 1500.0)
+		FOOTHILLS: return (12.0 + 17.0 * base + 10.0 * ridge * ridge + 10.0 * hills) * (1.0 + minf(high / 1500.0, 0.45))
 	return 6.5 + 7.0 * base + 1.5 * detail + 4.0 * hills
 
 ## The land before roads: the biomes' relief, massifs, the river valley. Pure
@@ -376,7 +461,32 @@ static func land(x: float, z: float, nz: Dictionary, r: PackedFloat32Array, peak
 	if h < 1.2: h = 1.2 - (1.2 - h) * 0.25
 	# Valley sides climb away from the river among the mountains.
 	h += (range_share + 0.5 * foothill) * 0.12 * maxf(0.0, dv - 140.0)
-	return way + h
+	# On a wall: an even slope (the way itself rises) for the zigzag, shut in on both sides
+	# by rising ground. On the last wall that ground falls away towards the top instead.
+	for span: Vector4 in nz.walls:
+		if z <= span.x - 140.0 or z >= span.y + span.w: continue
+		var share := smoothstep(span.x - 140.0, span.x, z) * (1.0 - smoothstep(span.y + span.w - 140.0, span.y + span.w, z))
+		# (Where the sides begin wanders, and they begin gently: a straight crease up the slope
+		# would show from the road as a line drawn across the mountain.)
+		var dx := absf(x - span.z) - 34.0 * (0.5 + 0.5 * w) - 22.0 * (0.5 + 0.5 * hills)
+		var rise := maxf(0.0, dx - WALL_HALF - 35.0)
+		var side := 240.0 * (1.0 - exp(-rise * rise / (rise + 60.0) / 240.0)) * (0.75 + 0.5 * ridge)
+		if span.w > 200.0:
+			var fall := maxf(0.0, dx - WALL_HALF - 25.0)
+			side = lerpf(side, -0.33 * fall * fall / (fall + 40.0), smoothstep(span.y - 500.0, span.y, z))
+		h = lerpf(h, 3.0 + 2.5 * base + 0.5 * detail + side, share)
+	var top: Vector3 = nz.summit
+	var height := way + h
+	# Nothing around stands higher than the summit: a cone over it, steep to the south and
+	# the sides, gentle to the north, and never below the way itself.
+	if top != Vector3.ZERO:
+		var offset := Vector2(x - top.x, z - top.z)
+		var off := offset.length()
+		if off < 2600.0:
+			var fall := lerpf(0.25, 0.06, smoothstep(-0.3, 0.7, offset.y / maxf(off, 1.0)))
+			var cone := maxf(top.y + 6.0 - fall * maxf(0.0, off - 90.0), way + lerpf(4.0, 12.0, smoothstep(0.0, 400.0, top.y - way)))
+			height = lerpf(minf(height, cone), height, smoothstep(2000.0, 2600.0, off))
+	return height
 
 ## Share of desert at a point (0..1): there the river runs dry.
 static func desert_share(z: float, warp: float, list: Array) -> float:
@@ -385,14 +495,14 @@ static func desert_share(z: float, warp: float, list: Array) -> float:
 
 static func dry_at(z: float) -> bool:
 	_ensure_zones(z)
-	return desert_share(z, 0.0, zones) > 0.5
+	return desert_share(z, 0.0, zones) > 0.5 or river_off(z, river_gap) > 0.5
 
 ## Per landscape: temperature offset (°C, clear skies being 14), how often rain
 ## comes (1 normal), whether snow may fall.
 const CLIMATES := [[0.0, 1.0, true], [4.0, 0.8, true], [24.0, 0.04, false], [-3.0, 1.0, true], [2.0, 1.6, true], [8.0, 0.6, false], [14.0, 0.2, false], [-3.0, 1.1, true], [-2.0, 1.0, true]]
 
 ## The climate for weather.gd: biome name, temperature offset (°C, falling
-## 1.5 °C for every 100 m of height), how often rain comes (1 normal), whether
+## 0.85 °C for every 100 m of height), how often rain comes (1 normal), whether
 ## snow may fall, and how high the car is.
 static func climate_at(x: float, z: float, height: float = 0.0) -> Dictionary:
 	_ensure_zones(z)
@@ -401,8 +511,8 @@ static func climate_at(x: float, z: float, height: float = 0.0) -> Dictionary:
 	var b: Array = CLIMATES[int(mix.y)]
 	var dominant := int(mix.y) if mix.z > 0.5 else int(mix.x)
 	# High up, a cloud layer the road climbs through, clearing near the tops.
-	var mist := smoothstep(420.0, 620.0, height) * (1.0 - smoothstep(820.0, 960.0, height))
-	return {"name": BIOME_NAMES[dominant], "biome": dominant, "temperature": lerpf(a[0], b[0], mix.z) - 0.015 * maxf(0.0, height), "height": height, "mist": mist, "wet": lerpf(a[1], b[1], mix.z), "snow": a[2] if mix.z < 0.5 else b[2]}
+	var mist := smoothstep(1000.0, 1120.0, height) * (1.0 - smoothstep(1240.0, 1360.0, height))
+	return {"name": BIOME_NAMES[dominant], "biome": dominant, "temperature": lerpf(a[0], b[0], mix.z) - 0.0085 * maxf(0.0, height), "height": height, "mist": mist, "wet": lerpf(a[1], b[1], mix.z), "snow": a[2] if mix.z < 0.5 else b[2]}
 
 # ---------------------------------------------------------------- fields
 
@@ -478,6 +588,9 @@ static func far_job(at: Vector2) -> Dictionary:
 	var nz := noises.duplicate()
 	nz.zones = zones.duplicate()
 	nz.altitude = altitude.duplicate()
+	nz.walls = wall_spans.duplicate()
+	nz.summit = summit
+	nz.gap = river_gap
 	nz.field_seed = seed_value
 	var area := Rect2(at - Vector2.ONE * FAR_REACH, Vector2.ONE * FAR_REACH * 2.0)
 	return {"at": at, "nz": nz, "river": river, "peaks": _peaks_near(area)}
@@ -551,7 +664,7 @@ static func _far_colour(biome: int, h: float, up: float) -> Color:
 		STEPPE: colour = Color(0.46, 0.39, 0.18)
 		TAIGA: colour = Color(0.045, 0.085, 0.05)
 		FOOTHILLS: colour = FOREST_GREEN.lerp(Color(0.18, 0.25, 0.09), 0.6)
-		MOUNTAINS: colour = FOREST_GREEN.lerp(ROCK_GREY, smoothstep(480.0, 620.0, h))
+		MOUNTAINS: colour = FOREST_GREEN.lerp(ROCK_GREY, smoothstep(TREELINE, TREELINE + 170.0, h))
 	colour = colour.lerp(ROCK_GREY, smoothstep(0.8, 0.62, up) * (0.3 if biome == DESERT else 1.0))
 	return colour.lerp(SNOW_WHITE, smoothstep(SNOWLINE - 40.0, SNOWLINE + 30.0, h) * (0.45 if up < 0.6 else 1.0))
 
@@ -566,9 +679,11 @@ static func _slope(x: float, z: float) -> float:
 
 static func _peaks_near(area: Rect2) -> Array:
 	var result := []
-	for m: Vector4 in massifs:
-		var reach := m.z * 2.2
-		if m.x + reach > area.position.x and m.x - reach < area.end.x and m.y + reach > area.position.y and m.y - reach < area.end.y: result.append(m)
+	# (A massif's radius is under 190 m, so its reach under 420 m.)
+	for b in range(floori((area.position.y - 420.0) / BAND), floori((area.end.y + 420.0) / BAND) + 1):
+		for m: Vector4 in massifs_in.get(b, []):
+			var reach := m.z * 2.2
+			if m.x + reach > area.position.x and m.x - reach < area.end.x and m.y + reach > area.position.y and m.y - reach < area.end.y: result.append(m)
 	return result
 
 ## Massifs (one or two per band, on either side of the river, now and then
@@ -592,6 +707,8 @@ static func _ensure_bands(z: float) -> void:
 			var radius := rng.randf_range(11.0, 16.0)
 			if absf(pz) < 120.0 or biome == DESERT or biome == MOUNTAINS or (biome != BOG and i >= 2): continue
 			ponds.append(Vector4(px, pz, radius, land(px, pz, noises, river, _peaks_near(Rect2(px - 1, pz - 1, 2, 2))) - 0.3))
+			var in_band: Array = ponds_in.get_or_add(floori(pz / BAND), [])
+			in_band.append(ponds.size() - 1)
 
 static func _band_rng(b: int) -> RandomNumberGenerator:
 	var rng := RandomNumberGenerator.new()
@@ -601,7 +718,9 @@ static func _band_rng(b: int) -> RandomNumberGenerator:
 static func _ensure_massifs(b: int) -> void:
 	if massif_bands.has(b): return
 	massif_bands[b] = true
-	massifs.append_array(_draw_massifs(_band_rng(b), b))
+	var drawn := _draw_massifs(_band_rng(b), b)
+	massifs.append_array(drawn)
+	massifs_in[b] = drawn
 
 static func _draw_massifs(rng: RandomNumberGenerator, b: int) -> Array:
 	var found := []
@@ -636,6 +755,10 @@ static func _plan_stretch() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed_value, stretches, 7])
 	var from: Vector2 = road_controls[road_controls.size() - 1]
+	for wall: Dictionary in walls:
+		if not wall.built and from.y + 480.0 > wall.z0:
+			_plan_wall(wall, from, rng)
+			return
 	var tz := from.y + rng.randf_range(200.0, 280.0)
 	_ensure_bands(tz + 200.0)
 	# Keep to this bank, or now and then cross the river (one ford).
@@ -649,7 +772,7 @@ static func _plan_stretch() -> void:
 		if score < best_score:
 			best_score = score
 			best = p
-	var route := _route(from, best, 0)
+	var route := _route(from, best, 0, _road_heading())
 	var controls := _simplify(route)
 	for i in range(1, controls.size()): road_controls.append(controls[i])
 	_rebuild_main()
@@ -660,7 +783,10 @@ static func _plan_stretch() -> void:
 	var along: PackedFloat32Array = main.along
 	var at := _sample_near(points, from.lerp(best, 0.5))
 	var here_biome := biome_at(points[at].x, points[at].y)
-	if points[at].y > next_station and here_biome != MOUNTAINS:
+	# (Nothing leaves the road just below or above a wall.)
+	var by_wall := wall_share(points[at].y + 180.0, wall_spans) > 0.0 or wall_share(points[at].y - 180.0, wall_spans) > 0.0
+	if by_wall: pass
+	elif points[at].y > next_station and here_biome != MOUNTAINS:
 		if _roadside_site(rng, at, "gas_station", "Benzínka", here_biome):
 			next_station = points[at].y + rng.randf_range(5000.0, 8000.0)
 	elif stretches % 4 == 1:
@@ -704,6 +830,78 @@ static func _plan_stretch() -> void:
 		sites.append({"name": "Tábor", "kind": "camp", "biome": biome_at(points[c].x, points[c].y), "point": points[c], "along": along[c], "loot": []})
 	stretches += 1
 	planned_z = maxf(planned_z, best.y)
+
+## A wall's road, all in one: from where the road is to the wall's foot, then leg by leg
+## across the slope to a hairpin on each side, supplies every few legs, and on the last
+## wall out along the top to the transmitter.
+static func _plan_wall(wall: Dictionary, from: Vector2, rng: RandomNumberGenerator) -> void:
+	_ensure_bands(wall.z1 + 200.0)
+	wall.built = true
+	var side := 1.0 if from.x >= wall.x else -1.0
+	var entry := Vector2(wall.x + side * WALL_HALF, wall.z0)
+	# Up to the wall's foot heading north, and round onto the first leg.
+	var into := entry + Vector2(side * TURN_IN, -TURN_IN)
+	var approach := _simplify(_route(from, into, 0, _road_heading()))
+	# (The route's last grid cells would leave a kink just before the curve: it heads straight
+	# for a point well below it, and comes up to it from there.)
+	while approach.size() > 2 and (approach[approach.size() - 2] as Vector2).distance_to(into) < 40.0: approach.remove_at(approach.size() - 2)
+	var below := into - Vector2(0.0, 22.0)
+	if (approach[approach.size() - 2] as Vector2).distance_to(below) > 8.0: approach.insert(approach.size() - 1, below)
+	for i in range(1, approach.size()): road_controls.append(approach[i])
+	road_controls.append(entry + Vector2(side * TURN_IN * 0.7071, -TURN_IN * (1.0 - 0.7071)))
+	road_controls.append(entry)
+	var bends := PackedVector2Array()
+	for leg: int in wall.legs:
+		side = -side
+		var radius := rng.randf_range(11.0, 17.0)
+		var reach := WALL_HALF * rng.randf_range(0.76, 1.04)
+		var centre := Vector2(wall.x + side * reach, wall.z0 + (leg + 1) * WALL_LEG - radius)
+		var last: Vector2 = road_controls.back()
+		var approach_end := centre + Vector2(0.0, -radius)
+		var wave := rng.randf_range(7.0, 13.0) * (-1.0 if rng.randf() < 0.5 else 1.0)
+		road_controls.append(last.lerp(approach_end, rng.randf_range(0.23, 0.34)) + Vector2(0.0, wave))
+		road_controls.append(last.lerp(approach_end, rng.randf_range(0.64, 0.77)) - Vector2(0.0, wave))
+		for degrees: float in [-100.0, -60.0, -20.0, 20.0, 60.0, 100.0]:
+			var turn := deg_to_rad(degrees)
+			road_controls.append(centre + Vector2(side * cos(turn), sin(turn)) * radius)
+		bends.append(centre)
+	var last_wall: bool = wall == walls[walls.size() - 1]
+	var out := Vector2(wall.x - side * (SUMMIT_LOT - 4.0), summit.z) if last_wall else Vector2(wall.x - side * WALL_HALF * 0.4, wall.z1 + 30.0)
+	# Round from the last leg onto a heading north, for what comes after.
+	var back := -side
+	road_controls.append(out + Vector2(-back * TURN_IN, -TURN_IN))
+	road_controls.append(out + Vector2(-back * TURN_IN * (1.0 - 0.7071), -TURN_IN * 0.7071))
+	road_controls.append(out)
+	road_controls.append(out + Vector2(0.0, 70.0 if last_wall else 24.0))
+	wall.entry = entry
+	wall.exit = out
+	var old_size: int = (roads[0].points as PackedVector2Array).size()
+	_rebuild_main()
+	var main: Dictionary = roads[0]
+	var points: PackedVector2Array = main.points
+	var along: PackedFloat32Array = main.along
+	var levels: PackedFloat32Array = main.levels
+	for leg in range(3, bends.size() - 1, 5):
+		var k := _nearest_from(points, bends[leg] - Vector2(signf(bends[leg].x - wall.x) * WALL_HALF * 0.8, 0.0), old_size - 150)
+		sites.append({"name": "Zásoby pri serpentíne", "kind": "supply", "biome": MOUNTAINS, "point": points[k], "along": along[k], "loot": _loot(rng, false, MOUNTAINS)})
+	if last_wall:
+		var k := _nearest_from(points, out, old_size - 150)
+		var at := Vector2(summit.x, summit.z)
+		sites.append({"name": "Vysielač", "kind": "summit", "biome": MOUNTAINS, "point": at, "at": at, "facing": Vector2(0.0, 1.0), "lot": SUMMIT_LOT, "level": levels[k], "model": "", "along": along[k], "loot": []})
+	stretches += 1
+	var end: Vector2 = road_controls[road_controls.size() - 1]
+	planned_z = maxf(planned_z, end.y)
+
+## Which way the road's end is heading.
+static func _road_heading() -> Vector2:
+	if road_controls.size() < 2: return Vector2.ZERO
+	return (road_controls[road_controls.size() - 1] as Vector2) - (road_controls[road_controls.size() - 2] as Vector2)
+
+static func _nearest_from(points: PackedVector2Array, p: Vector2, from: int) -> int:
+	var best := maxi(0, from)
+	for k in range(best, points.size()):
+		if points[k].distance_squared_to(p) < points[best].distance_squared_to(p): best = k
+	return best
 
 ## A building beside the main road at sample k, on a levelled lot: on whichever
 ## side is clear of the road's bends, the river and ponds. False if neither is.
@@ -751,7 +949,8 @@ static func _loot(rng: RandomNumberGenerator, store: bool, biome: int, station: 
 	if rng.randf() < 0.55: items.append(["coolant", rng.randi_range(1, 2)])
 	if store and rng.randf() < 0.55:
 		var here: Array = TYRES_HERE[biome]
-		items.append(["tyre:" + str(here[rng.randi() % here.size()]), 1])
+		var supply := str(here[rng.randi() % here.size()])
+		items.append(["chains" if supply == "chains" else "tyre:" + supply, 1])
 	return items
 
 static func _sample_near(points: PackedVector2Array, p: Vector2) -> int:
@@ -768,15 +967,77 @@ static func _rebuild_main() -> void:
 	var main: Dictionary = roads[0]
 	var old_points: PackedVector2Array = main.points
 	var old_levels: PackedFloat32Array = main.levels
-	var line := _smooth(road_controls)
+	var old_along: PackedFloat32Array = main.along
+	var line := _grown_line(old_points)
 	var keep := maxi(0, old_points.size() - 150)
-	var levels := _levels(line, keep, old_levels, 0)
+	# (What lies before the end of the old line's settled part is the same as before.)
+	var settled := mini(settled_samples, old_along.size())
+	var arc := old_along.slice(0, settled)
+	if arc.is_empty(): arc.append(0.0)
+	arc.resize(line.size())
+	for k in range(maxi(settled, 1), line.size()): arc[k] = arc[k - 1] + line[k].distance_to(line[k - 1])
+	# Where a new wall's road begins and ends along the whole road.
+	for wall: Dictionary in walls:
+		if wall.built and not wall.has("s1"):
+			wall.s0 = arc[_nearest_from(line, wall.entry, keep)]
+			wall.s1 = arc[_nearest_from(line, wall.exit, keep)]
+	var levels := _levels(line, keep, old_levels, 0, arc)
+	# Re-index the changed part (the old line's, before it goes).
+	_unindex(0, keep, old_points)
 	main.points = line
 	main.levels = levels
-	main.along = _arc(line)
-	# Re-index the changed part.
-	_unindex(0, keep)
+	main.along = arc
 	_index(0, keep)
+
+## How many samples of the line stayed as they were in the last growth.
+static var settled_samples := 0
+
+## The line through all the controls, smoothing only its end: corner cutting and averaging
+## reach a few dozen metres, so the new end is joined on where the old line has settled,
+## SETTLE metres back from its last control (see _smooth).
+static func _grown_line(old: PackedVector2Array) -> PackedVector2Array:
+	const SETTLE := 70.0
+	var count := road_controls.size()
+	var last := -1
+	if old.size() > 80:
+		for i in range(count - 1, -1, -1):
+			if (road_controls[i] as Vector2).is_equal_approx(old_end_control):
+				last = i
+				break
+	old_end_control = road_controls[count - 1]
+	# No line yet, or not long enough to join: all of it.
+	if last < 0:
+		settled_samples = 0
+		return _smooth(road_controls)
+	var back := 0.0
+	var join := last
+	while join > 0 and back < SETTLE:
+		back += (road_controls[join] as Vector2).distance_to(road_controls[join - 1])
+		join -= 1
+	var from := join
+	while from > 0 and back < SETTLE * 2.0:
+		back += (road_controls[from] as Vector2).distance_to(road_controls[from - 1])
+		from -= 1
+	if back < SETTLE * 2.0:
+		settled_samples = 0
+		return _smooth(road_controls)
+	var target: Vector2 = road_controls[join]
+	var end := _nearest_from(old, target, old.size() - 150)
+	var tail := _smooth(road_controls.slice(from))
+	var start := _nearest_from(tail, old[end], 0)
+	# (They should run together here; where they do not, the whole line is made.)
+	if start < 1 or start + 2 >= tail.size() or minf(Geometry2D.get_closest_point_to_segment(old[end], tail[start - 1], tail[start]).distance_to(old[end]), Geometry2D.get_closest_point_to_segment(old[end], tail[start], tail[start + 1]).distance_to(old[end])) > 0.4:
+		settled_samples = 0
+		return _smooth(road_controls)
+	# From the next sample a full step on, the new end takes over.
+	if tail[start + 1].distance_to(old[end]) < 1.0: start += 1
+	var line := old.slice(0, end + 1)
+	line.append_array(tail.slice(start + 1))
+	settled_samples = end + 1
+	return line
+
+## The last control when the line was last made.
+static var old_end_control := Vector2(INF, INF)
 
 static func _add_side_road(controls: Array, title: String, junction: Vector2) -> void:
 	var line := _smooth(controls)
@@ -832,17 +1093,15 @@ static func _resample(points: PackedVector2Array) -> PackedVector2Array:
 ## Road levels (2 m samples) from `from` on: the smoothed land, down to fords
 ## and pond shores, a side road meeting the main road at its level, the grade
 ## limited, crests and dips rounded. Samples before `from` keep `held`.
-static func _levels(line: PackedVector2Array, from: int, held: PackedFloat32Array, road: int) -> PackedFloat32Array:
+static func _levels(line: PackedVector2Array, from: int, held: PackedFloat32Array, road: int, arc := PackedFloat32Array()) -> PackedFloat32Array:
 	var count := line.size()
 	var raw := PackedFloat32Array()
 	raw.resize(count)
 	for k in range(maxi(0, from - 8), count): raw[k] = land_at(line[k].x, line[k].y)
-	var centre := PackedFloat32Array()
+	var centre := held.slice(0, mini(from, held.size()))
+	var first := centre.size()
 	centre.resize(count)
-	for k in count:
-		if k < from and k < held.size():
-			centre[k] = held[k]
-			continue
+	for k in range(first, count):
 		var total := 0.0
 		var weight := 0.0
 		for o in range(-6, 7):
@@ -852,18 +1111,30 @@ static func _levels(line: PackedVector2Array, from: int, held: PackedFloat32Arra
 			weight += 1.0
 		centre[k] = total / weight
 	# The rollers are laid over the grade-limited road: this works without them.
-	var arc := _arc(line) if road == 0 else PackedFloat32Array()
 	if road == 0:
 		for k in range(maxi(0, from - 12), mini(from, count)): centre[k] -= _hump(arc[k], line[k])
 	var start := maxi(from, 1)
-	for c in _river_crossings(line):
+	for c in _river_crossings(line, start):
 		for k in range(start, count):
 			var off := absf(float(k - c)) * 2.0
 			if off < 120.0: centre[k] = minf(centre[k], river_level(line[c].y) + 0.9 + maxf(0.0, off - 8.0) * 0.12)
+	var lowest := INF
+	var highest := -INF
+	for k in range(start, count):
+		lowest = minf(lowest, line[k].y)
+		highest = maxf(highest, line[k].y)
 	for pond: Vector4 in ponds:
+		if pond.y < lowest - pond.z - 40.0 or pond.y > highest + pond.z + 40.0: continue
 		for k in range(start, count):
 			var d := line[k].distance_to(Vector2(pond.x, pond.y))
 			if d < pond.z + 40.0: centre[k] = minf(centre[k], pond.w + 0.3 + maxf(0.0, d - pond.z) * 0.12)
+	# On a wall the road climbs evenly, whatever the ground does (it follows the road).
+	if road == 0:
+		for wall: Dictionary in walls:
+			if not wall.has("s1"): continue
+			for k in range(start, count):
+				if arc[k] < wall.s0 or arc[k] > wall.s1: continue
+				centre[k] = altitude_of(lerpf(wall.z0, wall.z1, (arc[k] - wall.s0) / (wall.s1 - wall.s0)), altitude) + 3.0
 	# A side road starts on the main road at its level.
 	var pinned := 0
 	if road > 0:
@@ -913,12 +1184,13 @@ static func _hump(s: float, p: Vector2) -> float:
 	var high := 0.7 + 0.8 * float((roll >> 4) % 100) / 100.0
 	# (Not at the fords.)
 	var dry := smoothstep(20.0, 40.0, absf(p.x - river_x(p.y)))
-	return high * bump * bump * dry * float(HUMP_SCALE[biome_at(p.x, p.y)])
+	return high * bump * bump * dry * float(HUMP_SCALE[biome_at(p.x, p.y)]) * (1.0 - wall_share(p.y, wall_spans))
 
-static func _river_crossings(line: PackedVector2Array) -> Array[int]:
+## Fords of the line near or past sample `from` (a ford lowers 60 samples each way).
+static func _river_crossings(line: PackedVector2Array, from: int) -> Array[int]:
 	var result: Array[int] = []
-	for c in line.size() - 1:
-		if signf(line[c].x - river_x(line[c].y)) != signf(line[c + 1].x - river_x(line[c + 1].y)): result.append(c)
+	for c in range(maxi(0, from - 60), line.size() - 1):
+		if signf(line[c].x - river_x(line[c].y)) != signf(line[c + 1].x - river_x(line[c + 1].y)) and river_off(line[c].y, river_gap) < 0.5: result.append(c)
 	return result
 
 static func _index(road: int, from: int) -> void:
@@ -928,9 +1200,11 @@ static func _index(road: int, from: int) -> void:
 		if not road_index.has(key): road_index[key] = PackedInt32Array()
 		road_index[key].append_array([road, k])
 
-static func _unindex(road: int, from: int) -> void:
-	for key in road_index.keys():
-		var entries: PackedInt32Array = road_index[key]
+static func _unindex(road: int, from: int, line: PackedVector2Array) -> void:
+	var seen := {}
+	for k in range(from, line.size()): seen[Vector2i(floori(line[k].x / 16.0), floori(line[k].y / 16.0))] = true
+	for key: Vector2i in seen:
+		var entries: PackedInt32Array = road_index.get(key, PackedInt32Array())
 		var kept := PackedInt32Array()
 		for e in range(0, entries.size(), 2):
 			if entries[e] == road and entries[e + 1] >= from: continue
@@ -955,7 +1229,7 @@ static func roads_near(area: Rect2) -> Dictionary:
 ## generated_terrain.gd: grade limited (switchbacks), fords cost a detour,
 ## ponds blocked, turns of at most 45° per cell; a side road (`kind` 1) is
 ## also kept off the main road.
-static func _route(from: Vector2, to: Vector2, kind: int) -> PackedVector2Array:
+static func _route(from: Vector2, to: Vector2, kind: int, heading := Vector2.ZERO) -> PackedVector2Array:
 	var margin := 200.0
 	var origin := Vector2(minf(from.x, to.x) - margin, minf(from.y, to.y) - margin)
 	var w := ceili((absf(to.x - from.x) + 2.0 * margin) / ROUTE) + 1
@@ -968,6 +1242,8 @@ static func _route(from: Vector2, to: Vector2, kind: int) -> PackedVector2Array:
 	blocked.resize(w * h)
 	water.resize(w * h)
 	_ensure_bands(origin.y + h * ROUTE)
+	_ensure_zones(origin.y + h * ROUTE)
+	var peaks := _peaks_near(Rect2(origin, Vector2(w, h) * ROUTE))
 	var main: Dictionary = roads[0]
 	for iz in h:
 		var z := origin.y + iz * ROUTE
@@ -975,7 +1251,7 @@ static func _route(from: Vector2, to: Vector2, kind: int) -> PackedVector2Array:
 		for ix in w:
 			var x := origin.x + ix * ROUTE
 			var i := iz * w + ix
-			heights_g[i] = land_at(x, z)
+			heights_g[i] = land(x, z, noises, river, peaks)
 			var dv := absf(x - rx)
 			water[i] = 2 if dv < 10.0 else (1 if dv < 20.0 else 0)
 			if pond_at(x, z, 10.0) >= 0: blocked[i] = 1
@@ -994,8 +1270,17 @@ static func _route(from: Vector2, to: Vector2, kind: int) -> PackedVector2Array:
 					if cell.x >= 0 and cell.y >= 0 and cell.x < w and cell.y < h: blocked[cell.y * w + cell.x] = maxi(blocked[cell.y * w + cell.x], 2)
 	var start := _cell(grid, from)
 	var goal := _cell(grid, to)
-	for attempt in [[ROUTE_GRADE, 0.5], [0.18, 0.5], [0.26, 0.5], [10.0, -0.1]]:
-		var found := _astar(grid, start, goal, attempt[0], attempt[1])
+	# Going on the way the road already goes, so that no corner is left where stretches meet.
+	var way := Vector2i.ZERO
+	if heading != Vector2.ZERO:
+		var nearest := -2.0
+		for d: Vector2i in DIRS:
+			var along := Vector2(d).normalized().dot(heading.normalized())
+			if along > nearest:
+				nearest = along
+				way = d
+	for attempt in [[ROUTE_GRADE, 0.5, way], [0.18, 0.5, way], [0.26, 0.5, way], [10.0, 0.5, way], [10.0, -0.1, way], [10.0, -0.1, Vector2i.ZERO]]:
+		var found := _astar(grid, start, goal, attempt[0], attempt[1], attempt[2])
 		if not found.is_empty():
 			found[0] = from
 			found[found.size() - 1] = to
@@ -1008,7 +1293,7 @@ static func _cell(grid: Dictionary, p: Vector2) -> int:
 
 const DIRS := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1)]
 
-static func _astar(grid: Dictionary, start: int, goal: int, limit: float, sharpest: float) -> PackedVector2Array:
+static func _astar(grid: Dictionary, start: int, goal: int, limit: float, sharpest: float, way := Vector2i.ZERO) -> PackedVector2Array:
 	var w: int = grid.w
 	var h: int = grid.h
 	var origin: Vector2 = grid.origin
@@ -1036,7 +1321,7 @@ static func _astar(grid: Dictionary, start: int, goal: int, limit: float, sharpe
 		var nx := n % w
 		var nz := n / w
 		var from := came[n]
-		var arrived := Vector2i(nx - from % w, nz - from / w) if from != -1 else Vector2i.ZERO
+		var arrived := Vector2i(nx - from % w, nz - from / w) if from != -1 else way
 		for d: Vector2i in DIRS:
 			var mx := nx + d.x
 			var mz := nz + d.y
@@ -1229,7 +1514,7 @@ static func tile_job(tile: Vector2i) -> Dictionary:
 		elif reach.grow(16.0).has_point(site.point): clearings.append(Vector3(site.point.x, site.point.y, 12.0 if site.kind == "camp" else 8.0))
 	if reach.grow(20.0).has_point(Vector2(CAMP.x, CAMP.y)): clearings.append(CAMP)
 	_ensure_zones(area.end.y)
-	return {"tile": tile, "seeds": noise_seeds, "zones": zones.duplicate(), "altitude": altitude.duplicate(), "river": river, "peaks": _peaks_near(reach.grow(200.0)), "pieces": pieces, "ponds": near_ponds, "clearings": clearings, "lots": lots, "seed_value": seed_value}
+	return {"tile": tile, "seeds": noise_seeds, "zones": zones.duplicate(), "altitude": altitude.duplicate(), "walls": wall_spans.duplicate(), "summit": summit, "gap": river_gap, "river": river, "peaks": _peaks_near(reach.grow(200.0)), "pieces": pieces, "ponds": near_ponds, "clearings": clearings, "lots": lots, "seed_value": seed_value}
 
 ## Makes one tile (on a worker thread): heights and ground kinds, 80 × 80.
 ## Returns them with the tile's height range.
@@ -1238,6 +1523,9 @@ static func bake_tile(job: Dictionary) -> Dictionary:
 	var nz := make_noises(job.seeds)
 	nz.zones = job.zones
 	nz.altitude = job.altitude
+	nz.walls = job.walls
+	nz.summit = job.summit
+	nz.gap = job.gap
 	var r: PackedFloat32Array = job.river
 	var peaks: Array = job.peaks
 	var x0 := tile.x * TILE_M
@@ -1269,7 +1557,7 @@ static func bake_tile(job: Dictionary) -> Dictionary:
 			var warp: float = nz.warp.get_noise_2d(x, z)
 			var mix := zone_mix(z, warp, nz.zones)
 			biome_c[k] = int(mix.y) if mix.z + 0.15 * nz.detail.get_noise_2d(x * 3.0, z * 3.0) > 0.5 else int(mix.x)
-			dry_c[k] = desert_share(z, warp, nz.zones)
+			dry_c[k] = maxf(desert_share(z, warp, nz.zones), river_off(z, nz.gap))
 	var count := TILE * TILE
 	var h := PackedFloat32Array()
 	h.resize(count)
@@ -1414,6 +1702,9 @@ static func bake_tile(job: Dictionary) -> Dictionary:
 		var rx := river_x_of(r, z)
 		var half_width := 4.5 + 1.2 * sin(z * 0.021 + r[6])
 		var level_row := altitude_of(z, job.altitude)
+		# (Where the river has given out it leaves no bed: the channel fades away.)
+		var channel := 1.0 - river_off(z, job.gap)
+		if channel <= 0.0: continue
 		for tx in TILE:
 			var dv := absf(x0 + tx * STEP - rx)
 			if dv >= 24.0: continue
@@ -1423,7 +1714,7 @@ static func bake_tile(job: Dictionary) -> Dictionary:
 			if road_dist[i] != INF:
 				ford = 1.0 - smoothstep(road_half[i], road_half[i] + 3.0, road_dist[i])
 				depth = lerpf(depth, road_ford[i], ford)
-			var c := 1.0 - smoothstep(half_width, lerpf(half_width + 5.0, 24.0, ford), dv)
+			var c := (1.0 - smoothstep(half_width, lerpf(half_width + 5.0, 24.0, ford), dv)) * channel
 			# In the desert the river runs dry: a shallow sandy wash above the water.
 			var bed := level_row + lerpf(-depth, 0.6 - depth * 0.3, smoothstep(0.3, 0.7, dry[i]))
 			if c > 0.0: h[i] = lerpf(h[i], bed, c)
@@ -1447,6 +1738,7 @@ static func bake_tile(job: Dictionary) -> Dictionary:
 		var z := z0 + tz * STEP
 		var rx := river_x_of(r, z)
 		var level_row := altitude_of(z, job.altitude)
+		var wall_row := wall_share(z, job.walls)
 		for tx in TILE:
 			var x := x0 + tx * STEP
 			var i := tz * TILE + tx
@@ -1471,8 +1763,8 @@ static func bake_tile(job: Dictionary) -> Dictionary:
 					if slope > 0.55 or (above > 18.0 and noise > 0.3): k = Surface.ROCK
 				MOUNTAINS:
 					# Forest low down, alpine meadow and rock above, snow higher.
-					k = Surface.FOREST if woods[i] > 0.15 and hv < 480.0 + 40.0 * noise and slope < 0.6 else Surface.GRASS
-					if slope > 0.45 or (hv > 620.0 and noise > 0.1): k = Surface.ROCK
+					k = Surface.FOREST if woods[i] > 0.15 and hv < TREELINE + 40.0 * noise and slope < 0.6 else Surface.GRASS
+					if slope > 0.6 or (hv > TREELINE + 170.0 and noise > 0.1): k = Surface.ROCK
 					snowy = hv > SNOWLINE + 30.0 * sin(z * 0.03) + 30.0 * sin(x * 0.05) + 20.0 * noise
 					if snowy and slope < 0.95: k = Surface.SNOW
 				FIELDS:
@@ -1519,9 +1811,9 @@ static func bake_tile(job: Dictionary) -> Dictionary:
 					k = Surface.GRAVEL
 					look = 0
 			var dv := absf(x - rx)
-			if dv < 13.0 and above < 1.6:
+			if dv < 13.0 and above < 1.6 and river_off(z, job.gap) < 0.5:
 				# The river's banks; a sandy dry wash in the desert.
-				k = Surface.SAND if dry[i] > 0.5 else Surface.MUD
+				k = (Surface.GRAVEL if hv > TREELINE else Surface.SAND) if dry[i] > 0.5 else Surface.MUD
 				look = 0 if dry[i] > 0.5 else LOOK_BANK
 			var dist := road_dist[i]
 			var on_road := false
@@ -1537,21 +1829,26 @@ static func bake_tile(job: Dictionary) -> Dictionary:
 						# puddles and rock on the climbs, changing every kilometre or so.
 						var stage := posmod(floori(s / 900.0), 3)
 						if s < 400.0: k = Surface.ROAD
-						elif above > 17.0 and hv > 640.0: k = Surface.ROCK
+						elif above > 17.0 and hv > TREELINE + 190.0: k = Surface.ROCK
 						elif biome == DESERT or biome == STEPPE: k = Surface.GRAVEL if dist > 0.45 and dist < 1.15 else Surface.PACKED
 						elif biome == FIELDS and stage == 0: k = Surface.ROAD
 						elif stage == 1 or biome == BOG: k = Surface.DIRT
 						else: k = Surface.GRAVEL if dist > 0.45 and dist < 1.15 else Surface.DIRT
 						var puddles := 0.65 if biome == BOG else 0.85
-						if k == Surface.DIRT and (stage == 1 or biome == BOG) and sin(s * 0.11) * sin(s * 0.047 + 1.0) > puddles: k = Surface.MUD
-						if boggy and dist > 1.6 and k != Surface.ROAD: k = Surface.MUD
+						# (No mud on the serpentines: on a hairpin's slope it would stop any car.)
+						if wall_row == 0.0:
+							if k == Surface.DIRT and (stage == 1 or biome == BOG) and sin(s * 0.11) * sin(s * 0.047 + 1.0) > puddles: k = Surface.MUD
+							if boggy and dist > 1.6 and k != Surface.ROAD: k = Surface.MUD
 					elif (biome == DESERT or biome == STEPPE) and k == Surface.DIRT: k = Surface.PACKED
-					if snowy: k = Surface.SNOW
+					if snowy:
+						# (The main road is kept clear but for a drift here and there.)
+						k = Surface.GRAVEL if road_id[i] == 0 and (wall_row > 0.0 or sin(s * 0.045) * sin(s * 0.017 + 0.7) < 0.45) else Surface.SNOW
+					if road_id[i] == 0 and (wall_row > 0.0 or biome == MOUNTAINS or biome == FOOTHILLS): k = _mountain_road(s, hv)
 				elif dist < half + 1.0:
 					look = 0
 					k = Surface.GRAVEL if road_id[i] == 0 and road_along[i] > 400.0 and posmod(floori(road_along[i] / 900.0), 3) != 1 else Surface.DIRT
 					if biome == DESERT or biome == STEPPE: k = Surface.PACKED
-					if snowy: k = Surface.SNOW
+					if snowy and road_id[i] != 0: k = Surface.SNOW
 			for pond: Vector4 in job.ponds:
 				var d := Vector2(x - pond.x, z - pond.y).length()
 				if d > pond.z + 6.0: continue
@@ -1561,7 +1858,7 @@ static func bake_tile(job: Dictionary) -> Dictionary:
 				elif dist == INF and d < pond.z + 2.5:
 					k = Surface.MUD
 					look = 0
-			if dv < 12.0 and -above > 0.03:
+			if dv < 12.0 and -above > 0.03 and dry[i] < 0.5:
 				k = Surface.WATER
 				look = 0
 			kinds[i] = k | (look << 4)
@@ -1597,6 +1894,15 @@ static func bake_tile(job: Dictionary) -> Dictionary:
 			low = minf(low, h[i])
 			high = maxf(high, h[i])
 	return {"tile": tile, "heights": h, "ground": kinds, "low": low, "high": high}
+
+## The road in the mountains by turns: asphalt, gravel, asphalt again, packed dirt, a few
+## hundred metres of each; high up, short sheets of ice across it.
+static func _mountain_road(s: float, height: float) -> int:
+	if height > ICE_FROM and sin(s * 0.21) * sin(s * 0.037 + 1.3) > 0.62: return Surface.ICE
+	match posmod(floori(s / 380.0), 4):
+		0, 2: return Surface.ROAD
+		1: return Surface.GRAVEL
+	return Surface.PACKED
 
 ## A stable random number 0..1 for a grid cell (and salt).
 static func _unit(cell: Vector2i, salt: int) -> float:
@@ -1677,18 +1983,21 @@ static func surface_at(x: float, z: float) -> int:
 	return ground[posmod(iz, N) * N + posmod(ix, N)] & 15
 
 static func frozen_level(x: float, z: float) -> float:
-	for pond: Vector4 in ponds:
-		if Vector2(x - pond.x, z - pond.y).length_squared() < pond.z * pond.z: return pond.w
-	return NAN
+	var at := pond_at(x, z, 0.0)
+	return (ponds[at] as Vector4).w if at >= 0 else NAN
 
 static func pond_at(x: float, z: float, margin: float = 6.0) -> int:
-	for i in ponds.size():
-		var pond: Vector4 = ponds[i]
-		if absf(z - pond.y) < pond.z + margin and Vector2(x - pond.x, z - pond.y).length() < pond.z + margin: return i
+	# (A pond's reach is short of a band; margins are small.)
+	var band := floori(z / BAND)
+	for b in [band - 1, band, band + 1]:
+		for i: int in ponds_in.get(b, []):
+			var pond: Vector4 = ponds[i]
+			if absf(z - pond.y) < pond.z + margin and Vector2(x - pond.x, z - pond.y).length() < pond.z + margin: return i
 	return -1
 
 static func water_depth_at(x: float, z: float) -> float:
 	if pond_ice > FROZEN and pond_at(x, z) >= 0: return 0.0
+	if river_off(z, river_gap) > 0.5 and pond_at(x, z) < 0: return 0.0
 	if surface_at(x, z) != Surface.WATER and (flood <= 0.01 or absf(x - river_x(z)) > 13.0) and pond_at(x, z) < 0: return 0.0
 	return maxf(0.0, water_level_at(x, z) - height_at(x, z))
 
@@ -1735,13 +2044,38 @@ static func test_spots() -> Array:
 		result.append([spot[0], p.x, p.y, atan2(-d.x, -d.y)])
 	return result
 
+## For testing: places on the road before each landscape and the last stage's parts, from
+## the start to the summit: [name, z], in order. What each is on the road: road_sample_at().
+static func checkpoints() -> Array:
+	var list := [["Štart · " + BIOME_NAMES[int((zones[0] as Vector2).y)], 20.0]]
+	for i in range(1, zones.size()):
+		var zone: Vector2 = zones[i]
+		if zone.x > summit.z: break
+		list.append([BIOME_NAMES[int(zone.y)], zone.x - BLEND - 100.0])
+	list.append(["Serpentíny I", (walls[0] as Dictionary).z0 - 120.0])
+	list.append(["Sedlo", (walls[0] as Dictionary).z1 + 180.0])
+	list.append(["Serpentíny II", (walls[1] as Dictionary).z0 - 120.0])
+	list.append(["Vrchol", (walls[1] as Dictionary).z1 - 2.5 * WALL_LEG])
+	list.sort_custom(func(a: Array, b: Array) -> bool: return a[1] < b[1])
+	return list
+
+## The first sample of the main road that gets to z (-1: not planned that far).
+static func road_sample_at(z: float) -> int:
+	var line: PackedVector2Array = roads[0].points
+	if planned_z < z + 20.0: return -1
+	for k in line.size():
+		if line[k].y >= z: return k
+	return -1
+
 ## The main road at t × 100 m along (endless_expedition.gd keeps the car's
 ## route_phase there, so a recovery puts it back on the road where it is).
 static func route_xz(t: float, lane: int = 0) -> Vector2:
 	var line: PackedVector2Array = roads[0].points
-	var f := clampf(t * 50.0, 0.0, line.size() - 1.001)
-	var i := floori(f)
+	var along: PackedFloat32Array = roads[0].along
+	var s := t * 100.0
+	# (The samples are about 2 m apart, a little more or less where the road was joined on.)
+	var i := clampi(along.bsearch(s) - 1, 0, line.size() - 2)
 	var a := line[i]
-	var b := line[mini(i + 1, line.size() - 1)]
+	var b := line[i + 1]
 	var direction := (b - a).normalized()
-	return a.lerp(b, f - i) + Vector2(direction.y, -direction.x) * (1.2 + lane * 0.4)
+	return a.lerp(b, clampf((s - along[i]) / maxf(along[i + 1] - along[i], 0.01), 0.0, 1.0)) + Vector2(direction.y, -direction.x) * (1.2 + lane * 0.4)

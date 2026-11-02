@@ -27,6 +27,8 @@ const OVERVIEW_OFFSET := Vector3(41, 120, 58)
 ## scene's own Jeep is kept as a second car (Scout03) only when more than one
 ## car is driven (patrol or checks); otherwise it is not built at all.
 @export var lead_model := "m1009"
+## Everything is made and the game is on.
+signal ready_for_play
 var quality_name := "reference"
 var render_profile := "reference"
 var elapsed := 0.0
@@ -42,6 +44,18 @@ var follow_distance := [0.0, 0.0, 8.5, 5.2, 10.0, 0.0, 9.0]
 var orbit_yaw := 0.7
 var orbit_pitch := 0.42
 var orbit_idle := 0.0
+## The road camera's own place: the height it follows the car at (bumps and suspension
+## smoothed away), and how far it is lifted to keep the ground out of the view.
+var camera_centre_y := 0.0
+var camera_lift := 0.0
+## How steeply the car is climbing (radians, smoothed): the road camera stays at the same
+## height over the road behind the car, uphill or down.
+var camera_slope := 0.0
+## How soon after a finger the camera goes back behind the car, how fast it follows the car's
+## heading then, and the height it goes back to.
+const CAMERA_RETURN_AFTER := 0.7
+const CAMERA_FOLLOW := 4.0
+const CAMERA_PITCH := 0.3
 ## Seconds without any input; past AFK_ORBIT the orbit camera circles the car.
 var afk_time := 0.0
 const AFK_ORBIT := 30.0
@@ -93,6 +107,16 @@ func _enter_tree() -> void:
 	test_spots = Surface.test_spots()
 
 func _ready() -> void:
+	# (The road's world is made a little a frame, under its loading screen; nothing else
+	# moves until it is there.)
+	var loading: CanvasLayer
+	if endless_world:
+		loading = preload("res://offroad/loading_screen.gd").open(get_tree())
+		set_process(false)
+		set_process_input(false)
+		set_process_unhandled_input(false)
+		set_process_unhandled_key_input(false)
+		for car in vehicles(): car.set_physics_process(false)
 	_fit_window()
 	_configure_quality()
 	get_window().size_changed.connect(_on_window_resized)
@@ -108,7 +132,7 @@ func _ready() -> void:
 			car.get_node("CollisionShape3D").disabled = true
 			car.position.y -= 500.0
 	soil.configure(self)
-	_configure_test_grounds()
+	await _configure_test_grounds()
 	_create_driving_readout()
 	_create_pause_menu()
 	if touch_ui:
@@ -130,7 +154,15 @@ func _ready() -> void:
 		var expedition: Node = (load(EXPEDITIONS[world_script.resource_path]) as GDScript).new()
 		expedition.name = "Expedition"
 		add_child(expedition)
-		expedition.setup(self)
+		await expedition.setup(self, loading)
+	if loading != null:
+		loading.close()
+		set_process(true)
+		set_process_input(true)
+		set_process_unhandled_input(true)
+		set_process_unhandled_key_input(true)
+		lead.set_physics_process(true)
+		ready_for_play.emit()
 
 ## Before the cars set themselves up: the lead becomes lead_model, and a copy of
 ## the scene's original lead (the Jeep) joins the patrol beside it.
@@ -170,7 +202,7 @@ func _configure_test_grounds() -> void:
 	# dressing (forest, water, landmarks); see `grounds_script`.
 	test_grounds = grounds_script.new()
 	add_child(test_grounds)
-	test_grounds.build(self)
+	await test_grounds.build(self)
 
 func _panel_style(alpha: float = 0.78) -> StyleBoxFlat:
 	var background := StyleBoxFlat.new()
@@ -237,7 +269,7 @@ func _create_driving_readout() -> void:
 		"Orbit / Voľná kamera: ťahaj myšou      P  pauza",
 		"V  ďalšie auto      Q  kvalita grafiky      F11  celá obrazovka",
 		"K  ďalšie počasie (lesná vrchovina)",
-		"J  ostrekovač a stierače",
+		"U  stierače      J  ostrekovač      M  motor      Y  navijak",
 		"G  pohon 4x4 / 4x2 (M1009, Jeep)      L  uzávierka diferenciálu      F  svetlá",
 		"T / Shift+T  ďalší / predošlý test,  1–9, 0  priamo:"])
 	for i in test_spots.size(): lines.append("   %s  %s" % [str(i + 1) if i < 9 else ("0" if i == 9 else "T"), test_spots[i][0]])
@@ -302,6 +334,9 @@ func _pause_card(column: VBoxContainer) -> void:
 	title.add_theme_font_size_override("font_size", roundi(56.0 * MenuUI.k()))
 	title.add_theme_color_override("font_color", MenuUI.PEN)
 	column.add_child(MenuUI.button("POKRAČOVAŤ", close_pause_menu, "pen", 76.0, 40.0))
+	column.add_child(MenuUI.button("SKOK  (TEST)", func():
+		close_pause_menu()
+		(get_node("Expedition") as Node).open_checkpoints(), "box"))
 	column.add_child(MenuUI.button("NASTAVENIA", func(): MenuUI.open_settings(pause_menu, func(): _apply_render_profile(GameSettings.profile())), "box"))
 	if not phone: column.add_child(MenuUI.button("OVLÁDANIE  (H)", func(): help_card.visible = not help_card.visible, "box"))
 	if not phone: column.add_child(MenuUI.button("CELÁ OBRAZOVKA  (F11)", toggle_fullscreen, "box"))
@@ -555,9 +590,14 @@ func _update_camera(delta: float) -> void:
 	var centre := target.origin
 	var forward := -target.basis.z
 	var flat := Vector2(forward.x, forward.z)
+	var heading_now := chase_heading
 	if flat.length_squared() > 0.04:
-		var heading := atan2(-flat.x, -flat.y)
-		chase_heading = heading if camera_snap else lerp_angle(chase_heading, heading, 1.0 - exp(-delta * 3.2))
+		heading_now = atan2(-flat.x, -flat.y)
+		chase_heading = heading_now if camera_snap else lerp_angle(chase_heading, heading_now, 1.0 - exp(-delta * 3.2))
+	camera_centre_y = centre.y if camera_snap else lerpf(camera_centre_y, centre.y, 1.0 - exp(-delta * 9.0))
+	centre.y = camera_centre_y
+	var climbing := asin(clampf(forward.y, -0.6, 0.6))
+	camera_slope = climbing if camera_snap else lerpf(camera_slope, climbing, 1.0 - exp(-delta * 2.5))
 	var desired: Vector3
 	var look := centre
 	if camera_mode == 5:
@@ -575,25 +615,37 @@ func _update_camera(delta: float) -> void:
 		return
 	var distance: float = follow_distance[camera_mode]
 	if camera_mode in FREE_CAMERAS:
-		# Orbit swings back behind a moving car a few seconds after the last drag,
-		# and circles it only when the player is away (AFK); the free camera stays
-		# exactly where the finger put it (relative to the world, not the car).
 		orbit_idle += delta
-		if camera_mode == 4 and not paused:
-			if afk_time > AFK_ORBIT: orbit_yaw += delta * 0.12
-			elif orbit_idle > 2.5 and absf(lead.speed) > 2.0: orbit_yaw = lerp_angle(orbit_yaw, chase_heading, 1.0 - exp(-delta * 1.2))
-		desired = centre + Vector3(sin(orbit_yaw) * cos(orbit_pitch), sin(orbit_pitch), cos(orbit_yaw) * cos(orbit_pitch)) * distance
+		if not paused:
+			# Driving: straight behind the car, whatever a finger did before.
+			if orbit_idle > CAMERA_RETURN_AFTER and absf(lead.speed) > 1.0:
+				var follow := 1.0 - exp(-delta * CAMERA_FOLLOW)
+				orbit_yaw = lerp_angle(orbit_yaw, heading_now, follow)
+				orbit_pitch = lerpf(orbit_pitch, CAMERA_PITCH, follow)
+			elif camera_mode == 4 and afk_time > AFK_ORBIT:
+				orbit_yaw += delta * 0.12
+		# (Not while a finger holds it somewhere: there the angle is the finger's.)
+		var settled := clampf((orbit_idle - CAMERA_RETURN_AFTER) / 1.0, 0.0, 1.0)
+		var elevation := orbit_pitch - camera_slope * settled
+		desired = centre + Vector3(sin(orbit_yaw) * cos(elevation), sin(elevation), cos(orbit_yaw) * cos(elevation)) * distance
 		look = centre + Vector3.UP * 0.3
 	else:
 		var behind := Vector3(sin(chase_heading), 0, cos(chase_heading))
 		desired = centre + behind * distance + Vector3.UP * (distance * 0.3 + (1.1 if camera_mode == 2 else 0.6))
 		look = centre - behind * 2.5 + Vector3.UP * (0.7 if camera_mode == 2 else 0.5)
-	camera_position = desired if camera_snap else camera_position.lerp(desired, 1.0 - exp(-delta * 7.0))
-	# Never let the lens dip into a dune between the camera and the car.
-	camera_position.y = maxf(camera_position.y, soil.height_at(camera_position.x, camera_position.z) + 0.6)
-	# Nor below the water surface.
-	camera_position.y = maxf(camera_position.y, Surface.water_level_at(camera_position.x, camera_position.z) + 0.35)
-	camera.look_at_from_position(camera_position, look)
+	camera_position = desired if camera_snap else camera_position.lerp(desired, 1.0 - exp(-delta * 12.0))
+	# Ground between the lens and the car (a bank in a hairpin, a dune) lifts the camera:
+	# smoothly, up quicker than down, so that it never jumps.
+	var need := 0.0
+	for share: float in [1.0, 0.66, 0.33]:
+		var along_view: Vector3 = centre.lerp(camera_position, share)
+		need = maxf(need, soil.height_at(along_view.x, along_view.z) + (1.2 if share == 1.0 else 0.9) - along_view.y)
+	camera_lift = maxf(need, 0.0) if camera_snap else lerpf(camera_lift, maxf(need, 0.0), 1.0 - exp(-delta * (6.0 if need > camera_lift else 1.2)))
+	var lens: Vector3 = camera_position + Vector3.UP * camera_lift
+	# Never into the ground itself, nor below the water surface.
+	lens.y = maxf(lens.y, soil.height_at(lens.x, lens.z) + 0.5)
+	lens.y = maxf(lens.y, Surface.water_level_at(lens.x, lens.z) + 0.35)
+	camera.look_at_from_position(lens, look)
 	camera_snap = false
 
 func _set_camera_mode(mode: int) -> void:
@@ -667,6 +719,8 @@ func _zoom(direction: int) -> void:
 
 ## Finger/mouse drag on a free camera: yaw around the car and tilt.
 func camera_drag(relative: Vector2) -> void:
+	# (A thumb merely resting on the screen does not hold the camera away from behind the car.)
+	if relative.length_squared() < 2.0: return
 	orbit_yaw -= relative.x * 0.006
 	orbit_pitch = clampf(orbit_pitch + relative.y * 0.004, 0.03, 1.4)
 	orbit_idle = 0.0
@@ -690,6 +744,16 @@ func toggle_drive() -> void:
 func toggle_lights() -> void:
 	var on: bool = not lead.lights_on
 	for car in vehicles(): car.lights_on = on
+	toast_time = 2.5
+
+func toggle_wipers() -> void:
+	lead.wipers_on = not lead.wipers_on
+	toast_time = 2.5
+
+## Off at once; on through the starter (the expedition has the tank and the sound).
+func toggle_engine() -> void:
+	if has_node("Expedition"): (get_node("Expedition") as Node).toggle_engine()
+	else: lead.engine_running = not lead.engine_running
 	toast_time = 2.5
 
 func toggle_diff() -> void:
@@ -763,6 +827,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if key == KEY_G: toggle_drive()
 	if key == KEY_L: toggle_diff()
 	if key == KEY_F: toggle_lights()
+	if key == KEY_U: toggle_wipers()
+	if key == KEY_M: toggle_engine()
+	if key == KEY_Y and has_node("Expedition"): (get_node("Expedition") as Node).toggle_winch()
 	if key == KEY_K and test_grounds.has_method("next_weather"): test_grounds.next_weather()
 	if key == KEY_J and "washer_strokes" in lead: lead.washer_strokes = 4
 	if key == KEY_Q:

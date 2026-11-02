@@ -374,7 +374,6 @@ func _load_game() -> void:
 	for index in data.get("explored", []): explored.append(int(index))
 	car.place_on_ground(Vector3(float(data.get("x", camp.x)), 0, float(data.get("z", camp.y))), float(data.get("heading", 0)))
 	_load_more(data)
-	message = "Výprava načítaná."
 
 
 ## Does a run saved in another version of the world carry on where it was?

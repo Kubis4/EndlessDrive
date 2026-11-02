@@ -397,8 +397,9 @@ func _trunk(p: Vector2, y: float, radius: float, height: float) -> void:
 	shape.position = Vector3(p.x, y + height * 0.5, p.y)
 	collision.add_child(shape)
 
-## One MultiMeshInstance per (cell, model): instances [Transform3D, Color].
-func _batches(name: String, cells: Dictionary, end: float, shadows: bool) -> int:
+## One MultiMeshInstance per (cell, model): instances [Transform3D, Color]; seen from `begin`
+## to `end` metres.
+func _batches(name: String, cells: Dictionary, end: float, shadows: bool, begin: float = 0.0) -> int:
 	var total := 0
 	for key: Vector3i in cells:
 		var items: Array = cells[key]
@@ -413,6 +414,8 @@ func _batches(name: String, cells: Dictionary, end: float, shadows: bool) -> int
 		var batch := MultiMeshInstance3D.new()
 		batch.name = "%s_%d_%d_%d" % [name, key.x, key.y, key.z]
 		batch.multimesh = multimesh
+		batch.visibility_range_begin = begin
+		batch.visibility_range_begin_margin = begin * 0.15
 		batch.visibility_range_end = end
 		batch.visibility_range_end_margin = end * 0.1
 		batch.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
@@ -446,11 +449,19 @@ func _add(cells: Dictionary, model: String, p: Vector2, transform: Transform3D, 
 	if not cells.has(key): cells[key] = []
 	cells[key].append([transform, color])
 
+## Size of the cells the winter trees up close are batched in (m).
+const WINTER_CELL := 20.0
+
 ## Forest of the kit trees (10–16 m) on forest ground, a few on meadows.
 func _build_forest(area := Rect2()) -> void:
 	if not area.has_area(): area = Rect2(-H.HALF + 6.0, -H.HALF + 6.0, 2.0 * H.HALF - 12.0, 2.0 * H.HALF - 12.0)
 	var cells := {}
-	var spacing := 5.0
+	# Winter conifers: wider crowns, fewer of them, each twice over: finely up close in small
+	# cells, lightly further off.
+	var winter: bool = str(forest_models[0]).begins_with("winter_")
+	var close_cells := {}
+	var far_cells := {}
+	var spacing := (8.0 if mobile else 6.5) if winter else 5.0
 	var x: float = area.position.x
 	while x < area.end.x:
 		var z: float = area.position.y
@@ -464,13 +475,27 @@ func _build_forest(area := Rect2()) -> void:
 			var chance := 0.8 if ground == Surface.FOREST else (0.03 if ground == Surface.GRASS else 0.0)
 			if rng.randf() >= chance or not _clear(p, 2.6, [Surface.FOREST, Surface.GRASS]): continue
 			var model: String = forest_models[rng.randi() % forest_models.size()]
-			var scale := rng.randf_range(1.25, 1.7)
+			var scale := rng.randf_range(0.8, 1.25) if winter else rng.randf_range(1.25, 1.7)
 			var y: float = H.height_at(p.x, p.y)
 			var basis := Basis(Vector3.UP, rng.randf_range(0.0, TAU)).scaled(Vector3(scale, scale * rng.randf_range(0.92, 1.12), scale))
 			# Slight per-tree hue and brightness so the canopy is not uniform.
-			_add(cells, model, p, Transform3D(basis, Vector3(p.x, y - 0.15, p.y)), Color.from_hsv(rng.randf_range(0.0, 0.08), rng.randf_range(0.0, 0.2), rng.randf_range(0.82, 1.08)) * foliage_tint)
+			var tone := Color.from_hsv(rng.randf_range(0.0, 0.08), rng.randf_range(0.0, 0.2), rng.randf_range(0.82, 1.08)) * foliage_tint
+			var standing := Transform3D(basis, Vector3(p.x, y - 0.15, p.y))
+			if winter:
+				var key := Vector3i(floori(p.x / WINTER_CELL), floori(p.y / WINTER_CELL), Props.catalogue().find(model + "_hi"))
+				if not close_cells.has(key): close_cells[key] = []
+				close_cells[key].append([standing, Color.WHITE * rng.randf_range(0.88, 1.08)])
+				_add(far_cells, model + "_lo", p, standing, Color.WHITE * rng.randf_range(0.88, 1.08))
+				_trunk(p, y, Props.trunk(model + "_hi") * scale, 3.5)
+				continue
+			_add(cells, model, p, standing, tone)
 			_trunk(p, y, Props.trunk(model) * scale, 3.5)
 		x += spacing
+	if winter:
+		var near_reach := 42.0 if mobile else 80.0
+		_batches("ForestClose", close_cells, near_reach, not mobile)
+		_batches("ForestFar", far_cells, 170.0 if mobile else 240.0, not mobile, near_reach - 12.0)
+		return
 	_report("forest trees", _batches("Forest", cells, 220.0, true))
 
 ## Realistic feature trees along the trails, around the camp and on meadows,

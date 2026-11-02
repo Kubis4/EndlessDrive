@@ -20,6 +20,7 @@ uniform float wet = 0.0;
 uniform vec3 mud_color : source_color = vec3(0.24, 0.17, 0.11);
 uniform vec3 dust_color : source_color = vec3(0.55, 0.47, 0.36);
 // 1 on the tyre (tread outermost), 0 on axles and other parts.
+uniform bool geometry_grooves = false;
 uniform float tread = 1.0;
 // 0..1 how caked the sidewalls and rims are: only a car stuck and spinning
 // in snow or mud packs them; the running tread takes the coats always.
@@ -84,8 +85,9 @@ void fragment() {
 	vec3 tread_normal = has_normal ? texture(normal_texture, UV).rgb * 2.0 - 1.0 : vec3(0.0, 0.0, 1.0);
 	float edge = smoothstep(0.12, 0.45, length(tread_normal.xy));
 	// (Rubber is dark all over, so only the relief tells grooves from blocks.)
-	float groove = edge;
+	float groove = geometry_grooves ? COLOR.r : edge;
 	float running = tread * smoothstep(0.33, 0.39, radial);
+	if (geometry_grooves) running *= 1.0 - abs(normalize(local_normal).z);
 	float scrubbed = running * (1.0 - groove) * smoothstep(0.35, 0.65, noise(local * 6.0) * 0.4 + 0.6);
 	float mud_cover = coat(clumps * 0.6 + face * 0.2 + groove * 0.2, mud) * (1.0 - 0.8 * scrubbed) * (1.0 - 0.95 * smoothstep(0.2, 0.6, snow) * scrubbed);
 	float dust_cover = coat(clumps * 0.5 + face * 0.5, dust) * (1.0 - mud_cover) * (1.0 - 0.6 * scrubbed);

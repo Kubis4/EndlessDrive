@@ -56,7 +56,9 @@ const GROUND_LAYERS := ["grass", "forest", "dirt", "mud", "gravel", "rock", "ban
 const MADE := {"pine_1": 0.22, "pine_2": 0.2, "cactus_1": 0.26, "cactus_2": 0.2, "shrub_dry": 0.0, "reeds": 0.0, "weeds": 0.0,
 	# From the foliage sources (build_foliage.gd).
 	"pack_wheatgrass": 0.0, "pack_buffalo": 0.0, "pack_longgrass": 0.0, "pack_phlox": 0.0, "pack_yarrow": 0.0, "pack_blanketflower": 0.0, "pack_beardtongue": 0.0,
-	"crop_wheat": 0.0, "crop_sunflower_1": 0.0, "crop_sunflower_2": 0.0, "crop_sunflower_3": 0.0}
+	"crop_wheat": 0.0, "crop_sunflower_1": 0.0, "crop_sunflower_2": 0.0, "crop_sunflower_3": 0.0,
+	# Winter conifers (tools/build_winter_trees.gd): up close and further off.
+	"winter_a_hi": 0.2, "winter_a_lo": 0.0, "winter_b_hi": 0.2, "winter_b_lo": 0.0, "winter_c_hi": 0.25, "winter_c_lo": 0.0}
 
 static func names(prefix: String) -> Array:
 	return MODELS.keys().filter(func(n: String): return n.begins_with(prefix))

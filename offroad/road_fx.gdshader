@@ -82,7 +82,7 @@ void fragment() {
 	if (frost > 0.0) {
 		float crystals = noise(uv * vec2(aspect, 1.0) * 22.0) * 0.55 + noise(uv * vec2(aspect, 1.0) * 70.0) * 0.3 + noise(uv * vec2(aspect, 1.0) * 6.0) * 0.5;
 		float edge = smoothstep(1.02 - frost * 0.42, 1.34 - frost * 0.42, radius + crystals * 0.42);
-		colour = mix(colour, vec3(0.82, 0.9, 0.97), edge * 0.75 * frost);
+		colour = mix(colour, vec3(0.82, 0.9, 0.97), edge * 0.35 * frost);
 	}
 	if (flare > 0.0) {
 		vec2 at = (SCREEN_UV - sun_at) * vec2(aspect, 1.0);

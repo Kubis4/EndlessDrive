@@ -28,9 +28,6 @@ const TYPES := {
 	"winter": {"name": "Zimné", "note": "sneh, ľad a mokro, v blate slabšie",
 		"grip": [0.85, 0.9, 0.95, 0.95, 0.95, 0.95, 0.85, 0.95, 2.2, 3.0, 0.95, 0.95, 1.0, 1.0],
 		"speed_on": [0.9, 0.95, 0.95, 1.0, 1.0, 1.0, 1.0, 1.1, 1.9, 1.2, 1.0, 0.95, 1.05, 1.05], "rolling": 1.05, "soft": 0.8, "speed": 0.95, "sink": 0.8, "bite": 0.5},
-	"chains": {"name": "S reťazami", "note": "hlboký sneh a ľad, ale pomalé a smädné",
-		"grip": [0.9, 0.95, 0.7, 1.15, 1.2, 1.5, 0.9, 1.1, 2.8, 6.0, 1.1, 0.6, 1.2, 1.2],
-		"speed_on": [1.0, 1.0, 1.0, 1.1, 1.2, 1.4, 1.1, 1.2, 2.2, 1.5, 1.1, 1.0, 1.2, 1.2], "rolling": 1.35, "soft": 0.7, "speed": 0.55, "sink": 0.7, "bite": 1.0},
 	"sand": {"name": "Púštne", "note": "široké: nezaboria sa v piesku, šetria palivo",
 		"grip": [1.4, 1.15, 0.9, 0.85, 0.9, 0.9, 0.7, 0.8, 0.7, 0.35, 0.9, 0.8, 0.95, 0.95],
 		"speed_on": [1.3, 1.1, 0.9, 0.95, 0.9, 0.8, 0.9, 0.9, 0.8, 0.6, 1.0, 0.85, 0.95, 0.95], "rolling": 0.85, "soft": 0.45, "speed": 0.9, "sink": 0.35, "bite": 0.6},
@@ -39,18 +36,24 @@ const TYPES := {
 static var meshes := {}
 static var rims := {}
 
+## Scale both the bead cut and the fitted tyre from the same stock wheel.
+static func wheel_scale(wheel: Mesh) -> float:
+	var size := wheel.get_aabb().size
+	return maxf(size.x, size.y) / (2.0 * RADIUS)
+
 ## The rim alone of a wheel model (cached per model).
 static func rim_of(wheel: Mesh) -> Mesh:
 	if rims.has(wheel): return rims[wheel]
 	var arrays := wheel.surface_get_arrays(0)
 	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX] if arrays[Mesh.ARRAY_INDEX] != null else PackedInt32Array(range(vertices.size()))
+	var rim_radius := RIM * wheel_scale(wheel)
 	var kept := PackedInt32Array()
 	for t in range(0, indices.size(), 3):
 		var inside := true
 		for k in 3:
 			var v := vertices[indices[t + k]]
-			if Vector2(v.x, v.y).length() > RIM: inside = false
+			if Vector2(v.x, v.y).length() > rim_radius: inside = false
 		if inside: kept.append_array([indices[t], indices[t + 1], indices[t + 2]])
 	arrays[Mesh.ARRAY_INDEX] = kept
 	var mesh := ArrayMesh.new()
@@ -64,12 +67,16 @@ static func mesh_of(kind: String) -> Mesh:
 	if meshes.has(kind): return meshes[kind]
 	var rubber := SurfaceTool.new()
 	rubber.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var steel: SurfaceTool = null
+	rubber.set_color(Color.WHITE)
 	match kind:
+		"road":
+			_carcass(rubber, RADIUS - 0.008, HALF_WIDTH)
+			for row in 5:
+				_lugs(rubber, 48, 0.5 * (row % 2), (row - 2) * 0.055, 0.024, 0.92, RADIUS - 0.012, RADIUS, 0.12)
 		"offroad":
 			_carcass(rubber, RADIUS - 0.022, HALF_WIDTH)
 			for row: Array in [[-0.125, 0.04, 0.0], [-0.045, 0.036, 0.5], [0.045, 0.036, 0.0], [0.125, 0.04, 0.5]]:
-				_lugs(rubber, 24, row[2], row[0], row[1], 0.72, RADIUS - 0.022, RADIUS, 0.0)
+				_lugs(rubber, 24, row[2], row[0], row[1], 0.72, RADIUS - 0.034, RADIUS, 0.35 if row[0] < 0.0 else -0.35)
 		"mud":
 			var big := RADIUS + 0.012
 			_carcass(rubber, big - 0.042, HALF_WIDTH + 0.006)
@@ -81,20 +88,13 @@ static func mesh_of(kind: String) -> Mesh:
 		"winter":
 			_carcass(rubber, RADIUS - 0.012, HALF_WIDTH)
 			for row: Array in [[-0.135, 0.0], [-0.08, 0.5], [-0.027, 0.0], [0.027, 0.5], [0.08, 0.0], [0.135, 0.5]]:
-				_lugs(rubber, 42, row[1], row[0], 0.022, 0.68, RADIUS - 0.012, RADIUS, 0.25)
+				_lugs(rubber, 42, row[1], row[0], 0.022, 0.68, RADIUS - 0.012, RADIUS, 0.55 if row[0] < 0.0 else -0.55)
 		"sand":
 			_carcass(rubber, RADIUS - 0.014, HALF_WIDTH + 0.022)
 			# Low paddles across a wide, smooth tread.
 			_lugs(rubber, 16, 0.0, 0.0, 0.16, 0.14, RADIUS - 0.014, RADIUS, 0.0)
-		"chains":
-			_carcass(rubber, RADIUS - 0.012, HALF_WIDTH)
-			for row: Array in [[-0.11, 0.0], [-0.04, 0.5], [0.04, 0.0], [0.11, 0.5]]:
-				_lugs(rubber, 34, row[1], row[0], 0.03, 0.7, RADIUS - 0.012, RADIUS, 0.0)
-			steel = SurfaceTool.new()
-			steel.begin(Mesh.PRIMITIVE_TRIANGLES)
-			_chains(steel)
+	rubber.index()
 	var mesh := rubber.commit()
-	if steel != null: steel.commit(mesh)
 	meshes[kind] = mesh
 	return mesh
 
@@ -122,14 +122,14 @@ static func _on(radius: float, angle: float, z: float) -> Vector3:
 ## The tyre's body: bead, sidewall, rounded shoulder and tread band, turned
 ## about the axle.
 static func _carcass(st: SurfaceTool, tread: float, half: float) -> void:
-	var profile := [Vector2(0.235, half * 0.72), Vector2(0.3, half * 0.97), Vector2(tread - 0.05, half), Vector2(tread - 0.012, half * 0.9), Vector2(tread, half * 0.72), Vector2(tread, -half * 0.72), Vector2(tread - 0.012, -half * 0.9), Vector2(tread - 0.05, -half), Vector2(0.3, -half * 0.97), Vector2(0.235, -half * 0.72)]
+	var profile := [Vector2(RIM * 0.86, half * 0.58), Vector2(0.3, half * 0.97), Vector2(tread - 0.05, half), Vector2(tread - 0.012, half * 0.9), Vector2(tread, half * 0.72), Vector2(tread, -half * 0.72), Vector2(tread - 0.012, -half * 0.9), Vector2(tread - 0.05, -half), Vector2(0.3, -half * 0.97), Vector2(RIM * 0.86, -half * 0.58)]
 	const SIDES := 48
 	for s in SIDES:
 		var a0 := TAU * s / SIDES
 		var a1 := TAU * (s + 1) / SIDES
-		for p in profile.size() - 1:
+		for p in profile.size():
 			var u: Vector2 = profile[p]
-			var v: Vector2 = profile[p + 1]
+			var v: Vector2 = profile[(p + 1) % profile.size()]
 			var mid := (a0 + a1) * 0.5
 			var along := v - u
 			var out := Vector3(-cos(mid) * along.y, -sin(mid) * along.y, along.x).normalized()
@@ -150,7 +150,9 @@ static func _lugs(st: SurfaceTool, count: int, offset: float, z: float, dz: floa
 			top.append(_on(high, a[k], zs[k]))
 			bottom.append(_on(low, a[k], zs[k]))
 		var radial := _on(1.0, centre, 0.0)
+		st.set_color(Color.BLACK)
 		_quad(st, top[0], top[1], top[2], top[3], radial)
+		st.set_color(Color.WHITE)
 		_quad(st, bottom[0], bottom[1], top[1], top[0], Vector3(0, 0, -1))
 		_quad(st, bottom[1], bottom[2], top[2], top[1], _on(1.0, centre + PI * 0.5, 0.0))
 		_quad(st, bottom[2], bottom[3], top[3], top[2], Vector3(0, 0, 1))
@@ -158,31 +160,43 @@ static func _lugs(st: SurfaceTool, count: int, offset: float, z: float, dz: floa
 
 ## Chains: a side chain round each shoulder and cross chains over the tread,
 ## each a row of small flat links.
-static func _chains(st: SurfaceTool) -> void:
-	const CROSSES := 10
-	var r := RADIUS + 0.008
-	for c in CROSSES:
-		var angle := TAU * c / CROSSES
-		for l in 7:
-			var z := -HALF_WIDTH * 0.8 + HALF_WIDTH * 1.6 * (l + 0.5) / 7.0
-			_link(st, angle + (0.03 if l % 2 == 0 else -0.03), z, r, 0.018, 0.024)
-	for side in [-1.0, 1.0]:
-		for l in 60:
-			var angle := TAU * l / 60.0
-			_link(st, angle, side * HALF_WIDTH * 0.86, r - 0.012, 0.024, 0.008)
+static var chain_mesh: Mesh
 
-static func _link(st: SurfaceTool, angle: float, z: float, r: float, half_along: float, half_z: float) -> void:
-	var dt := half_along / r
-	var t := 0.008
-	var a := [angle - dt, angle + dt, angle + dt, angle - dt]
-	var zs := [z - half_z, z - half_z, z + half_z, z + half_z]
-	var top := []
-	var low := []
-	for k in 4:
-		top.append(_on(r + t, a[k], zs[k]))
-		low.append(_on(r - t, a[k], zs[k]))
-	_quad(st, top[0], top[1], top[2], top[3], _on(1.0, angle, 0.0))
-	for k in 4:
-		var n := (k + 1) % 4
-		var mid: Vector3 = (top[k] + top[n]) * 0.5
-		_quad(st, low[k], low[n], top[n], top[k], mid - _on(r, angle, z))
+static func chains_mesh() -> Mesh:
+	if chain_mesh != null: return chain_mesh
+	var steel := SurfaceTool.new()
+	steel.begin(Mesh.PRIMITIVE_TRIANGLES)
+	_chains(steel)
+	steel.index()
+	chain_mesh = steel.commit()
+	return chain_mesh
+
+static func _chains(st: SurfaceTool) -> void:
+	# Side tension rings and diamond cross chains follow the rounded shoulders.
+	for side: float in [-1.0, 1.0]:
+		for n in 64:
+			_wire(st, _chain_point(TAU * n / 64, side), _chain_point(TAU * (n + 1) / 64, side))
+	for n in 12:
+		var angle := TAU * n / 12
+		for side: float in [-1.0, 1.0]:
+			for direction: float in [-1.0, 1.0]:
+				var previous := _chain_point(angle, side)
+				for step in range(1, 9):
+					var t := step / 8.0
+					var point := _chain_point(angle + direction * t * PI / 12.0, side * (1.0 - t))
+					_wire(st, previous, point)
+					previous = point
+
+static func _chain_point(angle: float, across: float) -> Vector3:
+	var shoulder := smoothstep(0.72, 1.0, absf(across))
+	return _on(RADIUS + 0.006 - 0.043 * shoulder, angle, across * (HALF_WIDTH + 0.006))
+
+static func _wire(st: SurfaceTool, a: Vector3, b: Vector3) -> void:
+	var axis := (b - a).normalized()
+	var normal := axis.cross(Vector3.UP)
+	if normal.length_squared() < 0.001: normal = axis.cross(Vector3.RIGHT)
+	normal = normal.normalized() * 0.006
+	for i in 6:
+		var u := normal.rotated(axis, TAU * i / 6)
+		var v := normal.rotated(axis, TAU * (i + 1) / 6)
+		_quad(st, a + u, b + u, b + v, a + v, u + v)

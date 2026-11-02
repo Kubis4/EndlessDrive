@@ -1,20 +1,21 @@
 extends Control
 ## The main menu: a simple list on a torn sheet of parchment on the left, and on the
 ## right the chosen car turning (menu_car.gd). The garage, on the same sheet, buys cars
-## and what a run starts with (garage.gd). A new run asks where to start; it replaces a
-## saved one only after asking. The start and the car go to the game through Engine
-## metadata (endless_terrain.gd, garage.gd).
+## and what a run starts with (garage.gd). A new run starts in the fields or the desert,
+## drawn at random; it replaces a saved one only after asking. The start and the car go
+## to the game through Engine metadata (endless_terrain.gd, garage.gd).
 const Settings = preload("res://offroad/game_settings.gd")
 const UI = preload("res://offroad/menu_ui.gd")
 const Garage = preload("res://offroad/garage.gd")
 const Catalog = preload("res://scripts/vehicle_catalog.gd")
 const SAVE := "user://endless_expedition.json"
+const GAME := "res://offroad/endless.tscn"
 ## The sheet's width on screen.
 const SHEET := 0.38
-const STARTS := [["POLIA", "Kukurica, jačmeň, repka a slnečnice, potom lúky, step, močiare, lesy a hory.", 5],
-	["PÚŠŤ", "Horúčava a piesočné búrky, potom step, polia, močiare, lesy a hory.", 2]]
-const HELP_KEYS := "W A S D alebo šípky: plyn, brzda, zatáčanie\nMedzerník: ručná brzda      R: späť na cestu\nE: vziať z budovy, keď stojíš pri plávajúcej kocke\nI: náklad a pneumatiky      B: doplniť kvapaliny\nG: pohon 4x4 alebo 4x2      L: zámok diferenciálu\nF: svetlá      Koliesko alebo + −: priblíženie      ESC: pauza"
-const HELP_TOUCH := "Ľavý palec: zatáčanie v ľavom dolnom rohu\nPravý palec: plyn, brzda a cúvanie, ručná brzda\nVZIAŤ: objaví sa pri plávajúcej kocke, keď zastavíš\nVIAC: náklad, doplnenie kvapalín, návrat na cestu\n4X4 a ZÁMOK: keď uviazneš\nŤahaním po obrazovke otáčaš kameru, dvoma prstami alebo + − ju približuješ\nŤuknutím na rýchlosť zobrazíš podrobnosti"
+## Where a new run can start (biomes of endless_terrain.gd: fields, desert).
+const STARTS := [5, 2]
+const HELP_KEYS := "W A S D alebo šípky: plyn, brzda, zatáčanie\nMedzerník: ručná brzda      R: späť na cestu\nE: vziať z budovy, keď stojíš pri plávajúcej kocke\nI: inventár      B: doplniť kvapaliny\nG: pohon 4x4 alebo 4x2      L: zámok diferenciálu\nM: motor      F: svetlá      U: stierače      J: ostrekovač      Y: navijak\nN: skok (test)      Koliesko alebo + −: priblíženie      ESC: pauza"
+const HELP_TOUCH := "Ľavý palec: zatáčanie\nPravý palec: plyn, brzda a cúvanie, ručná brzda\nAUTO: motor, svetlá, stierače, 4X4, zámok a navijak\nHore: inventár (palivo, olej, opravy, pneumatiky) a menu\nVZIAŤ: objaví sa pri plávajúcej kocke, keď zastavíš\nŤahaním po obrazovke otáčaš kameru, dvoma prstami ju približuješ\nŤuknutím na rýchlosť zobrazíš podrobnosti"
 var saved := {}
 var sheet: ColorRect
 var sheet_material: ShaderMaterial
@@ -141,9 +142,9 @@ func _fill_page() -> void:
 	var first: Button
 	if can_continue:
 		first = _entry("POKRAČOVAŤ  ·  %.1f KM" % (float(saved.get("distance", 0.0)) / 1000.0), _go.bind(-1))
-		_entry("NOVÁ VÝPRAVA", _choose_start)
+		_entry("NOVÁ VÝPRAVA", _confirm_new)
 	else:
-		first = _entry("NOVÁ VÝPRAVA", _choose_start)
+		first = _entry("NOVÁ VÝPRAVA", _go_new)
 	_entry("GARÁŽ", _open_garage)
 	_entry("NASTAVENIA", func() -> void: UI.open_settings(self, func() -> void: pass))
 	_entry("AKO HRAŤ", _show_help)
@@ -219,27 +220,24 @@ func _view_car(id: String) -> void:
 	viewing = id
 	_fill_garage()
 
-func _choose_start() -> void:
+## Fields or desert: the road decides.
+func _go_new() -> void:
+	_go(STARTS[randi() % STARTS.size()])
+
+func _confirm_new() -> void:
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", roundi(12.0 * UI.k()))
-	column.add_child(UI.label("KDE ZAČNEME?", 54, UI.PEN))
-	if not saved.is_empty():
-		column.add_child(UI.label("Uložená výprava (%.1f km) sa nahradí novou." % (float(saved.get("distance", 0.0)) / 1000.0), 28, UI.RUST))
+	column.add_child(UI.label("NOVÁ VÝPRAVA?", 54, UI.PEN))
+	column.add_child(UI.label("Uložená výprava (%.1f km) sa nahradí novou." % (float(saved.get("distance", 0.0)) / 1000.0), 28, UI.RUST))
 	var scrim := UI.modal(self, column, 980.0)
-	for start: Array in STARTS:
-		var biome: int = start[2]
-		column.add_child(UI.button(start[0], func() -> void: _go(biome), "pen", 72.0, 38.0))
-		var note := UI.label(start[1], 24, UI.PEN)
-		note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		column.add_child(note)
-	column.add_child(UI.button("NÁHODNE", func() -> void: _go(STARTS[randi() % STARTS.size()][2]), "box"))
+	column.add_child(UI.button("VYRAZIŤ", _go_new, "pen", 72.0, 38.0))
 	column.add_child(UI.button("SPÄŤ", func() -> void: scrim.queue_free(), "box"))
 
 func _show_help() -> void:
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", roundi(14.0 * UI.k()))
 	column.add_child(UI.label("AKO HRAŤ", 54, UI.PEN))
-	var text := UI.label("Asi 56 km cez polia, močiare a lesy až do hôr, a potom stále ďalej. Palivo berieš z benzíniek a domov pri ceste.\n\n" + (HELP_TOUCH if Settings.is_mobile() else HELP_KEYS), 28, UI.PEN)
+	var text := UI.label("Z polí alebo z púšte stále vyššie, cez močiare a lesy až do hôr, serpentínami k vysielaču na vrchole. Tam výprava končí, ale cesta ide ďalej. Palivo berieš z benzíniek a domov pri ceste.\n\n" + (HELP_TOUCH if Settings.is_mobile() else HELP_KEYS), 28, UI.PEN)
 	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(text)
 	var scrim := UI.modal(self, column, 1100.0)
@@ -252,15 +250,10 @@ func _go(biome: int) -> void:
 		Engine.set_meta("endless_start", biome)
 		Engine.set_meta("endless_car", Garage.car)
 	else: Engine.set_meta("endless_car", str(saved.get("car", "m1009")))
-	# The load takes seconds: first say so.
-	var cover := ColorRect.new()
-	cover.color = Color(0.04, 0.035, 0.025, 0.8)
-	cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(cover)
-	var centre := CenterContainer.new()
-	centre.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	cover.add_child(centre)
-	centre.add_child(UI.label("CESTA SA CHYSTÁ…", 60, UI.PAPER))
+	# The load takes seconds: on a thread, with the wheel turning meanwhile.
+	preload("res://offroad/loading_screen.gd").open(get_tree())
 	await get_tree().process_frame
-	await get_tree().process_frame
-	get_tree().change_scene_to_file("res://offroad/endless.tscn")
+	ResourceLoader.load_threaded_request(GAME)
+	while ResourceLoader.load_threaded_get_status(GAME) == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+		await get_tree().process_frame
+	get_tree().change_scene_to_packed(ResourceLoader.load_threaded_get(GAME))

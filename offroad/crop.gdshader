@@ -10,6 +10,9 @@ uniform vec3 car = vec3(0.0, -1000.0, 0.0);
 // into the field's own colour, so no grid of them shows.
 uniform float near_cut = 0.0;
 uniform float far_cut = 0.0;
+// Over how many metres each gives way, stalk by stalk: a wide band shows no edge.
+uniform float near_band = 3.0;
+uniform float far_band = 8.0;
 uniform vec3 field_colour : source_color = vec3(0.5);
 varying vec3 world_at;
 uniform sampler2D crush_map : hint_default_black, filter_nearest, repeat_enable;
@@ -33,8 +36,8 @@ void fragment() {
 	// Driven over: only stubble is left.
 	if (UV.y < 0.88 && texture(crush_map, place / 256.0).r > 0.5) { discard; }
 	float seen_from = distance(world_at, CAMERA_POSITION_WORLD);
-	if (seen_from < near_cut + 3.0 * fract(sin(dot(floor(place * 6.0), vec2(12.9898, 78.233))) * 43758.5453)) { discard; }
-	if (far_cut > 0.0 && seen_from > far_cut + 8.0 * fract(sin(dot(floor(place * 3.0), vec2(39.3, 11.7))) * 91.17)) { discard; }
+	if (seen_from < near_cut + near_band * fract(sin(dot(floor(place * 6.0), vec2(12.9898, 78.233))) * 43758.5453)) { discard; }
+	if (far_cut > 0.0 && seen_from > far_cut + far_band * fract(sin(dot(floor(place * 6.0), vec2(39.3, 11.7))) * 91.17)) { discard; }
 	vec4 texel = texture(plants, UV);
 	ALBEDO = mix(texel.rgb * COLOR.rgb, field_colour, smoothstep(45.0, 130.0, seen_from) * 0.7);
 	ALPHA = texel.a;

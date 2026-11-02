@@ -41,6 +41,12 @@ var front_drive := false
 ## up to its own grip).
 var four_wheel_drive := true
 var diff_locked := false
+## The engine is switched on (with an empty tank it still gives nothing), and the wipers.
+var engine_running := true
+var wipers_on := false
+## What the winch pulls with (N, world) and where on the car, from its centre.
+var winch_force := Vector3.ZERO
+var winch_arm := Vector3.ZERO
 ## Handbrake: kinetic share of tyre grip on the locked rear wheels.
 const LOCKED_FRICTION := 0.8
 ## Locked differential: extra rolling loss per unit of steering lock (tyre scrub).
@@ -106,6 +112,8 @@ var previous_contacts: Array[Vector3] = []
 var support_height := 0.0
 var ground_normal := Vector3.UP
 var slip_amount := 0.0
+## The tyres really sliding (sideways, spinning, the handbrake), without what braking adds.
+var slide_amount := 0.0
 var track_clock := 0.0
 var samples: Array[Vector3] = []
 var sides: Array[Vector3] = []
@@ -460,7 +468,7 @@ func _physics_process(delta: float) -> void:
 		if pedal * speed < -0.5: brake = absf(pedal)
 		else: throttle = pedal
 		# Hill hold: stopped with no pedal pressed, the brakes keep the car still.
-		if pedal == 0.0 and absf(speed) < 0.4: brake = 1.0
+		if pedal == 0.0 and absf(speed) < 0.4 and winch_force == Vector3.ZERO: brake = 1.0
 		# Keys steer digitally; the touch steering zone is analog (action strength).
 		turn = clampf(float(Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT)) - float(Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT))
 			+ _touch_strength("left") - _touch_strength("right"), -1.0, 1.0)
@@ -509,7 +517,7 @@ func _physics_process(delta: float) -> void:
 				recovery_turn = -signf(turn) * 0.75 if absf(turn) > 0.1 else (0.75 if lane % 2 == 0 else -0.75)
 				stalled_time = 0.0
 				recovery_count += 1
-	if get_meta("expedition_no_fuel", false): throttle = 0.0
+	if get_meta("expedition_no_fuel", false) or not engine_running: throttle = 0.0
 	throttle *= float(get_meta("expedition_engine_factor", 1.0))
 	simulate(delta, throttle, brake, turn, handbrake)
 
@@ -680,7 +688,11 @@ func _integrate(dt: float, throttle: float, brake: float, handbrake: bool) -> vo
 	var torque := Vector3.ZERO
 	var forward := -attitude.z
 	speed = velocity.dot(forward)
-	var motor := minf(engine_force, engine_power / maxf(absf(speed), 3.0)) * throttle
+	# From a stop the torque converter multiplies the engine's pull (what gets a car out of mud);
+	# as speed comes that falls to the engine's own torque through the gears, and what reaches
+	# the wheels is the power left after the driveline.
+	var pull := engine_force * lerpf(1.0, RUNNING_PULL, clampf(absf(speed) / CONVERTER_OFF, 0.0, 1.0))
+	var motor := minf(pull, engine_power * driveline_efficiency() / maxf(absf(speed), 3.0)) * throttle
 	var ground_limit := ground_speed_limit()
 	if throttle < 0.0: motor *= 0.45 * clampf((minf(6.0, ground_limit) + speed) / 2.0, 0.0, 1.0)
 	var was_grounded := grounded
@@ -810,11 +822,14 @@ func _integrate(dt: float, throttle: float, brake: float, handbrake: bool) -> vo
 	# Hard braking at speed locks/scrubs the tyres: more digging, rubber marks.
 	var brake_skid := brake * 0.55 * clampf(absf(speed) / 6.0, 0.0, 1.0) if grounded_wheels > 0 else 0.0
 	slip_amount = clampf(maximum_slip + (0.5 if handbrake else 0.0) + brake_skid, 0.0, 1.0)
+	slide_amount = clampf(maximum_slip + (0.5 if handbrake else 0.0), 0.0, 1.0)
 	force -= velocity * velocity.length() * air_drag
 	wheel_power = lerpf(wheel_power, engine_output, 1.0 - exp(-dt * 8.0))
 	force += _bog_down_force()
 	torque += bog_torque
 	force += _water_force()
+	force += winch_force
+	torque += winch_arm.cross(winch_force)
 	velocity += force / mass_kg * dt
 	# Integrate world angular momentum using the body's inertia tensor. A basis
 	# permits arbitrary rotations with no pitch/roll clamps or Euler singularity.
@@ -930,6 +945,9 @@ var air_drag := 0.58
 var wheel_power := 0.0
 var last_brake := 0.0
 const CONVERTER_SPEED := 2.5
+## The pull left once the converter has stopped multiplying, and the speed that happens by (m/s).
+const RUNNING_PULL := 0.42
+const CONVERTER_OFF := 8.0
 const SPIN_SPEED := 6.0
 ## Idling, and litres per kWh at the crank of a pre-chamber diesel, best at high load.
 const IDLE_LITRES_PER_HOUR := 1.5
@@ -945,6 +963,7 @@ func driveline_efficiency() -> float:
 ## Fuel flow now (l/h) from the engine's output: all the ground, the air, the slope, the
 ## load and spinning tyres cost fuel through this one figure.
 func fuel_rate() -> float:
+	if not engine_running: return 0.0
 	var crank := minf(wheel_power / driveline_efficiency(), engine_power)
 	var unused := 1.0 - crank / engine_power
 	return IDLE_LITRES_PER_HOUR + crank / 1000.0 * (LITRES_PER_KWH + LITRES_PER_KWH_LIGHT * unused * unused)
@@ -977,8 +996,14 @@ func tyre_grip(ground: int) -> float:
 
 ## Puts a tyre set on: road tyres are the model's own; any other keeps its rim
 ## and gets the set's tyre, under the same dirt layer.
-func fit_tyres(kind: String) -> void:
+func fit_tyres(kind: String, chains_on := false) -> void:
 	tyre_type = Tyres.TYPES[kind]
+	if chains_on:
+		tyre_type = tyre_type.duplicate(true)
+		tyre_type.grip[Surface.ICE] *= 2.0
+		tyre_type.grip[Surface.SNOW] *= 1.55
+		tyre_type.rolling *= 1.25
+		tyre_type.speed *= 0.65
 	if fitted_materials.is_empty():
 		var rubber := StandardMaterial3D.new()
 		rubber.albedo_color = Color(0.045, 0.045, 0.045)
@@ -987,6 +1012,7 @@ func fit_tyres(kind: String) -> void:
 		steel.metallic = 0.8
 		for source: StandardMaterial3D in [rubber, steel]:
 			var material := _grime_material(source, true)
+			material.set_shader_parameter("geometry_grooves", source == rubber)
 			fitted_materials.append(material)
 			grime_materials.append(material)
 	for wheel: Node3D in wheels:
@@ -1001,15 +1027,27 @@ func fit_tyres(kind: String) -> void:
 			var dirt := node.get_surface_override_material(0)
 			node.mesh = stock if kind == "road" else Tyres.rim_of(stock)
 			node.set_surface_override_material(0, dirt)
-			if kind == "road": continue
-			var tyre := MeshInstance3D.new()
-			tyre.name = "FittedTyre"
-			tyre.set_meta("fitted", true)
-			tyre.mesh = Tyres.mesh_of(kind)
-			# (The sets are made for the M1009's wheels.)
-			tyre.scale = Vector3.ONE * wheel_radius / Tyres.RADIUS
-			for s in tyre.mesh.get_surface_count(): tyre.set_surface_override_material(s, fitted_materials[s])
-			node.add_child(tyre)
+			var size_factor := Tyres.wheel_scale(stock)
+			if kind != "road":
+				var tyre := MeshInstance3D.new()
+				tyre.name = "FittedTyre"
+				tyre.set_meta("fitted", true)
+				tyre.mesh = Tyres.mesh_of(kind)
+				tyre.scale = Vector3.ONE * size_factor
+				tyre.material_override = fitted_materials[0]
+				node.add_child(tyre)
+			if chains_on:
+				var chain := MeshInstance3D.new()
+				chain.name = "SnowChains"
+				chain.set_meta("fitted", true)
+				chain.mesh = Tyres.chains_mesh()
+				var bounds := stock.get_aabb() if kind == "road" else Tyres.mesh_of(kind).get_aabb()
+				var width := bounds.size.z if kind == "road" else bounds.size.z * size_factor
+				var radius_scale := size_factor if kind == "road" else size_factor * bounds.size.x / (2.0 * Tyres.RADIUS)
+				chain.scale = Vector3(radius_scale, radius_scale, width / (2.0 * Tyres.HALF_WIDTH))
+				if kind == "road": chain.position.z = bounds.get_center().z
+				chain.material_override = fitted_materials[1]
+				node.add_child(chain)
 
 ## Highest speed the engine pushes to with a locked differential (30 km/h).
 const DIFF_LOCK_SPEED := 30.0 / 3.6
@@ -1509,9 +1547,9 @@ func _update_suspension() -> void:
 		(entry[0] as ShaderMaterial).set_shader_parameter("offset_left", left)
 		(entry[0] as ShaderMaterial).set_shader_parameter("offset_right", right)
 
-## Dirt, snow and rain on the glass, and the wipers: they run in rain and
-## snowfall and for a few strokes after the washer (J), each stroke clearing
-## its arc (dry mud only smears).
+## Dirt, snow and rain on the glass, and the wipers: they run when switched on
+## and for a few strokes after the washer (J), each stroke clearing its arc (dry
+## mud only smears).
 func _update_glass(dt: float, thrown: float) -> void:
 	if glass_layer == null: return
 	# Mud mostly hits the body; the glass gets a light spatter at most.
@@ -1530,7 +1568,7 @@ func _update_glass(dt: float, thrown: float) -> void:
 		coat.dust = maxf(0.0, coat.dust - dt * rinse * 1.5)
 		coat.snow = maxf(0.0, coat.snow - dt * (melt + (0.01 if absf(speed) > 11.0 else 0.0)))
 	if wipers.size() != 2: return
-	var wanted := Surface.rain > 0.1 or Surface.snowfall > 0.1 or washer_strokes > 0
+	var wanted := wipers_on or washer_strokes > 0
 	if wanted or wiper_phase > 0.0:
 		if wiper_phase == 0.0:
 			# A wipe starts: what the blades leave behind them is cleaner, shown

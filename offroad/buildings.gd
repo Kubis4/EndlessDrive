@@ -174,7 +174,7 @@ static func goods(parent: Node3D, tyres: Array, rubber: Material, front: float =
 		for i in 4:
 			var tyre := MeshInstance3D.new()
 			tyre.mesh = Tyres.mesh_of(kind)
-			tyre.material_override = rubber
+			tyre.set_surface_override_material(0, rubber)
 			tyre.rotation.x = PI * 0.5
 			tyre.position = Vector3(-3.2 - slot * 1.0, 0.18 + i * 0.34, -front)
 			parent.add_child(tyre)
