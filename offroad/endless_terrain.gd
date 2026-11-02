@@ -29,11 +29,11 @@ const MAX_FLOOD := 0.45
 const FROZEN := 0.8
 const LOOK_BANK := 1
 const POND_DEPTH := 1.4
-const SNOWLINE := 1900.0
+const SNOWLINE := 1480.0
 ## Above this no forest grows, and the mountains turn to rock.
-const TREELINE := 1450.0
+const TREELINE := 1220.0
 ## From this height sheets of ice lie across the mountain road.
-const ICE_FROM := 1550.0
+const ICE_FROM := 1300.0
 ## Road planning: how far ahead of the car, stretch length, route grid cell.
 const PLAN_AHEAD := 900.0
 const ROUTE := 8.0
@@ -45,7 +45,7 @@ const BAND := 1500.0
 const QUARRY := Vector3(1.0e7, 1.0e7, 0.0)
 ## Version of how the world is made, kept in saves: a run saved in another
 ## version starts afresh (the same seed gives other land and roads).
-const CACHE_VERSION := 9
+const CACHE_VERSION := 10
 
 static var seed_value := 0
 static var river := PackedFloat32Array([0, 20, 0.013, 0, 7, 0.037, 0, 2.5, 0.08, 0])
@@ -205,6 +205,8 @@ const BIOME_NAMES := ["Les", "Lúky", "Púšť", "Hory", "Močiare", "Polia", "S
 ## The journey to the mountains, from either start: landscape, its share of the
 ## way, its height (m). Stretched to about JOURNEY_KM.
 const JOURNEY_KM := 56.0
+## The way's height where the journey meets the last stage (m).
+const JOURNEY_TOP := 1120.0
 const FROM_DESERT := [DESERT, STEPPE, FIELDS, MEADOW, BOG, FOREST, TAIGA, FOOTHILLS]
 const FROM_FIELDS := [FIELDS, MEADOW, STEPPE, FIELDS, BOG, FOREST, TAIGA, FOOTHILLS]
 const STAGE_KM := {DESERT: [6.0, 9.0], STEPPE: [4.0, 6.0], FIELDS: [6.0, 9.0], MEADOW: [3.0, 5.0], BOG: [5.0, 7.0], FOREST: [6.0, 9.0], TAIGA: [5.0, 7.0], FOOTHILLS: [5.0, 7.0]}
@@ -235,6 +237,13 @@ const TURN_IN := 16.0
 const BLEND := 200.0
 ## (Less than ROAD_GRADE: a road that cannot keep up ends in a trench or on a dyke.)
 const CLIMB := 0.09
+## The share of a landscape's length its steeper stretch takes; the last climb's grade; how far
+## the last wall's ground lasts past its top (m).
+const RISE_STEEP := 0.36
+const FINAL_CLIMB := 0.07
+const LAST_WALL_ON := 1600.0
+## How softly the ground around the summit goes over into the ground along the way (m).
+const CONE_SOFT := 60.0
 ## Where this run starts (the start menu, --start=, or a save).
 static var start_biome := FOREST
 ## Zones: Vector2(start z, biome), in order; the first reaches back for ever.
@@ -261,7 +270,12 @@ static func _ensure_zones(z: float) -> void:
 		zones.append(Vector2(-1.0e7, biome))
 		var level := first.randf_range(STAGE_HEIGHT[biome][0], STAGE_HEIGHT[biome][1]) if STAGE_HEIGHT.has(biome) else 300.0
 		altitude.append(Vector2(-1.0e7, level))
-		altitude.append(Vector2(_stage_length(biome, first), level))
+		# (Level around the camp; from there the way climbs.)
+		var first_end := _stage_length(biome, first)
+		if biome == MOUNTAINS: altitude.append(Vector2(first_end, level))
+		else:
+			altitude.append(Vector2(300.0, level))
+			altitude.append(Vector2(first_end, _journey_level(first_end)))
 		if biome == MOUNTAINS:
 			mountains_z = maxf(1.0, (altitude[altitude.size() - 1] as Vector2).x)
 			_add_final_range(first)
@@ -275,7 +289,7 @@ static func _ensure_zones(z: float) -> void:
 		else:
 			biome = HIGH_LANDS[zones.size() % HIGH_LANDS.size()]
 			# (Down from the summit first: no range past it stands as high.)
-			if biome == MOUNTAINS and from.y > 1500.0: biome = FOOTHILLS
+			if biome == MOUNTAINS and from.y > 1250.0: biome = FOOTHILLS
 		if biome == MOUNTAINS:
 			zones.append(Vector2(from.x + 150.0, MOUNTAINS))
 			if mountains_z == 0.0:
@@ -284,15 +298,30 @@ static func _ensure_zones(z: float) -> void:
 			else: _add_range(rng)
 		else:
 			var level := rng.randf_range(STAGE_HEIGHT[biome][0], STAGE_HEIGHT[biome][1])
-			# On the journey the way only ever goes up.
-			if mountains_z == 0.0: level = maxf(level, from.y + rng.randf_range(25.0, 60.0))
-			# Long, even climbs and descents on the way there.
+			# On the journey the way only ever goes up, all the way: a landscape's rise is a long
+			# gentle slope, a steeper stretch in its middle, and gentle again.
+			if mountains_z == 0.0:
+				var stage := _stage_length(biome, rng)
+				level = maxf(_journey_level(from.x + stage) + rng.randf_range(-15.0, 15.0), from.y + 20.0)
+				var rise := level - from.y
+				stage = maxf(rise * 0.6 / (RISE_STEEP * CLIMB), stage)
+				zones.append(Vector2(from.x + 200.0, biome))
+				var steep_from := from.x + stage * (1.0 - RISE_STEEP) * 0.5
+				altitude.append(Vector2(steep_from, from.y + rise * 0.2))
+				altitude.append(Vector2(steep_from + stage * RISE_STEEP, from.y + rise * 0.8))
+				altitude.append(Vector2(from.x + stage, level))
+				continue
+			# Long, even descents and climbs past the summit.
 			var way := maxf(500.0, absf(level - from.y) / (CLIMB * 0.6))
 			var length := maxf(way + 400.0, _stage_length(biome, rng))
 			# Coming down from high up, the mountains last nearly to the bottom.
 			zones.append(Vector2(from.x + way * (0.85 if from.y > level + 200.0 else 0.5), biome))
 			altitude.append(Vector2(from.x + way, level))
 			altitude.append(Vector2(from.x + length, level))
+
+## How high the way is at z on the journey: an even climb from the start to the last stage.
+static func _journey_level(z: float) -> float:
+	return lerpf((altitude[0] as Vector2).y, JOURNEY_TOP, clampf(z / (JOURNEY_KM * 1000.0), 0.0, 1.0))
 
 ## The landscapes in the order of this run (the seed varies it a little).
 static func _journey(rng: RandomNumberGenerator) -> Array:
@@ -326,21 +355,22 @@ static func _stage_length(biome: int, rng: RandomNumberGenerator) -> float:
 	if not STAGE_KM.has(biome): return 1000.0
 	return rng.randf_range(STAGE_KM[biome][0], STAGE_KM[biome][1]) * 1000.0 * stage_scale
 
-## The last stage: a long climb, the first wall of serpentines, a high saddle, the second
-## wall, and along the top to the transmitter (about 2300 m).
+## The last stage (the journey has done most of the climbing): straight up at a fair grade, a
+## short wall of serpentines, a saddle, a second short wall, and along the top to the
+## transmitter (about 1700 m). Past it the way goes down again.
 static func _add_final_range(rng: RandomNumberGenerator) -> void:
 	var from: Vector2 = altitude[altitude.size() - 1]
-	var base := maxf(from.y + 250.0, rng.randf_range(1380.0, 1480.0))
-	var foot := from.x + (base - from.y) / CLIMB
+	var base := from.y + rng.randf_range(150.0, 220.0)
+	var foot := from.x + (base - from.y) / FINAL_CLIMB
 	altitude.append(Vector2(foot, base))
 	altitude.append(Vector2(foot + 150.0, base))
-	var first := _add_wall(foot + 150.0, base, 12, 140.0)
-	var saddle := Vector2(first.x + rng.randf_range(1200.0, 1700.0), first.y + rng.randf_range(50.0, 100.0))
+	var first := _add_wall(foot + 150.0, base, 5, 140.0)
+	var saddle := Vector2(first.x + rng.randf_range(900.0, 1300.0), first.y + rng.randf_range(60.0, 90.0))
 	altitude.append(saddle)
 	altitude.append(Vector2(saddle.x + 100.0, saddle.y))
-	var top := _add_wall(saddle.x + 100.0, saddle.y, 19, 560.0)
+	var top := _add_wall(saddle.x + 100.0, saddle.y, 7, LAST_WALL_ON)
 	summit = Vector3((walls[1] as Dictionary).x, top.y, top.x + SUMMIT_AHEAD)
-	altitude.append(Vector2(top.x + 420.0, top.y))
+	altitude.append(Vector2(top.x + SUMMIT_AHEAD + 170.0, top.y))
 	river_gap = Vector2((walls[0] as Dictionary).z0 - 100.0, top.x + 2400.0)
 	noises.summit = summit
 	noises.gap = river_gap
@@ -356,10 +386,13 @@ static func _add_wall(z0: float, level: float, legs: int, lasts: float) -> Vecto
 	altitude.append(Vector2(z1, top))
 	return Vector2(z1, top)
 
-## How much of a wall's slope z is on (0..1).
+## How much of a wall's slope z is on (0..1). The last wall's ground goes over into the land
+## past the summit slowly: quickly, it would stand there as a wall of its own.
 static func wall_share(z: float, spans: Array) -> float:
 	for span: Vector4 in spans:
-		if z > span.x - 140.0 and z < span.y + span.w: return smoothstep(span.x - 140.0, span.x, z) * (1.0 - smoothstep(span.y + span.w - 140.0, span.y + span.w, z))
+		if z > span.x - 140.0 and z < span.y + span.w:
+			var fade := 1300.0 if span.w > 200.0 else 140.0
+			return smoothstep(span.x - 140.0, span.x, z) * (1.0 - smoothstep(span.y + span.w - fade, span.y + span.w, z))
 	return 0.0
 
 ## Whether the river has given out here (0..1).
@@ -369,7 +402,7 @@ static func river_off(z: float, gap: Vector2) -> float:
 ## Up to a summit and along its saddle.
 static func _add_range(rng: RandomNumberGenerator) -> void:
 	var from: Vector2 = altitude[altitude.size() - 1]
-	var peak := maxf(from.y + 150.0, rng.randf_range(1500.0, 1900.0))
+	var peak := maxf(from.y + 150.0, rng.randf_range(1150.0, 1500.0))
 	var top := from.x + (peak - from.y) / CLIMB
 	altitude.append(Vector2(top, peak))
 	altitude.append(Vector2(top + rng.randf_range(300.0, 700.0), peak - rng.randf_range(0.0, 40.0)))
@@ -465,7 +498,7 @@ static func land(x: float, z: float, nz: Dictionary, r: PackedFloat32Array, peak
 	# by rising ground. On the last wall that ground falls away towards the top instead.
 	for span: Vector4 in nz.walls:
 		if z <= span.x - 140.0 or z >= span.y + span.w: continue
-		var share := smoothstep(span.x - 140.0, span.x, z) * (1.0 - smoothstep(span.y + span.w - 140.0, span.y + span.w, z))
+		var share := wall_share(z, [span])
 		# (Where the sides begin wanders, and they begin gently: a straight crease up the slope
 		# would show from the road as a line drawn across the mountain.)
 		var dx := absf(x - span.z) - 34.0 * (0.5 + 0.5 * w) - 22.0 * (0.5 + 0.5 * hills)
@@ -473,7 +506,7 @@ static func land(x: float, z: float, nz: Dictionary, r: PackedFloat32Array, peak
 		var side := 240.0 * (1.0 - exp(-rise * rise / (rise + 60.0) / 240.0)) * (0.75 + 0.5 * ridge)
 		if span.w > 200.0:
 			var fall := maxf(0.0, dx - WALL_HALF - 25.0)
-			side = lerpf(side, -0.33 * fall * fall / (fall + 40.0), smoothstep(span.y - 500.0, span.y, z))
+			side = lerpf(side, -170.0 * (1.0 - exp(-fall * fall / (fall + 40.0) / 500.0)), smoothstep(span.y - 400.0, span.y + 200.0, z))
 		h = lerpf(h, 3.0 + 2.5 * base + 0.5 * detail + side, share)
 	var top: Vector3 = nz.summit
 	var height := way + h
@@ -482,10 +515,14 @@ static func land(x: float, z: float, nz: Dictionary, r: PackedFloat32Array, peak
 	if top != Vector3.ZERO:
 		var offset := Vector2(x - top.x, z - top.z)
 		var off := offset.length()
-		if off < 2600.0:
-			var fall := lerpf(0.25, 0.06, smoothstep(-0.3, 0.7, offset.y / maxf(off, 1.0)))
-			var cone := maxf(top.y + 6.0 - fall * maxf(0.0, off - 90.0), way + lerpf(4.0, 12.0, smoothstep(0.0, 400.0, top.y - way)))
-			height = lerpf(minf(height, cone), height, smoothstep(2000.0, 2600.0, off))
+		if off < 7000.0:
+			var north := smoothstep(-0.3, 0.7, offset.y / maxf(off, 1.0))
+			var fall := lerpf(0.25, 0.06, north)
+			var slope_of_cone := top.y + 6.0 - fall * maxf(0.0, off - 90.0)
+			var floor_of_cone := way + lerpf(4.0, 12.0, smoothstep(0.0, 400.0, top.y - way))
+			var cone := 0.5 * (slope_of_cone + floor_of_cone + sqrt((slope_of_cone - floor_of_cone) * (slope_of_cone - floor_of_cone) + CONE_SOFT * CONE_SOFT))
+			# (The land comes back slowly, most slowly ahead, in full view from the top.)
+			height = lerpf(minf(height, cone), height, smoothstep(2000.0, lerpf(4500.0, 7000.0, north), off))
 	return height
 
 ## Share of desert at a point (0..1): there the river runs dry.
@@ -554,7 +591,8 @@ static func parcel_fit(x: float, z: float, nz: Dictionary, r: PackedFloat32Array
 			var pz := (cell.y + 0.15 + b * 0.35) * FIELD_SIZE.y
 			var mix := zone_mix(pz, nz.warp.get_noise_2d(px, pz), nz.zones)
 			if (1.0 - mix.z if int(mix.x) == FIELDS else 0.0) + (mix.z if int(mix.y) == FIELDS else 0.0) < 0.9: fit = false
-			var h := land(px, pz, nz, r, peaks)
+			# (On the way's own slope: the climb does not stop a field.)
+			var h := land(px, pz, nz, r, peaks) - altitude_of(pz, nz.altitude)
 			low = minf(low, h)
 			high = maxf(high, h)
 	fit = fit and high - low < PARCEL_ROUGHNESS
@@ -1748,7 +1786,7 @@ static func bake_tile(job: Dictionary) -> Dictionary:
 			var left := h[i - 1] if tx > 0 else hv
 			var up := h[i + TILE] if tz < TILE - 1 else hv
 			var down := h[i - TILE] if tz > 0 else hv
-			var slope := sqrt((right - left) * (right - left) + (up - down) * (up - down)) / ((2.0 if tx > 0 and tx < TILE - 1 else 1.0) * STEP)
+			var slope := Vector2((right - left) / (2.0 if tx > 0 and tx < TILE - 1 else 1.0), (up - down) / (2.0 if tz > 0 and tz < TILE - 1 else 1.0)).length() / STEP
 			var biome := biomes[i]
 			var noise := sin(x * 0.37 + sin(z * 0.23) * 2.0) * sin(z * 0.31 - x * 0.11)
 			var look := 0
@@ -1902,7 +1940,8 @@ static func _mountain_road(s: float, height: float) -> int:
 	match posmod(floori(s / 380.0), 4):
 		0, 2: return Surface.ROAD
 		1: return Surface.GRAVEL
-	return Surface.PACKED
+	# (Bare yellow earth has no place among snow.)
+	return Surface.GRAVEL if height > SNOWLINE - 80.0 else Surface.PACKED
 
 ## A stable random number 0..1 for a grid cell (and salt).
 static func _unit(cell: Vector2i, salt: int) -> float:

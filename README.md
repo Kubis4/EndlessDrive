@@ -2,9 +2,10 @@
 
 Off-road driving game for Android, made in **Godot 4.7.2** (Forward Mobile on phones). One
 procedural road leads from the fields or the desert (drawn at random for each new run) ever
-higher, up the serpentines of the last range to a transmitter on the summit at about 2300 m.
-That ends the journey, and the land goes on being made for whoever drives further. On the way:
-fuel, loot, weather, tyres and a garage paid for in scrap.
+higher, up the serpentines of the last range to a transmitter on the summit at about 1700 m.
+That ends the journey, and the land goes on being made for whoever drives further, downhill at
+first. The way climbs evenly for the whole 90 km of road; on it: fallen trees and poles, rockfalls
+and wrecks to get past, fuel, loot, weather, tyres and a garage paid for in scrap.
 
 - Package: `sk.kubis.endlessdrive`
 - Main scene: `offroad/endless_menu.tscn`, the game itself `offroad/endless.tscn`

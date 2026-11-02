@@ -501,6 +501,7 @@ func _dress_road(area: Rect2) -> void:
 		if floori(along[k] / POLE_EVERY) != floori(along[k - 1] / POLE_EVERY): _pole(floori(along[k] / POLE_EVERY))
 		if floori(along[k] / STONE_LENGTH) != floori(along[k - 1] / STONE_LENGTH) and T.wall_share(line[k].y, T.wall_spans) > 0.8: _stones(k, near[0], stones)
 		if floori(along[k] / PROP_EVERY) != floori(along[k - 1] / PROP_EVERY): _road_prop(k, floori(along[k] / PROP_EVERY))
+		if floori(along[k] / OBSTACLE_EVERY) != floori(along[k - 1] / OBSTACLE_EVERY): _obstacles(floori(along[k] / OBSTACLE_EVERY))
 	if not stones.is_empty(): _build_stones(stones)
 
 ## Where pole n stands: Vector3(x, z, height of its top), or nothing if the line
@@ -649,6 +650,120 @@ func _road_prop(k: int, n: int) -> void:
 		# Long things along the road, signs facing it.
 		prop.rotation.y = atan2(along_road.y, -along_road.x)
 		_place(prop)
+
+## What has fallen across the road: a stretch of it every so often, one side blocked and the
+## other open (a second one a little on, from the other side, makes the car weave). Nothing on
+## a bend, in a ford or by a building. Everything comes from the distance along the road.
+const OBSTACLE_EVERY := 340.0
+const OBSTACLES_HERE := {T.DESERT: ["rocks", "wreck"], T.STEPPE: ["pole", "wreck"], T.FIELDS: ["pole", "tree"], T.MEADOW: ["tree", "pole"],
+	T.BOG: ["tree"], T.FOREST: ["tree"], T.TAIGA: ["tree", "tree", "pole"], T.FOOTHILLS: ["tree", "rocks"], T.MOUNTAINS: ["rocks"]}
+
+## The obstacles of stretch n: [] or [{k, kind, side}], side being the one blocked.
+func obstacles_of(n: int) -> Array:
+	var main: Dictionary = T.roads[0]
+	var along: PackedFloat32Array = main.along
+	var line: PackedVector2Array = main.points
+	var chance := hash([T.seed_value, n, 17])
+	if n < 2 or chance % 100 > 75: return []
+	var first := along.bsearch(n * OBSTACLE_EVERY)
+	var side := 1.0 if (chance >> 8) % 2 == 0 else -1.0
+	var found := []
+	for at: int in ([first, first + 11] if (chance >> 10) % 100 < 35 else [first]):
+		if at < 14 or at + 14 >= line.size(): continue
+		var p := line[at]
+		if absf((line[at] - line[at - 12]).angle_to(line[at + 12] - line[at])) > 0.22: continue
+		if absf(p.x - T.river_x(p.y)) < 28.0 or T.pond_at(p.x, p.y, 8.0) >= 0: continue
+		var clear := true
+		for site: Dictionary in T.sites:
+			if (site.point as Vector2).distance_squared_to(p) < 1600.0: clear = false
+		if not clear: continue
+		var kinds: Array = OBSTACLES_HERE.get(T.biome_at(p.x, p.y), ["rocks"])
+		var kind: String = kinds[(chance >> 16) % kinds.size()]
+		# (No tree up where none grows.)
+		if kind == "tree" and T.altitude_of(p.y, T.altitude) > T.TREELINE: kind = "rocks"
+		found.append({"k": at, "kind": kind, "side": side})
+		side = -side
+	return found
+
+func _obstacles(n: int) -> void:
+	for found: Dictionary in obstacles_of(n):
+		match found.kind:
+			"tree":
+				var model := str(forest_models[hash([T.seed_value, found.k]) % forest_models.size()])
+				_fallen(found, model + "_hi" if model.begins_with("winter_") else model, 13.0)
+			"pole": _fallen(found, "", 6.69)
+			"wreck": _wreck(found)
+			_: _rockfall(found)
+
+## A tree or a pole lying from beside the road over to its middle, with its top on the road.
+func _fallen(found: Dictionary, model: String, length: float) -> void:
+	var main: Dictionary = T.roads[0]
+	var line: PackedVector2Array = main.points
+	var k: int = found.k
+	var tangent := (line[k + 2] - line[k - 2]).normalized()
+	var across := Vector2(-tangent.y, tangent.x) * (found.side as float)
+	# (Askew: nothing falls square to the road.)
+	var lean := deg_to_rad(-14.0 + 28.0 * T._unit(Vector2i(k, 0), 31))
+	var from: Vector2 = line[k] + across.rotated(lean) * length
+	var tip: Vector2 = line[k] + across * 0.3
+	var base := Vector3(from.x, T.terrain_height(from.x, from.y) + 0.25, from.y)
+	var top := Vector3(tip.x, T.terrain_height(tip.x, tip.y) + 0.3, tip.y)
+	var up := (top - base).normalized()
+	var right := up.cross(Vector3.UP).normalized()
+	var basis := Basis(right, up, right.cross(up))
+	if model == "":
+		var pole := MeshInstance3D.new()
+		pole.name = "FallenPole"
+		pole.mesh = Roadside.mesh("pylon01")
+		pole.transform = Transform3D(basis, base)
+		pole.visibility_range_end = 420.0
+		_place(pole)
+	else:
+		var cells := {}
+		# (As long as the beam below, whatever the model's own height.)
+		var fit := base.distance_to(top) / _mesh(model).get_aabb().size.y
+		_add(cells, model, Vector2(base.x, base.z), Transform3D(basis.scaled(Vector3.ONE * fit), base), Color.WHITE * foliage_tint)
+		_batches("FallenTree", cells, 420.0, not mobile)
+	# The trunk stops a car: a beam along it, its foot in the ground.
+	var beam := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(0.6, base.distance_to(top), 0.9)
+	beam.shape = shape
+	beam.transform = Transform3D(basis, base.lerp(top, 0.5))
+	collision.add_child(beam)
+
+## A wreck left on one half of the road, along it.
+func _wreck(found: Dictionary) -> void:
+	var main: Dictionary = T.roads[0]
+	var line: PackedVector2Array = main.points
+	var k: int = found.k
+	var tangent := (line[k + 2] - line[k - 2]).normalized()
+	var p: Vector2 = line[k] + Vector2(-tangent.y, tangent.x) * (found.side as float) * (main.half as float) * 0.6
+	var wreck := Roadside.spawn("truck01" if k % 2 == 0 else "trailer01")
+	wreck.position = Vector3(p.x, T.terrain_height(p.x, p.y) - 0.03, p.y)
+	wreck.rotation.y = atan2(tangent.y, -tangent.x)
+	_place(wreck)
+
+## Stones come down on one half of the road.
+func _rockfall(found: Dictionary) -> void:
+	var main: Dictionary = T.roads[0]
+	var line: PackedVector2Array = main.points
+	var k: int = found.k
+	var tangent := (line[k + 2] - line[k - 2]).normalized()
+	var across := Vector2(-tangent.y, tangent.x) * (found.side as float)
+	var cells := {}
+	var plain: Array = Props.names("rock_plain")
+	var half: float = main.half
+	for i in 5:
+		var cell := Vector2i(k, i)
+		var p: Vector2 = line[k] + across * lerpf(0.5, half + 1.5, T._unit(cell, 33)) + tangent * lerpf(-3.5, 3.5, T._unit(cell, 34))
+		var stone := lerpf(1.0, 1.9, T._unit(cell, 35))
+		var y: float = T.terrain_height(p.x, p.y)
+		var size := stone / 0.75
+		var turned := Basis(Vector3.UP, TAU * T._unit(cell, 36)).scaled(Vector3.ONE * size)
+		_add(cells, plain[(k + i) % plain.size()], p, Transform3D(turned, Vector3(p.x, y - stone * 0.25, p.y)), Color.WHITE)
+		_trunk(p, y - 0.3, stone * 0.42, stone)
+	_batches("Rockfall", cells, 420.0, not mobile)
 
 ## The road's edge at sample k gets a block of the stone wall on each side where the ground
 ## falls away (not where the road's own next leg runs close by). Each block stops the car.
@@ -931,8 +1046,10 @@ func _collect() -> void:
 		T.store_tile(result)
 		tiles[tile] = {"low": result.low, "high": result.high}
 		textures_dirty = true
-		var slot := pool_tiles.find(tile)
-		if slot >= 0: _show_chunk(slot)
+		# (Its neighbours may read its edge now.)
+		for near_tile: Vector2i in [tile, tile + Vector2i(-1, 0), tile + Vector2i(0, -1), tile + Vector2i(1, 0), tile + Vector2i(0, 1), tile + Vector2i(-1, -1)]:
+			var slot := pool_tiles.find(near_tile)
+			if slot >= 0: _show_chunk(slot)
 
 ## Ground chunks onto the tiles around the car.
 func _lay_ground() -> void:
@@ -948,10 +1065,18 @@ func _lay_ground() -> void:
 		pool_tiles[slot] = tile
 		_show_chunk(slot)
 
+## The neighbours a chunk reads, by their bit in the ground shader's missing_sides.
+const SIDES := {1: Vector2i(1, 0), 2: Vector2i(0, 1), 4: Vector2i(-1, 0), 8: Vector2i(0, -1), 16: Vector2i(1, 1)}
+
 func _show_chunk(slot: int) -> void:
 	var tile := pool_tiles[slot]
 	var made: bool = tiles.has(tile)
+	# (Asking the rings: a tile dropped or not yet made leaves another's heights there.)
+	var missing := 0
+	for bit: int in SIDES:
+		if not T.has_tile(tile + (SIDES[bit] as Vector2i)): missing |= bit
 	for chunk: MeshInstance3D in pool[slot]:
+		chunk.set_instance_shader_parameter("missing_sides", missing)
 		chunk.position = Vector3(tile.x * T.TILE_M, 0.0, tile.y * T.TILE_M)
 		chunk.visible = made
 		if made:

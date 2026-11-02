@@ -40,6 +40,10 @@ uniform sampler2D ground_heights : filter_nearest, repeat_disable;
 uniform float heights_half = 360.0;
 uniform float heights_step = 0.75;
 instance uniform float grid_step = 0.0;
+// Which neighbours of an endless chunk are not made yet (bits: +x, +z, -x, -z, the +x +z corner):
+// the ring still holds another tile's heights there, far above or below this one.
+instance uniform int missing_sides = 0;
+const int CHUNK_NODES = 80;
 // Endless world (endless_world.gd): both maps are rings around the car, texel
 // (x, z) holding the world texel at x, z modulo the map size (map_half and
 // heights_half are 0 then). Otherwise they are clamped at the map's edge.
@@ -52,6 +56,17 @@ ivec2 map_texel(ivec2 texel, ivec2 size) {
 
 float grid_height(ivec2 node) {
 	return texelFetch(ground_heights, map_texel(node, textureSize(ground_heights, 0)), 0).r;
+}
+
+// The node itself, or the chunk's own nearest one where the neighbour is missing.
+ivec2 kept_node(ivec2 node, ivec2 low, int missing) {
+	ivec2 high = low + ivec2(CHUNK_NODES);
+	if ((missing & 1) != 0 && node.x >= high.x) { node.x = high.x - 1; }
+	if ((missing & 2) != 0 && node.y >= high.y) { node.y = high.y - 1; }
+	if ((missing & 4) != 0 && node.x < low.x) { node.x = low.x; }
+	if ((missing & 8) != 0 && node.y < low.y) { node.y = low.y; }
+	if ((missing & 16) != 0 && node.x >= high.x && node.y >= high.y) { node = high - ivec2(1); }
+	return node;
 }
 
 int kind_at(ivec2 texel) {
@@ -92,11 +107,13 @@ void vertex() {
 	if (!fine_geometry && grid_step > 0.0) {
 		ivec2 node = ivec2(round((world.xz + vec2(heights_half)) / heights_step));
 		int s = int(round(grid_step / heights_step));
-		float h = grid_height(node);
+		ivec2 low = ivec2(round((MODEL_MATRIX[3].xz + vec2(heights_half)) / heights_step));
+		int missing = missing_sides;
+		float h = grid_height(kept_node(node, low, missing));
 		VERTEX.y += h;
 		world.y += h;
-		NORMAL = normalize(vec3(grid_height(node - ivec2(s, 0)) - grid_height(node + ivec2(s, 0)), 2.0 * grid_step,
-			grid_height(node - ivec2(0, s)) - grid_height(node + ivec2(0, s))));
+		NORMAL = normalize(vec3(grid_height(kept_node(node - ivec2(s, 0), low, missing)) - grid_height(kept_node(node + ivec2(s, 0), low, missing)), 2.0 * grid_step,
+			grid_height(kept_node(node - ivec2(0, s), low, missing)) - grid_height(kept_node(node + ivec2(0, s), low, missing))));
 	}
 	// The terrain's own slope, before ruts tilt it (water and snow follow it).
 	base_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
@@ -334,7 +351,7 @@ void fragment() {
 	}
 	// Tyres sinking into turf, forest floor or dirt churn up the wet soil below;
 	// rain turns dirt roads (and less so forest floor and turf) to mud.
-	float churn = max(rut * 0.8 * soil_w, wetness * churn_w);
+	float churn = max(rut * 0.8 * soil_w * (1.0 - snow_cover), wetness * churn_w);
 	if (churn > 0.01) {
 		vec4 churned;
 		vec3 churned_normal;
@@ -351,7 +368,9 @@ void fragment() {
 	// Ruts: churned, darker and damper soil, smoothed by the tyres; packed snow
 	// in snow.
 	float pressed = mix(rut, snow_rut, snow_w);
-	albedo.rgb = mix(albedo.rgb, albedo.rgb * mix(vec3(0.62, 0.56, 0.5), vec3(0.88, 0.91, 0.96), snow_w), pressed * 0.85);
+	albedo.rgb = mix(albedo.rgb, albedo.rgb * mix(vec3(0.62, 0.56, 0.5), vec3(0.76, 0.8, 0.88), snow_w), pressed * 0.85);
+	// (White on white shows a groove by its walls only.)
+	if (snow_w > 0.01 && snow_rut > 0.01) { normal_world = normalize(mix(normal_world, sand_normal(p, normal_world), snow_w)); }
 	albedo.a = mix(albedo.a, albedo.a * 0.8, rut);
 	normal_world = normalize(mix(normal_world, geometric, rut * 0.6 * (1.0 - snow_cover)));
 	// Rain: soaked ground darkens and turns satin (not mirror); water gathers in
@@ -379,10 +398,9 @@ void fragment() {
 	// whitens once the fall passes its own threshold.
 	float settle = fbm(p * 0.3) * 0.45 + fbm(p * 1.6 + 4.0) * 0.35 + settle_w;
 	float cover = smoothstep(settle - 0.05, settle + 0.05, snow_cover * 1.25) * smoothstep(0.55, 0.85, base_normal.y) * (1.0 - snow_w);
-	// Tyres press the snow down to a grey-blue crust and push the ground through.
-	// Deeper snow fills old tracks again; fresh ones in it stay as white grooves
-	// (the vertex lift dips there) rather than dark stripes.
-	cover *= 1.0 - snow_rut * 0.55 * (1.0 - smoothstep(0.01, 0.10, snow_depth));
+	// Tyres press the snow down to a grey-blue crust, not through it: fresh tracks stay
+	// white grooves (the vertex lift dips there) rather than stripes of what lies beneath.
+	cover *= 1.0 - snow_rut * 0.12 * (1.0 - smoothstep(0.01, 0.10, snow_depth));
 	if (cover > 0.001) {
 		vec4 fresh;
 		vec3 fresh_normal;

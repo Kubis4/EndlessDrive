@@ -644,7 +644,8 @@ func _update_camera(delta: float) -> void:
 	var lens: Vector3 = camera_position + Vector3.UP * camera_lift
 	# Never into the ground itself, nor below the water surface.
 	lens.y = maxf(lens.y, soil.height_at(lens.x, lens.z) + 0.5)
-	lens.y = maxf(lens.y, Surface.water_level_at(lens.x, lens.z) + 0.35)
+	# (Only over real water: on a dry slope the river's level says nothing.)
+	if Surface.water_depth_at(lens.x, lens.z) > 0.0: lens.y = maxf(lens.y, Surface.water_level_at(lens.x, lens.z) + 0.35)
 	camera.look_at_from_position(lens, look)
 	camera_snap = false
 

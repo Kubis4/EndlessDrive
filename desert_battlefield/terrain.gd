@@ -80,6 +80,13 @@ static func deform(kind: int) -> float:
 	# Fresh snow ruts even over asphalt or rock.
 	return maxf(d, DEFORM[SNOW] * _snow_on(kind) * (1.0 - 0.4 * frost) * (1.0 + snow_depth * 1.5))
 
+## How readily tyres mark a ground. Frost hardens it, but it still takes a shallower rut (and
+## snow hardly minds the cold): this is the look of the ground, the car's bogging down goes
+## by deform().
+static func ruts(kind: int) -> float:
+	var d: float = DEFORM[kind] * (1.0 + 0.45 * wetness * SOAK[kind]) * (1.0 - (0.15 if kind == SNOW else 0.4) * frost)
+	return maxf(d, DEFORM[SNOW] * _snow_on(kind) * (1.0 - 0.15 * frost) * (1.0 + snow_depth * 1.5))
+
 static func rolling(kind: int) -> float:
 	var r: float = ROLLING[kind] * (1.0 + 0.8 * wetness * SOAK[kind])
 	return lerpf(r, maxf(r, ROLLING[SNOW] * (1.0 + snow_depth * 3.0)), _snow_on(kind))
@@ -530,6 +537,9 @@ static func surface_at(x: float, z: float) -> int:
 ## Rut compaction scale at a point; loose dunes are 1.
 static func deform_at(x: float, z: float) -> float:
 	return deform(surface_at(x, z))
+
+static func ruts_at(x: float, z: float) -> float:
+	return ruts(surface_at(x, z))
 
 static func in_test_ground(x: float, z: float, margin: float = 0.0) -> bool:
 	if world != null: return world.in_test_ground(x, z, margin)

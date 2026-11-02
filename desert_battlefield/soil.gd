@@ -286,11 +286,11 @@ func stamp(point: Vector3, forward: Vector3, travel: float, slip: float) -> void
 	if mixed_ground:
 		# Sample the footprint corners; only a footprint straddling two grounds
 		# needs the per-texel lookup below.
-		uniform_deform = Surface.deform_at(world.x, world.z)
+		uniform_deform = Surface.ruts_at(world.x, world.z)
 		uniform_scale = rut_depth_scale_at(world.x, world.z)
 		mixed_ground = false
 		for corner: Vector2 in [Vector2(-1.1, -1.1), Vector2(1.1, -1.1), Vector2(-1.1, 1.1), Vector2(1.1, 1.1)]:
-			if Surface.deform_at(world.x + corner.x, world.z + corner.y) != uniform_deform or rut_depth_scale_at(world.x + corner.x, world.z + corner.y) != uniform_scale: mixed_ground = true
+			if Surface.ruts_at(world.x + corner.x, world.z + corner.y) != uniform_deform or rut_depth_scale_at(world.x + corner.x, world.z + corner.y) != uniform_scale: mixed_ground = true
 		if not mixed_ground and uniform_deform <= 0.0 and slip < MARK_SLIP: return
 	# Hard ground (asphalt, rock) cannot rut, but a skidding tyre leaves rubber:
 	# a 4 mm "depth" that the ground shaders draw as a dark mark.
@@ -318,7 +318,7 @@ func stamp(point: Vector3, forward: Vector3, travel: float, slip: float) -> void
 			if mixed_ground:
 				var x := ix * CELL - EXTENT + center.x
 				var z := iz * CELL - EXTENT + center.y
-				deform = Surface.deform_at(x, z)
+				deform = Surface.ruts_at(x, z)
 				depth_scale_at_point = rut_depth_scale_at(x, z)
 				limit = minf(base_limit * deform, max_depth) * depth_scale_at_point
 			var lateral := absf(delta.dot(side))
@@ -388,7 +388,7 @@ func dig_out(point: Vector3, forward: Vector3, slope: float, amount: float) -> v
 			var index := iz * RESOLUTION + ix
 			var previous := field[index]
 			if target <= previous: continue
-			if Surface.deform_at(ix * CELL - EXTENT + center.x, iz * CELL - EXTENT + center.y) <= 0.0: continue
+			if Surface.ruts_at(ix * CELL - EXTENT + center.x, iz * CELL - EXTENT + center.y) <= 0.0: continue
 			var value := minf(previous + (target - previous) * response, max_depth)
 			field[index] = value
 			image.set_pixel(ix, iz, Color(value, 0, 0, 1))
@@ -527,7 +527,7 @@ func prefetch(point: Vector3) -> void:
 	if container == null or absf(point.x) >= EXTENT or absf(point.z) >= EXTENT: return
 	var tile := Vector2i(clampi(floori((point.x + EXTENT) / TILE_SIZE), 0, 15), clampi(floori((point.z + EXTENT) / TILE_SIZE), 0, 15))
 	if not tiles.has(tile) and not pending.has(tile) and not _tile_hidden(tile) \
-		and Surface.deform_at(world.x, world.z) > 0.0: pending[tile] = true
+		and Surface.ruts_at(world.x, world.z) > 0.0: pending[tile] = true
 
 func _tile_hidden(tile: Vector2i) -> bool:
 	var x0 := tile.x * TILE_SIZE - EXTENT - CELL + center.x
