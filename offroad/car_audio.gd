@@ -50,6 +50,7 @@ var start_clock := 0.0
 var splat_clock := 1.0
 var thunder_clock := 25.0
 var landing_seen := 0
+var plunge_seen := 0
 var last_speed := 0.0
 var random := RandomNumberGenerator.new()
 var out_of_fuel := false
@@ -165,7 +166,7 @@ func _ground(delta: float) -> void:
 		_mix(name, float(entry[0]) * (0.15 + 0.85 * loudness), entry[1], delta)
 	# Wading: the water takes over, by how deep and how fast.
 	if car.water_submersion > 0.02:
-		_mix("surface_water", clampf(car.water_submersion * 2.0, 0.2, 1.0) * clampf(0.3 + speed * 0.14, 0.0, 1.0), 1.0, delta)
+		_mix("surface_water", clampf(car.water_submersion * 2.0, 0.2, 1.0) * clampf(0.3 + car.water_relative.length() * 0.14, 0.0, 1.0), 1.0, delta)
 	# Clods of mud against the arches.
 	splat_clock -= delta * clampf(speed / 6.0 + car.spin_share() * 2.0, 0.0, 2.5)
 	if splat_clock <= 0.0:
@@ -199,14 +200,17 @@ func _air(delta: float) -> void:
 		if thunder_clock <= 0.0:
 			thunder_clock = random.randf_range(18.0, 55.0)
 			shot("thunder" if random.randf() < 0.5 else "thunder_roll", random.randf_range(0.45, 0.85))
+			weather.flash()
 
-## Landings and running into things.
+## Landings, plunges and running into things.
 func _knocks(_delta: float) -> void:
+	if car.water_impact_count != plunge_seen:
+		plunge_seen = car.water_impact_count
+		shot("splash_1", clampf(car.water_plunge_speed * 0.16, 0.35, 1.0))
 	if car.landing_count != landing_seen:
 		landing_seen = car.landing_count
 		if car.landing_impact_speed > 1.5:
 			shot("debris", clampf(car.landing_impact_speed * 0.12, 0.12, 0.9), random.randf_range(0.65, 0.85))
-			if car.water_submersion > 0.05: shot("splash_1", 0.8)
 	var speed := absf(car.speed)
 	if last_speed - speed > 3.5:
 		shot("debris", clampf((last_speed - speed) * 0.09, 0.2, 1.0), random.randf_range(0.8, 1.0))

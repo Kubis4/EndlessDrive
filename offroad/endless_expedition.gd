@@ -147,7 +147,8 @@ func _resume(loading: CanvasLayer) -> void:
 		if line[k].distance_squared_to(p) < line[nearest].distance_squared_to(p): nearest = k
 	road_sample = nearest
 	var offset := line[nearest].distance_to(p)
-	var moved := saved_offset >= 0.0 and saved_offset < 40.0 and offset > saved_offset + 15.0
+	# (A run saved outside what is now the road's corridor goes back to the road as well.)
+	var moved := (saved_offset >= 0.0 and saved_offset < 40.0 and offset > saved_offset + 15.0) or not T.corridor.has(T.tile_of(p.x, p.y))
 	if world_changed or moved:
 		if offset > 20.0 or moved:
 			var ahead: Vector2 = line[mini(nearest + 4, line.size() - 1)] - line[nearest]

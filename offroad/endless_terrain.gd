@@ -36,6 +36,15 @@ const TREELINE := 1220.0
 const ICE_FROM := 1300.0
 ## Road planning: how far ahead of the car, stretch length, route grid cell.
 const PLAN_AHEAD := 900.0
+## What it costs a target to lie far aside for how far on it is.
+const ROAD_ASIDE := 0.55
+const ROAD_ASIDE_COST := 130.0
+## True if the last route found could not stay gentle and go only onward.
+static var route_forced := false
+## How far from a road the world goes on, in tiles (so at least this many times TILE_M).
+## Beyond it there is only the far land to look at; ground is not made there, and a wall
+## (endless_world.gd) keeps the car in.
+const CORRIDOR_TILES := 2
 const ROUTE := 8.0
 const ROUTE_GRADE := 0.11
 const ROAD_GRADE := 0.12
@@ -45,10 +54,15 @@ const BAND := 1500.0
 const QUARRY := Vector3(1.0e7, 1.0e7, 0.0)
 ## Version of how the world is made, kept in saves: a run saved in another
 ## version starts afresh (the same seed gives other land and roads).
-const CACHE_VERSION := 10
+const CACHE_VERSION := 11
 
 static var seed_value := 0
 static var river := PackedFloat32Array([0, 20, 0.013, 0, 7, 0.037, 0, 2.5, 0.08, 0])
+## The tiles within CORRIDOR_TILES of a road. Replaced, never changed in place, so what
+## the main thread holds stays valid while the planner works.
+static var corridor := {}
+## Per road, how many of its points the corridor has counted.
+static var corridor_counted := {}
 static var noise_seeds := PackedInt32Array()
 static var noises := {}
 static var flood := 0.0
@@ -107,6 +121,8 @@ static func generate(new_seed: int, start: int = -1) -> void:
 	start_biome = start if start >= 0 else _chosen_start()
 	flood = 0.0
 	pond_ice = 0.0
+	corridor = {}
+	corridor_counted = {}
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 	river = PackedFloat32Array([rng.randf_range(-40.0, 40.0),
@@ -789,6 +805,21 @@ static func plan_to(z: float) -> void:
 	while planned_z < z:
 		_plan_stretch()
 
+## Where a stretch from `from` heads for at `tz`, on this bank.
+static func _road_target(rng: RandomNumberGenerator, from: Vector2, tz: float) -> Vector2:
+	var best := Vector2.ZERO
+	var best_score := INF
+	for i in 10:
+		# (Among mountains the road keeps to the valley floor.)
+		var p := Vector2(river_x(tz) + bank * (rng.randf_range(26.0, 60.0) if biome_at(river_x(tz), tz) in [MOUNTAINS, FOOTHILLS] else rng.randf_range(45.0, 210.0)), tz + rng.randf_range(-25.0, 25.0))
+		var score := _slope(p.x, p.y) * 60.0 + (land_at(p.x, p.y) - river_level(p.y)) * 0.4 + (300.0 if pond_at(p.x, p.y) >= 0 else 0.0)
+		# (Not far aside for how far it gets.)
+		score += maxf(0.0, absf(p.x - from.x) / maxf(p.y - from.y, 1.0) - ROAD_ASIDE) * ROAD_ASIDE_COST
+		if score < best_score:
+			best_score = score
+			best = p
+	return best
+
 static func _plan_stretch() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed_value, stretches, 7])
@@ -800,17 +831,15 @@ static func _plan_stretch() -> void:
 	var tz := from.y + rng.randf_range(200.0, 280.0)
 	_ensure_bands(tz + 200.0)
 	# Keep to this bank, or now and then cross the river (one ford).
-	if stretches > 0 and rng.randf() < 0.35: bank = -bank
-	var best := Vector2.ZERO
-	var best_score := INF
-	for i in 10:
-		# (Among mountains the road keeps to the valley floor.)
-		var p := Vector2(river_x(tz) + bank * (rng.randf_range(26.0, 60.0) if biome_at(river_x(tz), tz) in [MOUNTAINS, FOOTHILLS] else rng.randf_range(45.0, 210.0)), tz + rng.randf_range(-25.0, 25.0))
-		var score := _slope(p.x, p.y) * 60.0 + (land_at(p.x, p.y) - river_level(p.y)) * 0.4 + (300.0 if pond_at(p.x, p.y) >= 0 else 0.0)
-		if score < best_score:
-			best_score = score
-			best = p
+	var crossing := stretches > 0 and rng.randf() < 0.35
+	if crossing: bank = -bank
+	var best := _road_target(rng, from, tz)
 	var route := _route(from, best, 0, _road_heading())
+	# (No ford where the banks are too steep to come down to: on along this side.)
+	if crossing and route_forced:
+		bank = -bank
+		best = _road_target(rng, from, tz)
+		route = _route(from, best, 0, _road_heading())
 	var controls := _simplify(route)
 	for i in range(1, controls.size()): road_controls.append(controls[i])
 	_rebuild_main()
@@ -1317,12 +1346,18 @@ static func _route(from: Vector2, to: Vector2, kind: int, heading := Vector2.ZER
 			if along > nearest:
 				nearest = along
 				way = d
-	for attempt in [[ROUTE_GRADE, 0.5, way], [0.18, 0.5, way], [0.26, 0.5, way], [10.0, 0.5, way], [10.0, -0.1, way], [10.0, -0.1, Vector2i.ZERO]]:
-		var found := _astar(grid, start, goal, attempt[0], attempt[1], attempt[2])
+	# The main road only ever goes on or aside, never back: it cannot turn round or cross
+	# itself. Only where the ground leaves no such way may it wind about.
+	var ways := [[ROUTE_GRADE, 0.5, way, true], [0.18, 0.5, way, true], [0.26, 0.5, way, true], [0.45, 0.5, way, true], [ROUTE_GRADE, 0.5, way, false], [0.18, 0.5, way, false], [0.26, 0.5, way, false], [10.0, 0.5, way, true], [10.0, 0.5, way, false], [10.0, -0.1, way, false], [10.0, -0.1, Vector2i.ZERO, false]]
+	if kind != 0: ways = ways.filter(func(attempt: Array) -> bool: return not attempt[3])
+	for attempt in ways:
+		var found := _astar(grid, start, goal, attempt[0], attempt[1], attempt[2], attempt[3])
 		if not found.is_empty():
 			found[0] = from
 			found[found.size() - 1] = to
+			route_forced = attempt[0] > 0.26 or not attempt[3]
 			return found
+	route_forced = true
 	return PackedVector2Array([from, to])
 
 static func _cell(grid: Dictionary, p: Vector2) -> int:
@@ -1331,7 +1366,7 @@ static func _cell(grid: Dictionary, p: Vector2) -> int:
 
 const DIRS := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1)]
 
-static func _astar(grid: Dictionary, start: int, goal: int, limit: float, sharpest: float, way := Vector2i.ZERO) -> PackedVector2Array:
+static func _astar(grid: Dictionary, start: int, goal: int, limit: float, sharpest: float, way := Vector2i.ZERO, onward := false) -> PackedVector2Array:
 	var w: int = grid.w
 	var h: int = grid.h
 	var origin: Vector2 = grid.origin
@@ -1366,6 +1401,7 @@ static func _astar(grid: Dictionary, start: int, goal: int, limit: float, sharpe
 			if mx < 0 or mz < 0 or mx >= w or mz >= h: continue
 			var m := mz * w + mx
 			if closed[m] == 1 or (blocked[m] == 1 and m != goal): continue
+			if onward and d.y < 0: continue
 			var length := ROUTE * (1.4142 if d.x != 0 and d.y != 0 else 1.0)
 			var grade := absf(heights_g[m] - heights_g[n]) / length
 			if grade > limit: continue
@@ -1481,14 +1517,14 @@ static func stamp_worn(soil, window: Rect2, known: Rect2) -> void:
 			var b := line[k + 1]
 			var normal := (b - a).normalized().orthogonal()
 			var biome := biome_at(a.x, a.y)
-			var hard := clampf(0.25 + a.y / 40000.0, 0.25, 1.0) * (1.35 if biome == BOG else (0.75 if biome == DESERT else 1.0))
+			var hard := clampf(0.25 + a.y / 40000.0, 0.25, 1.0) * (1.35 if biome == BOG else 1.0)
 			for sub in 8:
 				var s: float = along[k] + sub * 0.25
 				var p := a.lerp(b, sub / 8.0)
 				var wander_a := sin(s * 0.037 + phase) * 0.6 + sin(s * 0.093 + phase * 2.0) * 0.3 + sin(s * 0.23 + phase * 3.0) * 0.1
 				var wander_b := sin(s * 0.031 + phase * 5.0) * 0.6 + sin(s * 0.087 + phase * 7.0) * 0.3 + sin(s * 0.27 + phase) * 0.1
 				var patch := 0.5 + 0.5 * sin(s * 0.019 + phase * 4.0) * sin(s * 0.057 + phase)
-				var depth := (0.07 + 0.17 * hard) * (0.3 + 0.7 * patch)
+				var depth := (0.12 + 0.22 * hard) * (0.4 + 0.6 * patch)
 				var width := 0.34 + 0.1 * sin(s * 0.13 + phase)
 				var left := -0.85 + 0.4 * wander_a
 				var right := 0.85 + 0.4 * wander_b
@@ -2056,16 +2092,40 @@ static func river_current(z: float) -> Vector2:
 	var look := river_look(z)
 	return direction * (lerpf(1.7, 0.8, look) if look < 1.0 else lerpf(0.8, 0.55, look - 1.0))
 
+## How much of the mid-stream current runs at this distance from the river's middle: it
+## slackens towards the banks and over flooded ground.
+static func flow_share(off: float, z: float) -> float:
+	var half := 4.5 + 1.2 * sin(z * 0.021 + river[6])
+	return lerpf(1.0, 0.3, smoothstep(half * 0.4, half + 6.0, absf(off)))
+
+## The current at a point (m/s, X and Z): the water's mesh carries this same value for the
+## shader (see the river strip), and a car feels it, wherever there is water to feel.
 static func water_flow_at(x: float, z: float) -> Vector2:
-	if surface_at(x, z) != Surface.WATER or pond_at(x, z) >= 0: return Vector2.ZERO
-	return river_current(z)
+	if pond_at(x, z) >= 0 or river_off(z, river_gap) > 0.5: return Vector2.ZERO
+	return river_current(z) * flow_share(x - river_x(z), z)
 
 static func in_test_ground(_x: float, _z: float, _margin: float = 0.0) -> bool: return true
 static func hidden_rects() -> Array: return []
 static func play_limit() -> float: return DRIVABLE
 
-## Keeps the dressing's lists (trails, paths, spots) current.
+## Takes in what has been planned since (the main road's end is redrawn as it grows).
+static func _grow_corridor() -> void:
+	var grown := corridor.duplicate()
+	for r in roads.size():
+		var line: PackedVector2Array = roads[r].points
+		var last := EMPTY
+		for k in range(maxi(int(corridor_counted.get(r, 0)) - 200, 0), line.size()):
+			var tile := tile_of(line[k].x, line[k].y)
+			if tile == last: continue
+			last = tile
+			for dz in range(-CORRIDOR_TILES, CORRIDOR_TILES + 1):
+				for dx in range(-CORRIDOR_TILES, CORRIDOR_TILES + 1): grown[tile + Vector2i(dx, dz)] = true
+		corridor_counted[r] = line.size()
+	corridor = grown
+
+## Keeps the dressing's lists (trails, paths, spots) and the corridor current.
 static func _refresh_lists() -> void:
+	_grow_corridor()
 	trails = roads
 	paths = []
 	for road: Dictionary in roads: paths.append(road.points)

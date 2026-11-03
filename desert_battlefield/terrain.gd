@@ -15,6 +15,9 @@ const SURFACE_NAMES := ["Piesok", "Udupaný piesok", "Asfalt", "Štrk", "Hlina",
 const GRIP := [0.85, 0.80, 1.0, 0.66, 0.76, 0.38, 0.5, 0.9, 0.34, 0.1, 0.55, 0.6, 0.72, 0.6]
 const ROLLING := [0.085, 0.05, 0.015, 0.032, 0.045, 0.16, 0.10, 0.03, 0.07, 0.01, 0.05, 0.02, 0.04, 0.06]
 const DEFORM := [1.0, 0.6, 0.0, 0.7, 0.85, 1.6, 1.3, 0.0, 1.1, 0.0, 0.9, 0.0, 0.9, 0.85]
+## How deep tyres mark each ground (the look and lie of it; bogging down goes by DEFORM):
+## dirt, gravel and packed roads give a little less than the ground beside them.
+const RUTS := [1.0, 0.8, 0.0, 0.75, 0.85, 1.6, 1.3, 0.0, 1.1, 0.0, 0.9, 0.0, 0.78, 0.85]
 ## Particle response: dust clouds, ballistic grains/clods/spray and their tint.
 const DUST := [1.0, 0.75, 0.1, 0.65, 0.8, 0.0, 0.0, 0.3, 0.1, 0.0, 0.15, 0.0, 0.55, 0.2]
 const SPRAY := [1.0, 0.7, 0.0, 1.0, 0.8, 1.25, 1.7, 0.35, 1.3, 0.25, 0.6, 1.1, 0.8, 0.7]
@@ -84,7 +87,7 @@ static func deform(kind: int) -> float:
 ## snow hardly minds the cold): this is the look of the ground, the car's bogging down goes
 ## by deform().
 static func ruts(kind: int) -> float:
-	var d: float = DEFORM[kind] * (1.0 + 0.45 * wetness * SOAK[kind]) * (1.0 - (0.15 if kind == SNOW else 0.4) * frost)
+	var d: float = RUTS[kind] * (1.0 + 0.45 * wetness * SOAK[kind]) * (1.0 - (0.15 if kind == SNOW else 0.4) * frost)
 	return maxf(d, DEFORM[SNOW] * _snow_on(kind) * (1.0 - 0.15 * frost) * (1.0 + snow_depth * 1.5))
 
 static func rolling(kind: int) -> float:

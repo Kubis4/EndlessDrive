@@ -11,6 +11,21 @@ const CrushMap = preload("res://offroad/crush_map.gd")
 const RADIUS := 5
 const DRESS_RADIUS := 4
 const DROP_RADIUS := 6
+## The sides of a tile, by their bit in _world_edges.
+const EDGE_SIDES := {1: Vector2i(1, 0), 2: Vector2i(0, 1), 4: Vector2i(-1, 0), 8: Vector2i(0, -1)}
+const WALL_THICK := 3.0
+## How deep the belt of trees or rocks along the world's edge goes, and how far apart its rocks (m).
+const BELT_DEPTH := 18.0
+const BELT_ROCK_SPACING := 5.0
+## The far land's mask is brought up to date at most this often (s).
+const NEAR_EVERY := 0.1
+## What of the road's corridor the world goes by, taken from the terrain while it is not planning.
+var reach := {}
+var belt_sides := 0
+var near_image: Image
+var near_texture: ImageTexture
+var near_dirty := false
+var near_clock := 0.0
 ## Worker threads making tiles at once.
 const JOBS := 6
 ## Tiles dressed around the car (fewer on a weak phone, which also draws less far).
@@ -128,6 +143,9 @@ func _build_ground(root: Node3D) -> void:
 func _build_far_land() -> void:
 	far_material = ShaderMaterial.new()
 	far_material.shader = preload("res://offroad/far_terrain.gdshader")
+	near_image = Image.create(2 * RADIUS + 1, 2 * RADIUS + 1, false, Image.FORMAT_R8)
+	near_texture = ImageTexture.create_from_image(near_image)
+	far_material.set_shader_parameter("near_mask", near_texture)
 	far_land = MeshInstance3D.new()
 	far_land.name = "FarLand"
 	far_land.material_override = far_material
@@ -145,11 +163,18 @@ func _show_far(arrays: Array) -> void:
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	far_land.mesh = mesh
 
-## The far land stops one tile inside the real ground, which covers the seam.
+## The far land is cut away over every tile that is made. It has no river beds, road cuts or
+## hollows, so wherever it lay under real ground it would show through them as a pale flat plate.
+## (It lies lower than the ground: a tile just made may only overlap it for a moment.)
 func _near_rect() -> void:
-	var low := Vector2(centre - Vector2i.ONE * (RADIUS - 1)) * T.TILE_M
-	var high := Vector2(centre + Vector2i.ONE * RADIUS) * T.TILE_M
-	far_material.set_shader_parameter("near_rect", Vector4(low.x, low.y, high.x, high.y))
+	near_clock = NEAR_EVERY
+	near_dirty = false
+	for j in 2 * RADIUS + 1:
+		for i in 2 * RADIUS + 1:
+			near_image.set_pixel(i, j, Color.WHITE if tiles.has(centre + Vector2i(i - RADIUS, j - RADIUS)) else Color.BLACK)
+	near_texture.update(near_image)
+	var low := Vector2(centre - Vector2i.ONE * RADIUS) * T.TILE_M
+	far_material.set_shader_parameter("near_rect", Vector3(low.x, low.y, (2 * RADIUS + 1) * T.TILE_M))
 
 ## Takes a finished far land, or starts the next when the car has moved on.
 func _update_far(p: Vector2) -> void:
@@ -477,6 +502,9 @@ func _build_land_plants(area: Rect2, biome: int) -> void:
 const POLE_EVERY := 48.0
 const PROP_EVERY := 150.0
 const OPEN_LAND := [T.DESERT, T.STEPPE, T.FIELDS, T.MEADOW]
+## Things too big to stand by the road: how far off they keep (m, from its edge).
+const BIG_PROPS := ["trailer01", "trailer02", "truck01", "container01", "container02", "container03", "watertank01"]
+const BIG_PROP_OFF := 16.0
 ## The serpentines' stone wall: one block's length, its height and thickness (m).
 const STONE_LENGTH := 2.3
 const STONE_SIZE := Vector3(0.6, 2.2, 2.4)
@@ -634,7 +662,14 @@ func _road_prop(k: int, n: int) -> void:
 	var side := 1.0 if (chance >> 16) % 2 == 0 else -1.0
 	var normal := Vector2(-tangent.y, tangent.x) * side
 	var fence := model.begins_with("fence")
-	var off: float = main.half + (3.0 if fence or model.begins_with("sign") else 7.0)
+	# Big things are few, stand well off the road, and never where it bends back past them.
+	var big: bool = model in BIG_PROPS
+	if big and (chance >> 24) % 4 != 0: return
+	var off: float = main.half + (BIG_PROP_OFF + float((chance >> 4) % 14) if big else (3.0 if fence or model.begins_with("sign") else 7.0))
+	if big:
+		var spot: Vector2 = line[k] + normal * off
+		for j in range(maxi(0, k - 80), mini(line.size(), k + 80), 2):
+			if line[j].distance_squared_to(spot) < BIG_PROP_OFF * BIG_PROP_OFF: return
 	for part in (6 if fence else 1):
 		var s: int = mini(k + part * 2, line.size() - 3)
 		var along_road := (line[s + 2] - line[s - 1]).normalized()
@@ -647,15 +682,15 @@ func _road_prop(k: int, n: int) -> void:
 		if blocked: continue
 		var prop := Roadside.spawn(model)
 		prop.position = Vector3(p.x, T.terrain_height(p.x, p.y) - 0.03, p.y)
-		# Long things along the road, signs facing it.
-		prop.rotation.y = atan2(along_road.y, -along_road.x)
+		# Long things along the road, signs facing it; what was left out there, as it was left.
+		prop.rotation.y = atan2(along_road.y, -along_road.x) + (float((chance >> 12) % 5) * 0.5 - 1.0 if big else 0.0)
 		_place(prop)
 
 ## What has fallen across the road: a stretch of it every so often, one side blocked and the
 ## other open (a second one a little on, from the other side, makes the car weave). Nothing on
 ## a bend, in a ford or by a building. Everything comes from the distance along the road.
 const OBSTACLE_EVERY := 340.0
-const OBSTACLES_HERE := {T.DESERT: ["rocks", "wreck"], T.STEPPE: ["pole", "wreck"], T.FIELDS: ["pole", "tree"], T.MEADOW: ["tree", "pole"],
+const OBSTACLES_HERE := {T.DESERT: ["rocks"], T.STEPPE: ["pole", "rocks"], T.FIELDS: ["pole", "tree"], T.MEADOW: ["tree", "pole"],
 	T.BOG: ["tree"], T.FOREST: ["tree"], T.TAIGA: ["tree", "tree", "pole"], T.FOOTHILLS: ["tree", "rocks"], T.MOUNTAINS: ["rocks"]}
 
 ## The obstacles of stretch n: [] or [{k, kind, side}], side being the one blocked.
@@ -692,7 +727,6 @@ func _obstacles(n: int) -> void:
 				var model := str(forest_models[hash([T.seed_value, found.k]) % forest_models.size()])
 				_fallen(found, model + "_hi" if model.begins_with("winter_") else model, 13.0)
 			"pole": _fallen(found, "", 6.69)
-			"wreck": _wreck(found)
 			_: _rockfall(found)
 
 ## A tree or a pole lying from beside the road over to its middle, with its top on the road.
@@ -731,18 +765,6 @@ func _fallen(found: Dictionary, model: String, length: float) -> void:
 	beam.shape = shape
 	beam.transform = Transform3D(basis, base.lerp(top, 0.5))
 	collision.add_child(beam)
-
-## A wreck left on one half of the road, along it.
-func _wreck(found: Dictionary) -> void:
-	var main: Dictionary = T.roads[0]
-	var line: PackedVector2Array = main.points
-	var k: int = found.k
-	var tangent := (line[k + 2] - line[k - 2]).normalized()
-	var p: Vector2 = line[k] + Vector2(-tangent.y, tangent.x) * (found.side as float) * (main.half as float) * 0.6
-	var wreck := Roadside.spawn("truck01" if k % 2 == 0 else "trailer01")
-	wreck.position = Vector3(p.x, T.terrain_height(p.x, p.y) - 0.03, p.y)
-	wreck.rotation.y = atan2(tangent.y, -tangent.x)
-	_place(wreck)
 
 ## Stones come down on one half of the road.
 func _rockfall(found: Dictionary) -> void:
@@ -946,6 +968,10 @@ func _saved_far_away() -> bool:
 	if not saved is Dictionary or not saved.has("x") or not saved.has("z"): return false
 	return Vector2(float(saved.x), float(saved.z)).distance_to(Vector2(T.CAMP.x, T.CAMP.y)) > T.TILE_M * RADIUS
 
+## A tile the world has: within the road's corridor, or right around the car wherever it is.
+func _tile_wanted(tile: Vector2i, here: Vector2i) -> bool:
+	return reach.has(tile) or maxi(absi(tile.x - here.x), absi(tile.y - here.y)) <= 1
+
 ## Streams around p, a frame at a time, until everything in reach is made and dressed.
 func stream_all(p: Vector2) -> void:
 	while true:
@@ -957,6 +983,7 @@ func _all_there(p: Vector2) -> bool:
 	var here := T.tile_of(p.x, p.y)
 	for dz in range(-RADIUS, RADIUS + 1):
 		for dx in range(-RADIUS, RADIUS + 1):
+			if not _tile_wanted(here + Vector2i(dx, dz), here): continue
 			var info: Variant = tiles.get(here + Vector2i(dx, dz))
 			if info == null: return false
 			if maxi(absi(dx), absi(dz)) <= dress_radius and not info.has("node"): return false
@@ -973,6 +1000,8 @@ func _stream(p: Vector2, wait: bool) -> void:
 	if planning != -1 and WorkerThreadPool.is_task_completed(planning):
 		WorkerThreadPool.wait_for_task_completion(planning)
 		planning = -1
+	# (Only while nothing is planning does the terrain's corridor stay still to take.)
+	if planning == -1: reach = T.corridor
 	if planning == -1 and T.planned_z < p.y + T.PLAN_AHEAD - 200.0:
 		# Massifs and ponds for the stretch ahead are placed here, so the
 		# planner only reads them.
@@ -986,6 +1015,8 @@ func _stream(p: Vector2, wait: bool) -> void:
 		_lay_ground()
 		if far_land != null: _near_rect()
 	_collect()
+	near_clock -= get_process_delta_time()
+	if far_land != null and near_dirty and near_clock <= 0.0: _near_rect()
 	# The planner holds the lock while it changes the roads; tiles wait then.
 	if not T.plan_lock.try_lock():
 		_finish_textures()
@@ -994,7 +1025,7 @@ func _stream(p: Vector2, wait: bool) -> void:
 	for dz in range(-RADIUS, RADIUS + 1):
 		for dx in range(-RADIUS, RADIUS + 1):
 			var tile := here + Vector2i(dx, dz)
-			if not tiles.has(tile) and not pending.has(tile): wanted.append(tile)
+			if not tiles.has(tile) and not pending.has(tile) and _tile_wanted(tile, here): wanted.append(tile)
 	wanted.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return (a - here).length_squared() < (b - here).length_squared())
 	for tile in wanted:
 		if pending.size() >= maxi(2, mini(JOBS, OS.get_processor_count() - 2)) and not wait: break
@@ -1015,7 +1046,7 @@ func _stream(p: Vector2, wait: bool) -> void:
 		var ready := true
 		for nz in range(-1, 2):
 			for nx in range(-1, 2):
-				if not tiles.has(tile + Vector2i(nx, nz)): ready = false
+				if not tiles.has(tile + Vector2i(nx, nz)) and _tile_wanted(tile + Vector2i(nx, nz), here): ready = false
 		if ready: dress.append(tile)
 	_near_crops(here)
 	if dress.is_empty(): return
@@ -1046,6 +1077,7 @@ func _collect() -> void:
 		T.store_tile(result)
 		tiles[tile] = {"low": result.low, "high": result.high}
 		textures_dirty = true
+		near_dirty = true
 		# (Its neighbours may read its edge now.)
 		for near_tile: Vector2i in [tile, tile + Vector2i(-1, 0), tile + Vector2i(0, -1), tile + Vector2i(1, 0), tile + Vector2i(0, 1), tile + Vector2i(-1, -1)]:
 			var slot := pool_tiles.find(near_tile)
@@ -1109,6 +1141,49 @@ func _near_crops(here: Vector2i) -> void:
 			_build_close_crops(tile, tiles[tile].node)
 			return
 
+## Which sides of a tile end the world: bits as in EDGE_SIDES.
+func _world_edges(tile: Vector2i, area: Rect2) -> int:
+	if not reach.has(tile): return 0
+	var edges := 0
+	for bit: int in EDGE_SIDES:
+		var side: Vector2i = EDGE_SIDES[bit]
+		if reach.has(tile + side): continue
+		edges |= bit
+		# Invisible, and tall enough for any ground along the edge; the trees or rocks there say why.
+		var shape := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		var middle := area.get_center() + Vector2(side) * T.TILE_M * 0.5
+		box.size = Vector3(WALL_THICK, 400.0, T.TILE_M + WALL_THICK) if side.x != 0 else Vector3(T.TILE_M + WALL_THICK, 400.0, WALL_THICK)
+		shape.shape = box
+		shape.position = Vector3(middle.x, T.height_at(area.get_center().x, area.get_center().y), middle.y)
+		collision.add_child(shape)
+	return edges
+
+func _on_belt_side(p: Vector2, area: Rect2, sides: int) -> bool:
+	return (sides & 1 != 0 and area.end.x - p.x < BELT_DEPTH) or (sides & 2 != 0 and area.end.y - p.y < BELT_DEPTH) \
+		or (sides & 4 != 0 and p.x - area.position.x < BELT_DEPTH) or (sides & 8 != 0 and p.y - area.position.y < BELT_DEPTH)
+
+func _in_belt(p: Vector2, area: Rect2) -> bool:
+	return belt_sides != 0 and _on_belt_side(p, area, belt_sides)
+
+## Big rocks along the sides of a tile where the world ends and no trees grow.
+func _build_rock_belt(area: Rect2, sides: int) -> void:
+	var cells := {}
+	var plain: Array = Props.names("rock_plain")
+	var x: float = area.position.x
+	while x < area.end.x:
+		var z: float = area.position.y
+		while z < area.end.y:
+			var p := Vector2(x + rng.randf_range(-1.5, 1.5), z + rng.randf_range(-1.5, 1.5))
+			z += BELT_ROCK_SPACING
+			if not area.has_point(p) or not _on_belt_side(p, area, sides) or rng.randf() > 0.8 or T.surface_at(p.x, p.y) == Surface.WATER: continue
+			var size := rng.randf_range(1.8, 4.2)
+			var scale := size / 0.75
+			var basis := Basis(Vector3.UP, rng.randf_range(0.0, TAU)) * Basis(Vector3.RIGHT, rng.randf_range(-0.2, 0.2)).scaled(Vector3(scale, scale * rng.randf_range(0.7, 1.1), scale))
+			_add(cells, plain[rng.randi() % plain.size()], p, Transform3D(basis, Vector3(p.x, T.height_at(p.x, p.y) - size * 0.22, p.y)), Color.from_hsv(0.1, 0.05, rng.randf_range(0.8, 1.05)))
+		x += BELT_ROCK_SPACING
+	_batches("RockBelt", cells, 240.0, false)
+
 ## Everything on one tile, in its own node (freed with it): forest, feature
 ## trees, bushes, grass, rocks, the river stretch and ponds, and the trunks and
 ## boulders as one static body.
@@ -1128,7 +1203,13 @@ func _dress(tile: Vector2i) -> void:
 	# (High up nothing leafy grows, whatever the land is called there.)
 	var high: bool = T.altitude_of(area.get_center().y, T.altitude) > T.TREELINE
 	forest_models = WINTER_TREES if high or biome in [T.TAIGA, T.MOUNTAINS, T.FOOTHILLS] else FOREST_TREES
+	var edges := _world_edges(tile, area)
+	# (Where no trees grow, rocks close the world off instead.)
+	var rocky := biome in [T.DESERT, T.STEPPE]
+	belt_sides = 0 if rocky else edges
 	_build_forest(area)
+	belt_sides = 0
+	if rocky and edges != 0: _build_rock_belt(area, edges)
 	if not high and biome not in [T.TAIGA, T.DESERT, T.MOUNTAINS]: _build_feature_trees(area)
 	# (No green bushes up where it snows.)
 	if not high and biome != T.MOUNTAINS: _build_undergrowth(area)

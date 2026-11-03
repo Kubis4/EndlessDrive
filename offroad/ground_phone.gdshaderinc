@@ -21,6 +21,10 @@ uniform sampler2D ground_heights : filter_nearest, repeat_disable;
 uniform float heights_half = 360.0;
 uniform float heights_step = 0.75;
 instance uniform float grid_step = 0.0;
+// (As in highlands_ground.gdshader.) Neighbours not made, by side: their heights are
+// whatever the ring holds there, so a chunk stays with its own instead.
+instance uniform int missing_sides = 0;
+const int CHUNK_NODES = 80;
 uniform bool wrap_maps = false;
 varying vec3 world;
 varying vec3 world_normal;
@@ -30,12 +34,25 @@ varying vec3 tone;
 varying float mixing;
 
 ivec2 map_texel(ivec2 texel, ivec2 size) {
-	if (wrap_maps) { return texel - size * ivec2(floor(vec2(texel) / vec2(size))); }
+	// (From the texel's middle: 1920.0 / 960.0 may come out just under 2 on a GPU, and the row
+	// on the ring's edge would read outside the map, as height zero: a chasm along it.)
+	if (wrap_maps) { return texel - size * ivec2(floor((vec2(texel) + vec2(0.5)) / vec2(size))); }
 	return clamp(texel, ivec2(0), size - 1);
 }
 
 float grid_height(ivec2 node) {
 	return texelFetch(ground_heights, map_texel(node, textureSize(ground_heights, 0)), 0).r;
+}
+
+// The node itself, or the chunk's own nearest one where the neighbour is missing.
+ivec2 kept_node(ivec2 node, ivec2 low, int missing) {
+	ivec2 high = low + ivec2(CHUNK_NODES);
+	if ((missing & 1) != 0 && node.x >= high.x) { node.x = high.x - 1; }
+	if ((missing & 2) != 0 && node.y >= high.y) { node.y = high.y - 1; }
+	if ((missing & 4) != 0 && node.x < low.x) { node.x = low.x; }
+	if ((missing & 8) != 0 && node.y < low.y) { node.y = low.y; }
+	if ((missing & 16) != 0 && node.x >= high.x && node.y >= high.y) { node = high - ivec2(1); }
+	return node;
 }
 
 int kind_at(ivec2 texel) {
@@ -73,11 +90,13 @@ void vertex() {
 	if (!fine_geometry && grid_step > 0.0) {
 		ivec2 node = ivec2(round((world.xz + vec2(heights_half)) / heights_step));
 		int s = int(round(grid_step / heights_step));
-		float h = grid_height(node);
+		ivec2 low = ivec2(round((MODEL_MATRIX[3].xz + vec2(heights_half)) / heights_step));
+		int missing = missing_sides;
+		float h = grid_height(kept_node(node, low, missing));
 		VERTEX.y += h;
 		world.y += h;
-		NORMAL = normalize(vec3(grid_height(node - ivec2(s, 0)) - grid_height(node + ivec2(s, 0)), 2.0 * grid_step,
-			grid_height(node - ivec2(0, s)) - grid_height(node + ivec2(0, s))));
+		NORMAL = normalize(vec3(grid_height(kept_node(node - ivec2(s, 0), low, missing)) - grid_height(kept_node(node + ivec2(s, 0), low, missing)), 2.0 * grid_step,
+			grid_height(kept_node(node - ivec2(0, s), low, missing)) - grid_height(kept_node(node + ivec2(0, s), low, missing))));
 	}
 	base_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	// (Ruts only on the finest ground: further off they would not show.)
@@ -200,6 +219,7 @@ void fragment() {
 	vec4 albedo = vec4(0.0);
 	vec3 normal_world = vec3(0.0);
 	float soil_w = 0.0;
+	float sand_w = 0.0;
 	float mud_w = 0.0;
 	float churn_w = 0.0;
 	float soak_w = 0.0;
@@ -252,6 +272,7 @@ void fragment() {
 		normal_world += n * w;
 		bool soft = layer != 4 && layer != 5 && layer != 8 && layer != 9 && layer != 20;
 		soil_w += soft ? w : 0.0;
+		sand_w += layer == 10 ? w : 0.0;
 		mud_w += (layer == 3 || layer == 6 || layer == 7) ? w : 0.0;
 		churn_w += w * (layer == 2 || layer == 11 ? 0.8 : (layer == 1 ? 0.35 : (layer == 0 ? 0.15 : 0.0)));
 		soak_w += w * (layer == 20 ? 0.45 : (layer >= 8 && layer != 11 ? 0.0 : (layer == 2 || layer == 11 ? 1.0 : (layer == 0 ? 0.6 : 0.75))));
@@ -261,7 +282,8 @@ void fragment() {
 		hard_w += (layer == 4 || layer == 5 || layer == 2 || layer == 20) ? w : 0.0;
 		turf_w += layer <= 1 ? w : 0.0;
 	}
-	float churn = max(rut * 0.8 * soil_w, wetness * churn_w);
+	// (Sand has no wet soil below: dug up it is only darker sand. Nor does snow show any.)
+	float churn = max(rut * 0.8 * max(soil_w - sand_w, 0.0) * (1.0 - snow_cover), wetness * churn_w);
 	if (churn > 0.01) {
 		vec4 churned;
 		vec2 churned_normal;
@@ -272,9 +294,15 @@ void fragment() {
 	albedo.rgb *= mix(vec3(1.0), tone, 1.0 - snow_w * 0.85);
 	if (rut_depth > 0.0) {
 		float pressed = mix(rut, snow_rut, snow_w);
-		albedo.rgb = mix(albedo.rgb, albedo.rgb * mix(vec3(0.62, 0.56, 0.5), vec3(0.88, 0.91, 0.96), snow_w), pressed * 0.85);
+		// (Sand goes darker the deeper it is dug, without turning to mud.)
+		vec3 dug_sand = mix(vec3(0.74, 0.66, 0.56), vec3(0.44, 0.37, 0.3), smoothstep(0.02, 0.35, rut_depth));
+		albedo.rgb = mix(albedo.rgb, albedo.rgb * mix(mix(vec3(0.62, 0.56, 0.5), dug_sand, sand_w), vec3(0.76, 0.8, 0.88), snow_w), pressed * 0.85);
 		albedo.a = mix(albedo.a, albedo.a * 0.8, rut);
 		normal_world = mix(normal_world, geometric, rut * 0.6 * (1.0 - snow_cover));
+		// The walls of a rut, pixel by pixel and only close by (only ruts pay for it): they
+		// catch the light and the shade, which is what shows how deep it is. White on white
+		// shows a groove by nothing else.
+		if (close > 0.0 && rut_depth > 0.008) { normal_world = mix(normal_world, sand_normal(p, geometric), close); }
 	}
 	float puddle = 0.0;
 	if (wetness > 0.001) {
@@ -295,7 +323,8 @@ void fragment() {
 	if (snow_cover > 0.001) {
 		float settle = vnoise(p * 0.3) * 0.45 + vnoise(p * 1.6 + 4.0) * 0.35 + settle_w;
 		cover = smoothstep(settle - 0.05, settle + 0.05, snow_cover * 1.25) * smoothstep(0.55, 0.85, base_normal.y) * (1.0 - snow_w);
-		cover *= 1.0 - snow_rut * 0.55 * (1.0 - smoothstep(0.01, 0.10, snow_depth));
+		// Tyres press the snow down to a grey-blue crust, not through it.
+		cover *= 1.0 - snow_rut * 0.12 * (1.0 - smoothstep(0.01, 0.10, snow_depth));
 		if (cover > 0.001) {
 			vec4 fresh;
 			vec2 fresh_normal;

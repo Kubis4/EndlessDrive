@@ -50,7 +50,9 @@ const int CHUNK_NODES = 80;
 uniform bool wrap_maps = false;
 
 ivec2 map_texel(ivec2 texel, ivec2 size) {
-	if (wrap_maps) { return texel - size * ivec2(floor(vec2(texel) / vec2(size))); }
+	// (From the texel's middle: 1920.0 / 960.0 may come out just under 2 on a GPU, and the row
+	// on the ring's edge would read outside the map, as height zero: a chasm along it.)
+	if (wrap_maps) { return texel - size * ivec2(floor((vec2(texel) + vec2(0.5)) / vec2(size))); }
 	return clamp(texel, ivec2(0), size - 1);
 }
 
@@ -283,6 +285,7 @@ void fragment() {
 	// soft soil, mud churned up by rain, soaking, how late snow settles, baked
 	// snow, ice, hard ground that frost glazes, turf that gathers hoar frost.
 	float soil_w = 0.0;
+	float sand_w = 0.0;
 	float mud_w = 0.0;
 	float churn_w = 0.0;
 	float soak_w = 0.0;
@@ -340,6 +343,7 @@ void fragment() {
 		normal_world += n * w;
 		bool soft = layer != 4 && layer != 5 && layer != 8 && layer != 9 && layer != 20;
 		soil_w += soft ? w : 0.0;
+		sand_w += layer == 10 ? w : 0.0;
 		mud_w += (layer == 3 || layer == 6 || layer == 7) ? w : 0.0;
 		churn_w += w * (layer == 2 || layer == 11 ? 0.8 : (layer == 1 ? 0.35 : (layer == 0 ? 0.15 : 0.0)));
 		soak_w += w * (layer == 20 ? 0.45 : (layer >= 8 && layer != 11 ? 0.0 : (layer == 2 || layer == 11 ? 1.0 : (layer == 0 ? 0.6 : 0.75))));
@@ -351,7 +355,8 @@ void fragment() {
 	}
 	// Tyres sinking into turf, forest floor or dirt churn up the wet soil below;
 	// rain turns dirt roads (and less so forest floor and turf) to mud.
-	float churn = max(rut * 0.8 * soil_w * (1.0 - snow_cover), wetness * churn_w);
+	// (Sand has no wet soil below: dug up it is only darker sand.)
+	float churn = max(rut * 0.8 * max(soil_w - sand_w, 0.0) * (1.0 - snow_cover), wetness * churn_w);
 	if (churn > 0.01) {
 		vec4 churned;
 		vec3 churned_normal;
@@ -368,11 +373,14 @@ void fragment() {
 	// Ruts: churned, darker and damper soil, smoothed by the tyres; packed snow
 	// in snow.
 	float pressed = mix(rut, snow_rut, snow_w);
-	albedo.rgb = mix(albedo.rgb, albedo.rgb * mix(vec3(0.62, 0.56, 0.5), vec3(0.76, 0.8, 0.88), snow_w), pressed * 0.85);
-	// (White on white shows a groove by its walls only.)
-	if (snow_w > 0.01 && snow_rut > 0.01) { normal_world = normalize(mix(normal_world, sand_normal(p, normal_world), snow_w)); }
+	// (Sand goes darker the deeper it is dug, without turning to mud.)
+	vec3 dug_sand = mix(vec3(0.74, 0.66, 0.56), vec3(0.44, 0.37, 0.3), smoothstep(0.02, 0.35, rut_depth));
+	albedo.rgb = mix(albedo.rgb, albedo.rgb * mix(mix(vec3(0.62, 0.56, 0.5), dug_sand, sand_w), vec3(0.76, 0.8, 0.88), snow_w), pressed * 0.85);
 	albedo.a = mix(albedo.a, albedo.a * 0.8, rut);
 	normal_world = normalize(mix(normal_world, geometric, rut * 0.6 * (1.0 - snow_cover)));
+	// The walls of a rut catch the light and the shade: that is what shows how deep it is.
+	// White on white shows a groove by nothing else.
+	if (rut_depth > 0.008 && eye_distance < 45.0) { normal_world = normalize(mix(normal_world, sand_normal(p, geometric), 1.0 - smoothstep(30.0, 45.0, eye_distance))); }
 	// Rain: soaked ground darkens and turns satin (not mirror); water gathers in
 	// hollows and ruts on level soil, and only there does it shine.
 	float damp = wetness * soak_w;

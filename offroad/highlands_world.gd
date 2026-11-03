@@ -35,6 +35,10 @@ var mobile := Settings.is_mobile()
 var collision: StaticBody3D
 var meshes := {}
 var river_material: ShaderMaterial
+var water_near := false
+var water_near_clock := 0.0
+var wakes_shown := false
+var hull_shown := 0.0
 var pond_material: ShaderMaterial
 ## Water surfaces and how much of the flood each rises by (river 1, ponds 0.5).
 var water_nodes: Array[MeshInstance3D] = []
@@ -249,7 +253,8 @@ const POND_LOOK := 3
 
 ## Water: a strip following the river at its level (banks rise above it) and a
 ## disc per pond, sharing one material. The look changes along the river (see
-## H.river_look) and each vertex carries the current for the flowing ripples.
+## H.river_look) and each vertex carries the current (H.water_flow_at, what a car feels)
+## and its place across the river for the flowing ripples.
 ## The wake simulation follows the lead car wherever it meets water.
 func _build_river() -> void:
 	_water_materials()
@@ -263,7 +268,13 @@ func _water_materials() -> void:
 	var material := ShaderMaterial.new()
 	river_material = material
 	material.shader = preload("res://offroad/river.gdshader")
-	ripples.configure(RIPPLE_AREA)
+	# (A phone keeps a smaller, coarser grid, the lowest quality a coarser one still and plainer
+	# water; the car feels the same current on all of them.)
+	var settings := preload("res://offroad/game_settings.gd")
+	var plain: bool = settings.effective_quality() == "low"
+	var phone: bool = settings.is_mobile()
+	ripples.configure(Vector4(RIPPLE_AREA.x, RIPPLE_AREA.y, 26.0, 26.0) if phone else RIPPLE_AREA, 0.5 if plain else (0.4 if phone else 0.35))
+	material.set_shader_parameter("water_detail", 0.0 if plain else 1.0)
 	material.set_shader_parameter("ripple_map", ripples.texture)
 	material.set_shader_parameter("ripple_rect", ripples.bounds())
 	material.set_shader_parameter("ripple_cells", Vector2(ripples.nx, ripples.nz))
@@ -296,12 +307,18 @@ func _river_strip(z0: float, z1: float) -> Mesh:
 	var z: float = z0
 	while z <= z1:
 		var centre: float = H.river_x(z)
-		var current: Vector2 = H.river_current(z)
+		var look: float = H.river_look(z)
+		var level: float = H.river_level(z)
+		var current: Vector2 = H.river_current(z) if H.river_off(z, H.river_gap) <= 0.5 else Vector2.ZERO
+		var pond_near: bool = H.pond_at(centre, z, WIDTH + 6.0) >= 0
 		for i in ACROSS + 1:
-			st.set_color(Color(H.river_look(z) / 4.0, 0, 0))
-			st.set_uv(current)
+			var off := -WIDTH + 2.0 * WIDTH * i / ACROSS
+			st.set_color(Color(look / 4.0, 0, 0))
+			# (The same as H.water_flow_at, without asking about ponds where there are none.)
+			st.set_uv(H.water_flow_at(centre + off, z) if pond_near else current * H.flow_share(off, z))
+			st.set_uv2(Vector2(off, z))
 			st.set_normal(Vector3.UP)
-			st.add_vertex(Vector3(centre - WIDTH + 2.0 * WIDTH * i / ACROSS, H.river_level(z), z))
+			st.add_vertex(Vector3(centre + off, level, z))
 		rows += 1
 		# 1 m rows: the wake simulation displaces the vertices anywhere now.
 		z += 1.0
@@ -332,12 +349,15 @@ func _pond_mesh(pond: Vector4) -> Mesh:
 	var radius := pond.z + 1.0
 	st.set_color(Color(POND_LOOK / 4.0, 0, 0))
 	st.set_uv(Vector2.ZERO)
+	st.set_uv2(Vector2(pond.x, pond.y))
 	st.set_normal(Vector3.UP)
 	st.add_vertex(Vector3(pond.x, pond.w, pond.y))
 	for ring in range(1, RINGS + 1):
 		for s in SEGMENTS:
 			var a := TAU * s / SEGMENTS
-			st.add_vertex(Vector3(pond.x + cos(a) * radius * ring / RINGS, pond.w, pond.y + sin(a) * radius * ring / RINGS))
+			var place := Vector2(pond.x + cos(a) * radius * ring / RINGS, pond.y + sin(a) * radius * ring / RINGS)
+			st.set_uv2(place)
+			st.add_vertex(Vector3(place.x, pond.w, place.y))
 	for s in SEGMENTS:
 		var n := (s + 1) % SEGMENTS
 		# Clockwise seen from above (front face up).
@@ -367,16 +387,44 @@ func _noise_texture(frequency: float, seed: int, normal: bool) -> NoiseTexture2D
 	texture.generate_mipmaps = true
 	return texture
 
-## Moves the wake simulation with the lead car whenever water is near it.
-func _follow_wakes(vehicles: Array) -> void:
+## Moves the wake simulation with the lead car whenever water is near it: looked for a
+## few times a second, far enough ahead for the grid to be ready when the car gets there.
+func _follow_wakes(vehicles: Array, delta: float) -> void:
 	if vehicles.is_empty(): return
 	var car = vehicles[0]
 	var p := Vector2(car.position.x, car.position.z)
-	var near := false
-	for o: Vector2 in [Vector2.ZERO, Vector2(8, 0), Vector2(-8, 0), Vector2(0, 8), Vector2(0, -8)]:
-		if H.surface_at(p.x + o.x, p.y + o.y) == Surface.WATER: near = true
-	if near and ripples.follow(p):
+	water_near_clock -= delta
+	if water_near_clock <= 0.0:
+		water_near_clock = 0.25
+		var was_near := water_near
+		water_near = car.water_contact > 0.0 or H.surface_at(p.x, p.y) == Surface.WATER
+		for a in 8:
+			if water_near: break
+			var o := Vector2.from_angle(a * TAU / 8.0) * 24.0
+			water_near = H.surface_at(p.x + o.x, p.y + o.y) == Surface.WATER
+		# (Coming to water: the grid looks again at what lies around it, the flood may have changed.)
+		if water_near and not was_near: ripples.look_up_all()
+	if water_near: ripples.follow(p)
+
+## What the river's shader needs to know of the car and the waves. The car's motion through the
+## water parts the surface around the hull (river.gdshader), asleep it reads nothing at all.
+func _show_wakes(vehicles: Array) -> void:
+	if ripples.moved:
+		ripples.moved = false
 		river_material.set_shader_parameter("ripple_rect", ripples.bounds())
+	if ripples.active != wakes_shown:
+		wakes_shown = ripples.active
+		river_material.set_shader_parameter("ripple_awake", wakes_shown)
+	if vehicles.is_empty(): return
+	var car = vehicles[0]
+	if car.water_contact <= 0.0 and hull_shown <= 0.0: return
+	hull_shown = car.water_contact
+	var forward := Vector2(-car.attitude.z.x, -car.attitude.z.z).normalized()
+	river_material.set_shader_parameter("hull_wet", hull_shown)
+	river_material.set_shader_parameter("hull_centre", Vector2(car.position.x, car.position.z))
+	river_material.set_shader_parameter("hull_forward", forward)
+	river_material.set_shader_parameter("hull_half", Vector2(car.hull_half_length(), car.hull_half_width()))
+	river_material.set_shader_parameter("hull_motion", car.water_relative)
 
 ## True where the ground around a point (radius r) is all one of `kinds`.
 func _clear(p: Vector2, r: float, kinds: Array) -> bool:
@@ -452,6 +500,10 @@ func _add(cells: Dictionary, model: String, p: Vector2, transform: Transform3D, 
 ## Size of the cells the winter trees up close are batched in (m).
 const WINTER_CELL := 20.0
 
+## True in a belt of trees that closes the world off (endless_world.gd).
+func _in_belt(_p: Vector2, _area: Rect2) -> bool:
+	return false
+
 ## Forest of the kit trees (10–16 m) on forest ground, a few on meadows.
 func _build_forest(area := Rect2()) -> void:
 	if not area.has_area(): area = Rect2(-H.HALF + 6.0, -H.HALF + 6.0, 2.0 * H.HALF - 12.0, 2.0 * H.HALF - 12.0)
@@ -472,8 +524,9 @@ func _build_forest(area := Rect2()) -> void:
 			# a neighbour that can be unloaded independently.
 			if not area.has_point(p): continue
 			var ground: int = H.surface_at(p.x, p.y)
-			var chance := 0.8 if ground == Surface.FOREST else (0.03 if ground == Surface.GRASS else 0.0)
-			if rng.randf() >= chance or not _clear(p, 2.6, [Surface.FOREST, Surface.GRASS]): continue
+			var belt := _in_belt(p, area) and ground != Surface.WATER
+			var chance := 0.95 if belt else (0.8 if ground == Surface.FOREST else (0.03 if ground == Surface.GRASS else 0.0))
+			if rng.randf() >= chance or not (belt or _clear(p, 2.6, [Surface.FOREST, Surface.GRASS])): continue
 			var model: String = forest_models[rng.randi() % forest_models.size()]
 			var scale := rng.randf_range(0.8, 1.25) if winter else rng.randf_range(1.25, 1.7)
 			var y: float = H.height_at(p.x, p.y)
@@ -704,8 +757,9 @@ func set_signs_visible(show: bool) -> void:
 	for sign in signs: sign.visible = show
 
 func update_wakes(vehicles: Array, delta: float = 1.0 / 60.0) -> void:
-	_follow_wakes(vehicles)
+	_follow_wakes(vehicles, delta)
 	ripples.update(delta, vehicles)
+	_show_wakes(vehicles)
 	weather.update(delta)
 	_apply_flood()
 

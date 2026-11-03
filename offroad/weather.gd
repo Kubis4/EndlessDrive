@@ -22,6 +22,38 @@ const STATES := [
 ]
 const SANDSTORM := 6
 const FOG := 7
+## Each state's sky (offroad/sky.gdshader): zenith, horizon, clouds where the light falls
+## and at their heart, cloud cover, softness of their edges, how much sun gets through,
+## how fast the clouds go.
+const SKIES := [
+	[Color("4f85bd"), Color("c7dbe6"), Color("fbfaf3"), Color("aab6c2"), 0.42, 0.07, 1.0, 1.0],
+	[Color("76858f"), Color("aeb8be"), Color("c6cbce"), Color("68727c"), 0.86, 0.14, 0.22, 1.5],
+	[Color("535d67"), Color("8b959d"), Color("858e96"), Color("3f4750"), 0.97, 0.18, 0.05, 2.2],
+	[Color("30373f"), Color("5f6972"), Color("586069"), Color("22272d"), 1.0, 0.2, 0.0, 3.4],
+	[Color("5b92cb"), Color("dae8f0"), Color("f5f9fc"), Color("cbd8e2"), 0.3, 0.05, 1.0, 0.5],
+	[Color("a6aeb6"), Color("cbd1d6"), Color("d9dde0"), Color("939ba4"), 1.0, 0.22, 0.1, 0.8],
+	[Color("a67c4c"), Color("c99a62"), Color("c8985f"), Color("855e33"), 0.74, 0.28, 0.25, 4.5],
+	[Color("b3bbbc"), Color("c8cece"), Color("ccd1d1"), Color("a9b0b1"), 0.96, 0.32, 0.08, 0.3],
+]
+## How much the horizon goes over into the colour of the air, so the land fades into the sky.
+const SKY_AIR := 0.6
+const SKY_FOG := 0.2
+## The way the wind blows (the clouds go the same way).
+const WIND_WAY := Vector3(-0.93, 0.0, -0.37)
+## How much each landscape gives the wind to carry (the order of endless_terrain.gd's enum).
+const DUST_OF_LAND := [0.0, 0.12, 1.0, 0.35, 0.0, 0.4, 0.85, 0.1, 0.3]
+const DUST_SAND := Color(0.9, 0.78, 0.58)
+const DUST_SNOW := Color(0.93, 0.95, 0.98)
+const DUST_GRAIN := Color(0.76, 0.62, 0.4)
+const GRAIN_ALPHA := 0.9
+const PUFF_ALPHA := 0.42
+## How often (s) the sky's colours go to the shader, and at most how often its reflection is
+## redrawn, if it has changed enough to matter by then.
+const SKY_EVERY := 0.2
+const SKY_RADIANCE_EVERY := 5.0
+const SKY_RADIANCE_CHANGE := 0.02
+## How fast the wind carries the clouds (noise repeats per second, at speed 1).
+const CLOUD_DRIFT := 0.0022
 ## Each landscape's light (the order of endless_terrain.gd's enum): sun, haze,
 ## saturation, contrast, how much mist lies low.
 const MOODS := [
@@ -74,6 +106,25 @@ var base_sun := 1.3
 var base_ambient := 0.45
 var base_background := Color()
 var mobile: bool = preload("res://offroad/game_settings.gd").is_mobile()
+## The sky as it eases from one state's towards the next.
+var sky_look: Array = SKIES[0].duplicate()
+var sky_material: ShaderMaterial
+var sky_clock := 0.0
+var sky_radiance_clock := 0.0
+## How the sky looked when its reflection was last redrawn, and the number of that redraw.
+var sky_radiance_seen := -1.0
+var sky_radiance_tick := 0
+static var sky_globals_ready := false
+var sky_drift := Vector4.ZERO
+## Lightning, 1 at the flash, dying away.
+var lightning := 0.0
+## Grains of sand or snow hopping over the ground, and small puffs of dust rolling along it;
+## off (no cost at all) where there is nothing for the wind to carry.
+var dust_grains: GPUParticles3D
+var dust_puffs: GPUParticles3D
+var dust_now := 0.0
+var dust_tint := DUST_SAND
+var gust_clock := 0.0
 
 func setup(game: Node3D, ground_materials: Array, river_material: ShaderMaterial) -> void:
 	name = "Weather"
@@ -90,7 +141,203 @@ func setup(game: Node3D, ground_materials: Array, river_material: ShaderMaterial
 	base_background = environment.background_color
 	rain_particles = _precipitation(false)
 	snow_particles = _precipitation(true)
+	var plain_water: bool = preload("res://offroad/game_settings.gd").effective_quality() == "low"
+	dust_grains = _dust(false, plain_water)
+	if not plain_water: dust_puffs = _dust(true, plain_water)
+	_prepare_sky_globals()
 	_publish()
+
+## What the sky's shader reads must exist before it is compiled (and stays for the next run).
+func _prepare_sky_globals() -> void:
+	if sky_globals_ready: return
+	sky_globals_ready = true
+	for colour: String in ["sky_zenith", "sky_horizon", "sky_cloud_lit", "sky_cloud_dark"]:
+		RenderingServer.global_shader_parameter_add(colour, RenderingServer.GLOBAL_VAR_TYPE_COLOR, Color.WHITE)
+	for numbers: String in ["sky_cloud", "sky_drift"]:
+		RenderingServer.global_shader_parameter_add(numbers, RenderingServer.GLOBAL_VAR_TYPE_VEC4, Vector4.ZERO)
+
+## The battlefield's plain sky gives way to the weather's. Its reflection is redrawn over several
+## frames, and seldom (see _show_sky).
+func _install_sky(sky: Sky) -> void:
+	var noise := FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_PERLIN
+	noise.seed = 41
+	noise.frequency = 0.012
+	noise.fractal_octaves = 5
+	var texture := NoiseTexture2D.new()
+	texture.width = 256 if mobile else 512
+	texture.height = texture.width
+	texture.seamless = true
+	texture.generate_mipmaps = true
+	texture.noise = noise
+	sky_material = ShaderMaterial.new()
+	sky_material.shader = preload("res://offroad/sky.gdshader")
+	sky_material.set_shader_parameter("cloud_noise", texture)
+	sky_material.set_shader_parameter("sun_direction", root.sun.global_transform.basis.z.normalized())
+	var plain: bool = preload("res://offroad/game_settings.gd").effective_quality() == "low"
+	sky_material.set_shader_parameter("cloud_detail", 0.0 if plain else 1.0)
+	sky.process_mode = Sky.PROCESS_MODE_INCREMENTAL
+	sky.sky_material = sky_material
+	_publish_sky()
+
+## The sky as it stands, at once (a new state only eases there).
+func snap_sky() -> void:
+	sky_look = (SKIES[state] as Array).duplicate()
+	if sky_material != null: _publish_sky()
+
+func _publish_sky() -> void:
+	var air: Color = root.get_node("DesertAtmosphere").environment.fog_light_color
+	RenderingServer.global_shader_parameter_set("sky_zenith", (sky_look[0] as Color).srgb_to_linear())
+	RenderingServer.global_shader_parameter_set("sky_horizon", (sky_look[1] as Color).lerp(air, SKY_AIR).srgb_to_linear())
+	RenderingServer.global_shader_parameter_set("sky_cloud_lit", (sky_look[2] as Color).srgb_to_linear())
+	RenderingServer.global_shader_parameter_set("sky_cloud_dark", (sky_look[3] as Color).srgb_to_linear())
+	RenderingServer.global_shader_parameter_set("sky_cloud", Vector4(sky_look[4], sky_look[5], sky_look[6], lightning))
+
+## A flash for the thunder to follow (car_audio.gd).
+func flash() -> void:
+	lightning = 1.0
+
+## The clouds move every frame, the rest a few times a second, none of it touching the reflection;
+## that is redrawn only when the sky has changed, and never often.
+func _show_sky(delta: float) -> void:
+	if sky_material == null: return
+	var target: Array = SKIES[state]
+	var change := 1.0 - exp(-delta / 25.0)
+	for i in sky_look.size():
+		if i < 4: sky_look[i] = (sky_look[i] as Color).lerp(target[i], change)
+		else: sky_look[i] = lerpf(sky_look[i], target[i], change)
+	# The clouds go with the wind, the small ones a little faster, across the same way.
+	var carry := delta * CLOUD_DRIFT * (sky_look[7] as float) * (0.6 + wind)
+	sky_drift = Vector4(fposmod(sky_drift.x + carry, 1.0), fposmod(sky_drift.y + carry * 0.4, 1.0), fposmod(sky_drift.z + carry * 2.6, 1.0), fposmod(sky_drift.w + carry * 1.2, 1.0))
+	RenderingServer.global_shader_parameter_set("sky_drift", sky_drift)
+	var flashing := lightning > 0.0
+	if flashing:
+		# Two pulses, gone within a second.
+		lightning = maxf(0.0, lightning - delta * 2.4)
+		RenderingServer.global_shader_parameter_set("sky_cloud", Vector4(sky_look[4], sky_look[5], sky_look[6], lightning * absf(sin(lightning * 9.0))))
+	sky_clock += delta
+	if sky_clock >= SKY_EVERY:
+		sky_clock = 0.0
+		if not flashing: _publish_sky()
+	sky_radiance_clock += delta
+	if sky_radiance_clock >= SKY_RADIANCE_EVERY:
+		sky_radiance_clock = 0.0
+		var seen: float = (sky_look[4] as float) + (sky_look[0] as Color).get_luminance()
+		if absf(seen - sky_radiance_seen) >= SKY_RADIANCE_CHANGE:
+			sky_radiance_seen = seen
+			sky_radiance_tick = (sky_radiance_tick + 1) % 1000
+			sky_material.set_shader_parameter("radiance_tick", float(sky_radiance_tick))
+
+## What the wind carries, in a box that travels with the camera, updated less often than it is
+## drawn. Grains are tiny and hop (thrown up, falling back); puffs are small, soft and low, and
+## grow as they go. Few pixels either way: nothing here ever covers much of the screen.
+func _dust(puffs: bool, plain: bool) -> GPUParticles3D:
+	var particles := GPUParticles3D.new()
+	particles.name = "WindPuffs" if puffs else "WindGrains"
+	var grains: int = (120 if plain else 220) if mobile else 400
+	particles.amount = (24 if mobile else 44) if puffs else grains
+	particles.lifetime = 2.4 if puffs else 1.1
+	particles.fixed_fps = 20
+	particles.interpolate = true
+	particles.local_coords = false
+	particles.emitting = false
+	particles.visibility_aabb = AABB(Vector3(-40, -15, -40), Vector3(80, 30, 80))
+	particles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var process := ParticleProcessMaterial.new()
+	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	process.emission_box_extents = Vector3(12, 0.25, 12) if puffs else Vector3(9, 0.2, 9)
+	process.direction = (WIND_WAY + Vector3.UP * (0.08 if puffs else 0.22)).normalized()
+	process.spread = 10.0 if puffs else 16.0
+	process.gravity = Vector3(0.0, -0.15, 0.0) if puffs else Vector3(0.0, -2.2, 0.0)
+	process.initial_velocity_min = 2.5 if puffs else 4.0
+	process.initial_velocity_max = 5.0 if puffs else 9.0
+	process.scale_min = 0.6
+	process.scale_max = 1.5
+	if puffs:
+		var growth := Curve.new()
+		growth.add_point(Vector2(0.0, 0.45))
+		growth.add_point(Vector2(1.0, 1.0))
+		var growth_texture := CurveTexture.new()
+		growth_texture.curve = growth
+		process.scale_curve = growth_texture
+	# In and out softly: nothing pops up or vanishes.
+	var ramp := Gradient.new()
+	ramp.set_color(0, Color(1, 1, 1, 0))
+	ramp.set_color(1, Color(1, 1, 1, 0))
+	ramp.add_point(0.2, Color(1, 1, 1, 1))
+	ramp.add_point(0.65, Color(1, 1, 1, 1))
+	var ramp_texture := GradientTexture1D.new()
+	ramp_texture.gradient = ramp
+	ramp_texture.width = 32
+	process.color_ramp = ramp_texture
+	particles.process_material = process
+	var quad := QuadMesh.new()
+	quad.size = Vector2(3.2, 1.7) if puffs else Vector2(0.085, 0.085)
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	material.vertex_color_use_as_albedo = true
+	material.disable_receive_shadows = true
+	var soft := Gradient.new()
+	soft.set_color(0, Color(1, 1, 1, 1))
+	soft.set_color(1, Color(1, 1, 1, 0))
+	if not puffs: soft.add_point(0.5, Color(1, 1, 1, 1))
+	var texture := GradientTexture2D.new()
+	texture.gradient = soft
+	texture.fill = GradientTexture2D.FILL_RADIAL
+	texture.fill_from = Vector2(0.5, 0.5)
+	texture.fill_to = Vector2(0.5, 0.0)
+	texture.width = 32 if puffs else 16
+	texture.height = texture.width
+	material.albedo_texture = texture
+	material.albedo_color = Color(DUST_SAND, PUFF_ALPHA) if puffs else Color(DUST_GRAIN, GRAIN_ALPHA)
+	# (Right by the lens they fade out, instead of crossing it as blots.)
+	material.distance_fade_mode = BaseMaterial3D.DISTANCE_FADE_PIXEL_ALPHA
+	material.distance_fade_min_distance = 1.5 if puffs else 2.5
+	material.distance_fade_max_distance = 5.0 if puffs else 7.0
+	quad.material = material
+	particles.draw_pass_1 = quad
+	add_child(particles)
+	return particles
+
+## How much the wind carries now (0..1).
+func dust_amount() -> float:
+	return dust_now
+
+## Gusts come and go; what they lift depends on the land, and nothing lifts off wet ground.
+func _show_wind(delta: float, camera_at: Vector3) -> void:
+	if dust_grains == null: return
+	gust_clock += delta
+	var gust := 0.5 + 0.5 * sin(gust_clock * 0.37) * sin(gust_clock * 0.113 + 1.0)
+	var land: float = DUST_OF_LAND[climate.biome] if climate.has("biome") else 0.3
+	# Dry snow blows too, and more readily than sand.
+	var snowy := smoothstep(0.3, 0.8, snow_cover) * (1.0 if temperature < 0.0 else 0.0)
+	var lifted := maxf(land * (1.0 - snowy), 0.9 * snowy)
+	var dry := clampf(1.0 - wetness * 2.5, 0.0, 1.0) * (1.0 - clampf(rain * 3.0, 0.0, 1.0))
+	var target := clampf(lifted * dry * (0.35 + wind) * (0.55 + 0.45 * gust) + sand, 0.0, 1.0)
+	dust_now = lerpf(dust_now, target, 1.0 - exp(-delta * 1.5))
+	var on := dust_now > 0.04
+	if dust_grains.emitting != on:
+		dust_grains.emitting = on
+		if dust_puffs != null: dust_puffs.emitting = on
+	if not on: return
+	var ground: float = Surface.height_at(camera_at.x, camera_at.z)
+	var speed := 0.6 + wind * 1.1
+	var ahead := Vector3(camera_at.x, 0.0, camera_at.z) - WIND_WAY * 5.0 + Vector3(camera_velocity.x, 0.0, camera_velocity.z) * 0.7
+	dust_grains.global_position = ahead + Vector3.UP * (ground + 0.15)
+	dust_grains.amount_ratio = clampf(dust_now * 2.0, 0.05, 1.0)
+	dust_grains.speed_scale = speed
+	if dust_puffs != null:
+		dust_puffs.global_position = ahead + Vector3.UP * (ground + 0.5)
+		dust_puffs.amount_ratio = clampf(dust_now * 1.6, 0.05, 1.0)
+		dust_puffs.speed_scale = speed
+	# (The tint only when it is due: these are materials too.)
+	var tint: Color = DUST_SAND.lerp(DUST_SNOW, snowy)
+	if not tint.is_equal_approx(dust_tint):
+		dust_tint = tint
+		((dust_grains.draw_pass_1 as QuadMesh).material as StandardMaterial3D).albedo_color = Color(DUST_GRAIN.lerp(DUST_SNOW, snowy), GRAIN_ALPHA)
+		if dust_puffs != null: ((dust_puffs.draw_pass_1 as QuadMesh).material as StandardMaterial3D).albedo_color = Color(tint, PUFF_ALPHA)
 
 ## Falling rain streaks or snow flakes in a box that travels with the camera.
 func _precipitation(snow: bool) -> GPUParticles3D:
@@ -284,6 +531,7 @@ func _visuals(delta: float = 0.0) -> void:
 	snow_particles.emitting = snowfall > 0.08
 	rain_particles.amount_ratio = clampf(rain, 0.05, 1.0)
 	snow_particles.amount_ratio = clampf(snowfall, 0.05, 1.0)
+	_show_wind(delta, now)
 	# Overcast: weaker sun, flatter light, greyer air, more haze.
 	root.sun.light_energy = base_sun * (1.0 - 0.7 * cloud) * (1.0 - 0.45 * sand)
 	if not climate.is_empty(): root.sun.light_color = mood_sun
@@ -307,11 +555,10 @@ func _visuals(delta: float = 0.0) -> void:
 			environment.adjustment_enabled = true
 			environment.adjustment_saturation = mood_saturation * (1.0 - 0.2 * cloud)
 			environment.adjustment_contrast = mood_contrast
-	if environment.sky != null and environment.sky.sky_material is ProceduralSkyMaterial:
-		var sky := environment.sky.sky_material as ProceduralSkyMaterial
-		sky.sky_top_color = root.sky_colors[0].lerp(grey * 0.85, cloud)
-		sky.sky_horizon_color = root.sky_colors[1].lerp(haze, 0.45 if not climate.is_empty() else 0.0).lerp(grey, cloud).lerp(storm, sand)
-		sky.sky_top_color = sky.sky_top_color.lerp(storm, sand * 0.7)
+	if environment.sky != null and sky_material == null: _install_sky(environment.sky)
+	# (The sky fades into the air by its own horizon: fog over all of it would only wash it out.)
+	if perspective and sky_material != null: environment.fog_sky_affect = SKY_FOG
+	_show_sky(delta)
 	if river != null:
 		# Rain rings on the surface; a soaked land swells the rivers with silt.
 		river.set_shader_parameter("rain", rain)

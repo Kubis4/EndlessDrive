@@ -75,6 +75,25 @@ var wheel_surface := PackedInt32Array([0, 0, 0, 0])
 var surface_kind := 0
 ## Depth of the chassis floor below the ford's water surface.
 var water_submersion := 0.0
+## Wading, as the physics step works it out and the waves read it: water at each tyre (m),
+## how much of the car is in it (0..1, eased), its motion through the water (m/s, X and Z),
+## the surface there. A plunge and leaving the water each go out once, for the waves to take.
+var wheel_wet := PackedFloat32Array([0, 0, 0, 0])
+var water_contact := 0.0
+var water_relative := Vector2.ZERO
+var water_surface := 0.0
+var water_tyres := 0.0
+var water_felt := Vector2.ZERO
+var water_impact := 0.0
+var water_impact_count := 0
+var water_plunge_speed := 0.0
+var water_exit := 0.0
+var water_exit_point := Vector3.ZERO
+var water_burst := 0.0
+var water_armed := true
+var water_settling := 0.0
+var water_dry_time := 1.0
+var water_wet_time := 0.0
 ## Pedal of the latest tick; a spinning driven tyre on a stuck car digs in.
 var last_throttle := 0.0
 var parked_time := 0.0
@@ -406,6 +425,16 @@ func terrain_height(x: float, z: float) -> float:
 func place_on_ground(point: Vector3, yaw: float) -> void:
 	invalidate_hull_cache()
 	water_submersion = 0.0
+	water_contact = 0.0
+	water_tyres = 0.0
+	water_felt = Vector2.ZERO
+	water_relative = Vector2.ZERO
+	water_impact = 0.0
+	water_exit = 0.0
+	water_armed = false
+	water_settling = 0.0
+	water_dry_time = 0.0
+	water_wet_time = 0.0
 	position = point
 	heading = yaw
 	pitch = 0.0
@@ -559,6 +588,7 @@ func simulate(delta: float, throttle: float, brake: float, turn: float, handbrak
 	_update_suspension()
 	_update_tracks(delta)
 	dust_clock += delta
+	water_burst = maxf(0.0, water_burst - delta * 2.0)
 	_update_dust(Vector3(-sin(heading), 0, -cos(heading)), Vector3(cos(heading), 0, -sin(heading)))
 
 func terrain_normal(x: float, z: float) -> Vector3:
@@ -810,6 +840,9 @@ func _integrate(dt: float, throttle: float, brake: float, handbrake: bool) -> vo
 		if pushing: engine_output += absf(longitudinal + signf(longitudinal_speed) * resistance) * maxf(absf(longitudinal_speed), CONVERTER_SPEED)
 		var lateral_limit := sqrt(maxf(0.0, capacity * capacity - longitudinal * longitudinal))
 		var cornering := curb_mass_kg * 13.0 * sqrt(grip / 0.85)
+		# Wading, a tyre holds by the load left on it: what the water lifts off it, and what the
+		# cargo puts on, decide how readily the current moves the car.
+		if water_contact > 0.0: cornering *= lerpf(1.0, load / (curb_mass_kg * GRAVITY * 0.25), water_contact)
 		var lateral_force := clampf(-lateral_speed * cornering / maxf(absf(longitudinal_speed), 3.0), -lateral_limit, lateral_limit)
 		var side_force := tyre_right * lateral_force
 		var drive_force := tyre_forward * longitudinal
@@ -827,7 +860,7 @@ func _integrate(dt: float, throttle: float, brake: float, handbrake: bool) -> vo
 	wheel_power = lerpf(wheel_power, engine_output, 1.0 - exp(-dt * 8.0))
 	force += _bog_down_force()
 	torque += bog_torque
-	force += _water_force()
+	force += _water_force(dt)
 	force += winch_force
 	torque += winch_arm.cross(winch_force)
 	velocity += force / mass_kg * dt
@@ -1087,22 +1120,101 @@ func _bog_down_force() -> Vector3:
 		if over > 0.0 and total.length() < mass_kg * minf(over * 0.8, 3.0): total = -along * mass_kg * minf(over * 0.8, 3.0)
 	return total
 
+## The hull as the water meets it (m): half length and width, floor below the centre of mass.
+func hull_half_length() -> float: return half_wheelbase + 0.8
+func hull_half_width() -> float: return half_track + 0.15
+func floor_height() -> float: return COM.y + 0.1
+
+const WATER_DENSITY := 1000.0
+## Drag coefficients of the car's front (it parts the water) and its flat flank.
+const DRAG_FRONT := 0.45
+const DRAG_SIDE := 1.1
+## Share of the width and length the wheels and axles show below the floor.
+const DRAG_WHEELS := 0.35
+## Leaky buoyancy: kg of lift per metre of water above the floor. The same for any car, so
+## the lighter one, at the same depth, is the sooner lifted off its tyres.
+const WATER_LIFT := 2200.0
+## How quickly the water's hold on the car comes and goes (s): nothing kicks at the edge.
+const WATER_EASE := 0.12
+## Slower than this into the water is wading in, not a plunge (m/s).
+const PLUNGE_SPEED := 2.0
+## Time to wait after the first touch, for how much of the car went in (s).
+const PLUNGE_WINDOW := 0.1
+## How long a car must be out of the water before it can plunge again, and in it to leave (s):
+## the springs working at the edge of a ford do neither.
+const REARM_TIME := 0.8
+const WADE_TIME := 0.6
+const LEFT_TIME := 0.25
+
 ## Wading: hydrodynamic drag on the submerged body and partial (leaky) buoyancy,
-## both applied through the centre of mass. Zero outside the ford.
-func _water_force() -> Vector3:
-	water_submersion = 0.0
-	if Surface.water_depth_at(position.x, position.z) <= 0.0: return Vector3.ZERO
-	var floor_y := position.y - (COM.y + 0.1) * maxf(attitude.y.y, 0.0)
-	water_submersion = clampf(Surface.water_level_at(position.x, position.z) - floor_y, 0.0, 1.4)
-	if water_submersion <= 0.0: return Vector3.ZERO
-	# Drag against the water, not the ground: a current pushes a wading car
-	# downstream, harder the deeper it sits (and the lighter buoyancy makes it).
-	var flow := Surface.water_flow_at(position.x, position.z)
-	var relative := Vector3(velocity.x - flow.x, 0.0, velocity.z - flow.y)
-	var drag := -relative * relative.length() * 520.0 * water_submersion
-	drag += -relative * 900.0 * water_submersion * water_submersion
-	drag.y = -velocity.y * absf(velocity.y) * 900.0 * water_submersion
-	return drag + Vector3.UP * 1000.0 * GRAVITY * 1.5 * water_submersion
+## both applied through the centre of mass. Zero outside the water. The drag is against the
+## water, not the ground: a current pushes a car by its motion through the water, by what it
+## shows the current (its flank more than its front) and how deep it stands in it.
+func _water_force(dt: float) -> Vector3:
+	var in_water := 0.0
+	var tyre_depth := 0.0
+	for i in 4:
+		var contact := wheel_contacts[i]
+		# (Up to the tyre, not to the ground under a wheel in the air.)
+		var depth := maxf(Surface.water_depth_at(contact.x, contact.z) - maxf(wheel_gaps[i], 0.0), 0.0)
+		wheel_wet[i] = depth
+		in_water += smoothstep(0.02, 0.12, depth) * 0.25
+		tyre_depth += depth * 0.25
+	if in_water <= 0.0 and water_contact <= 0.0 and water_submersion <= 0.0:
+		water_dry_time += dt
+		if water_dry_time > REARM_TIME: water_armed = true
+		return Vector3.ZERO
+	_water_events(in_water, dt)
+	water_surface = Surface.water_level_at(position.x, position.z)
+	var floor_y := position.y - floor_height() * maxf(attitude.y.y, 0.0)
+	var under := clampf(water_surface - floor_y, 0.0, 1.4) * in_water
+	var easing := 1.0 - exp(-dt / WATER_EASE)
+	water_contact = lerpf(water_contact, in_water, easing)
+	water_submersion = lerpf(water_submersion, under, easing)
+	water_tyres = lerpf(water_tyres, tyre_depth, easing)
+	if in_water <= 0.0 and water_contact < 0.01:
+		water_contact = 0.0
+		water_submersion = 0.0
+		water_tyres = 0.0
+	water_felt = water_felt.lerp(Surface.water_flow_at(position.x, position.z), easing)
+	water_relative = Vector2(velocity.x, velocity.z) - water_felt
+	var moving := water_relative.length()
+	var forward := Vector2(-attitude.z.x, -attitude.z.z).normalized()
+	var side := Vector2(-forward.y, forward.x)
+	var wetted := water_submersion + clampf(water_tyres - water_submersion, 0.0, floor_height()) * DRAG_WHEELS
+	var front_area := 2.0 * hull_half_width() * wetted
+	var flank_area := 2.0 * hull_half_length() * wetted
+	var drag := -(forward * water_relative.dot(forward) * front_area * DRAG_FRONT + side * water_relative.dot(side) * flank_area * DRAG_SIDE) * moving * WATER_DENSITY * 0.5
+	var lift := WATER_LIFT * GRAVITY * water_submersion - velocity.y * absf(velocity.y) * 900.0 * water_submersion
+	return Vector3(drag.x, lift, drag.y)
+
+## A plunge and leaving the water, each once: at the edge of a ford the springs and small
+## movements come and go without either.
+func _water_events(in_water: float, dt: float) -> void:
+	if in_water > 0.02:
+		water_dry_time = 0.0
+		water_wet_time += dt
+		var deepest := 0
+		for i in 4:
+			if wheel_wet[i] > wheel_wet[deepest]: deepest = i
+		water_exit_point = wheel_contacts[deepest]
+		if water_armed:
+			water_armed = false
+			water_settling = PLUNGE_WINDOW
+			water_plunge_speed = -velocity.y
+		elif water_settling > 0.0:
+			water_settling -= dt
+			if water_settling <= 0.0 and water_plunge_speed > PLUNGE_SPEED:
+				water_impact = water_plunge_speed * in_water * hull_half_length() * hull_half_width()
+				water_impact_count += 1
+				water_burst = clampf(water_plunge_speed * 0.2, 0.3, 1.0)
+		return
+	water_dry_time += dt
+	water_settling = 0.0
+	if water_dry_time > REARM_TIME: water_armed = true
+	if water_wet_time > WADE_TIME and water_dry_time > LEFT_TIME:
+		water_wet_time = 0.0
+		water_exit = maxf(water_relative.length(), 1.0)
 
 func _update_visuals(dt: float) -> void:
 	body.basis = attitude
@@ -1323,7 +1435,7 @@ func _update_dust(forward: Vector3, right: Vector3) -> void:
 		wake_cloud.amount_ratio = intensity * cloud * game.dust_density
 		wake_specks.amount_ratio = intensity * detail * cloud
 		(wake_cloud.process_material as ParticleProcessMaterial).direction = (-forward * 0.5 + Vector3(0.35, 0.6, 0.12)).normalized()
-	var heavy := 1.0 + (spray - 1.0) * 0.6 + water_submersion
+	var heavy := 1.0 + (spray - 1.0) * 0.6 + water_submersion + water_burst * 1.5
 	for i in 2:
 		var side := -1.0 if i == 0 else 1.0
 		var wheel := 1 if i == 0 else 3
@@ -1347,10 +1459,10 @@ func _update_dust(forward: Vector3, right: Vector3) -> void:
 		grains.amount_ratio = clampf(wheel_intensity * amount * detail, 0.0, 1.0)
 		var process := grains.process_material as ParticleProcessMaterial
 		process.direction = (-forward * 0.75 * rotation_sign + right * side * (0.45 + slip_amount) + Vector3.UP * 0.65).normalized()
-		if wheel_surface[wheel] == Surface.WATER and water_submersion > 0.05 and movement > 1.5:
+		if wheel_surface[wheel] == Surface.WATER and water_submersion > 0.05 and (movement > 1.5 or water_burst > 0.0):
 			# Wading: the body ploughs sheets of water out to the sides and ahead.
 			process.direction = (forward * 0.35 + right * side + Vector3.UP * 0.9).normalized()
-			grains.amount_ratio = clampf(grains.amount_ratio * (1.0 + movement * 0.15), 0.0, 1.0)
+			grains.amount_ratio = clampf(grains.amount_ratio * (1.0 + movement * 0.15) + water_burst, 0.0, 1.0)
 		# Water and mud throw heavier, faster spray; wading lifts it further.
 		process.initial_velocity_min = (0.9 + movement * 0.08) * heavy
 		process.initial_velocity_max = (2.6 + movement * 0.12 + slip_amount * 3.5 + spinning * 3.5) * heavy
